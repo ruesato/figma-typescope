@@ -1,0 +1,151 @@
+/* Tailwind CSS Base */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Figma Plugin Design System Tokens */
+:root {
+  /* Background Colors */
+  --figma-color-bg: #ffffff;
+  --figma-color-bg-secondary: #f5f5f5;
+  --figma-color-bg-tertiary: #e5e5e5;
+  --figma-color-bg-brand: #0d99ff;
+  --figma-color-bg-success: #0fa958;
+  --figma-color-bg-warning: #ffcd29;
+  --figma-color-bg-danger: #f24822;
+
+  /* Text Colors */
+  --figma-color-text: #000000;
+  --figma-color-text-secondary: #666666;
+  --figma-color-text-tertiary: #999999;
+  --figma-color-text-onbrand: #ffffff;
+
+  /* Border Colors */
+  --figma-color-border: #e5e5e5;
+  --figma-color-border-strong: #cccccc;
+
+  /* Icon Colors */
+  --figma-color-icon: #333333;
+  --figma-color-icon-secondary: #666666;
+  --figma-color-icon-tertiary: #999999;
+
+  /* Spacing */
+  --figma-space-xs: 4px;
+  --figma-space-sm: 8px;
+  --figma-space-md: 16px;
+  --figma-space-lg: 24px;
+  --figma-space-xl: 32px;
+
+  /* Font Sizes */
+  --figma-font-size-xs: 10px;
+  --figma-font-size-sm: 11px;
+  --figma-font-size-md: 12px;
+  --figma-font-size-lg: 14px;
+  --figma-font-size-xl: 16px;
+
+  /* Border Radius */
+  --figma-radius-sm: 2px;
+  --figma-radius-md: 4px;
+  --figma-radius-lg: 8px;
+}
+
+/* Dark Theme (Auto-applied by Figma) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --figma-color-bg: #2c2c2c;
+    --figma-color-bg-secondary: #1e1e1e;
+    --figma-color-bg-tertiary: #333333;
+
+    --figma-color-text: #ffffff;
+    --figma-color-text-secondary: #b3b3b3;
+    --figma-color-text-tertiary: #808080;
+
+    --figma-color-border: #444444;
+    --figma-color-border-strong: #666666;
+
+    --figma-color-icon: #cccccc;
+    --figma-color-icon-secondary: #999999;
+    --figma-color-icon-tertiary: #666666;
+  }
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: var(--figma-font-size-md);
+  line-height: 1.5;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--figma-color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--figma-color-border-strong);
+  border-radius: var(--figma-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--figma-color-icon-secondary);
+}
+
+/* Focus Styles */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--figma-color-bg-brand);
+  outline-offset: 2px;
+}
+
+/* Utility Classes */
+.truncate-2-lines {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--figma-radius-md);
+  font-size: var(--figma-font-size-xs);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.badge-success {
+  background-color: rgba(15, 169, 88, 0.1);
+  color: var(--figma-color-bg-success);
+}
+
+.badge-warning {
+  background-color: rgba(255, 205, 41, 0.1);
+  color: #cc9f00;
+}
+
+.badge-danger {
+  background-color: rgba(242, 72, 34, 0.1);
+  color: var(--figma-color-bg-danger);
+}
+
+.badge-neutral {
+  background-color: var(--figma-color-bg-secondary);
+  color: var(--figma-color-text-secondary);
+}
