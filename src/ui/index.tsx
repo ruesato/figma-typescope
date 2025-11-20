@@ -1,22 +1,8 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-
 /**
- * UI Entry Point
+ * UI Entry Point for @create-figma-plugin
  *
- * Mounts the React application to the DOM
+ * Exports the root component. The build tool automatically
+ * wraps this in HTML and handles rendering.
  */
 
-const container = document.getElementById('root');
-
-if (!container) {
-  throw new Error('Root element not found');
-}
-
-const root = createRoot(container);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+export { default } from './App';
