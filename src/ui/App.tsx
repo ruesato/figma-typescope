@@ -2,6 +2,10 @@ import React from 'react';
 import type { AuditResult } from '@/shared/types';
 import { useMessageHandler } from './hooks/useMessageHandler';
 import { useAuditState } from './hooks/useAuditState';
+import SummaryDashboard from './components/SummaryDashboard';
+import AuditResults from './components/AuditResults';
+import ProgressIndicator from './components/ProgressIndicator';
+import ErrorDisplay from './components/ErrorDisplay';
 import './styles/globals.css';
 
 /**
@@ -10,7 +14,7 @@ import './styles/globals.css';
 export default function App() {
   // Message handling and state management
   const { runAudit, navigateToLayer, cancelAudit } = useMessageHandler();
-  const { auditResult, isAuditing, progress, error } = useAuditState();
+  const { auditResult, isAuditing, progress, error, setError } = useAuditState();
 
   return (
     <div className="min-h-screen bg-figma-bg text-figma-text p-4">
@@ -53,64 +57,59 @@ export default function App() {
 
         {/* Progress Indicator */}
         {isAuditing && (
-          <div className="mb-6 p-4 bg-figma-bg-secondary rounded-md">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-figma-text-secondary">
-                Analyzing text layers...
-              </span>
-              <span className="text-sm font-medium text-figma-text">
-                {progress}%
-              </span>
-            </div>
-            <div className="w-full bg-figma-bg-tertiary rounded-full h-2">
-              <div
-                className="bg-figma-bg-brand h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+          <div className="mb-6">
+            <ProgressIndicator
+              progress={progress}
+              message="Analyzing text layers..."
+            />
           </div>
         )}
 
         {/* Error Display */}
         {error && (
-          <div className="mb-6 p-4 bg-figma-bg-danger bg-opacity-10 border border-figma-bg-danger rounded-md">
-            <p className="text-sm text-figma-bg-danger">{error}</p>
+          <div className="mb-6">
+            <ErrorDisplay
+              error={error}
+              onDismiss={() => setError(null)}
+              onRetry={() => runAudit('page')}
+            />
           </div>
         )}
 
-        {/* Results Placeholder */}
+        {/* Audit Results */}
         {auditResult && !isAuditing && (
-          <div className="bg-figma-bg-secondary rounded-md p-6">
-            <h2 className="text-lg font-semibold mb-4">Audit Results</h2>
-            <div className="space-y-2 text-sm">
-              <p>
-                <span className="text-figma-text-secondary">Total text layers:</span>{' '}
-                <span className="font-medium">{auditResult.summary.totalTextLayers}</span>
-              </p>
-              <p>
-                <span className="text-figma-text-secondary">Unique fonts:</span>{' '}
-                <span className="font-medium">{auditResult.summary.uniqueFontFamilies}</span>
-              </p>
-              <p>
-                <span className="text-figma-text-secondary">Style coverage:</span>{' '}
-                <span className="font-medium">
-                  {auditResult.summary.styleCoveragePercent.toFixed(1)}%
-                </span>
-              </p>
-              <p className="text-figma-text-tertiary text-xs pt-2">
-                Timestamp: {new Date(auditResult.timestamp).toLocaleString()}
-              </p>
+          <div className="space-y-6">
+            {/* Summary Dashboard */}
+            <SummaryDashboard summary={auditResult.summary} />
+
+            {/* Detailed Results */}
+            <AuditResults
+              textLayers={auditResult.textLayers}
+              onNavigate={navigateToLayer}
+            />
+
+            {/* Footer Info */}
+            <div className="text-xs text-figma-text-tertiary text-center pt-4 border-t border-figma-border">
+              <p>File: {auditResult.fileName}</p>
+              <p>Timestamp: {new Date(auditResult.timestamp).toLocaleString()}</p>
             </div>
-            {/* TODO: Add detailed results components in Phase 3 (US1) */}
           </div>
         )}
 
         {/* Empty State */}
         {!auditResult && !isAuditing && !error && (
-          <div className="text-center py-12">
-            <p className="text-figma-text-secondary mb-4">
-              No audit data yet. Click "Run Audit on Page" to begin.
+          <div className="text-center py-16 px-4">
+            <div className="text-6xl mb-4">🔍</div>
+            <h3 className="text-lg font-semibold text-figma-text mb-2">
+              Ready to Audit
+            </h3>
+            <p className="text-figma-text-secondary text-sm max-w-md mx-auto">
+              Discover all text layers, analyze font usage, detect text style
+              assignments, and identify opportunities for better consistency.
             </p>
+            <div className="mt-6 text-xs text-figma-text-tertiary">
+              <p>💡 Tip: Select specific frames to audit just that area</p>
+            </div>
           </div>
         )}
       </div>

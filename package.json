@@ -49,6 +49,6 @@
     "id": "figma-font-audit-pro",
     "name": "Figma Font Audit Pro",
     "main": "src/main/code.ts",
-    "ui": "src/ui/index.html"
+    "ui": "src/ui/index.tsx"
   }
 }

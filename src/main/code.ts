@@ -1,4 +1,13 @@
-import type { UIToMainMessage, MainToUIMessage, AuditResult } from '@/shared/types';
+import type {
+  UIToMainMessage,
+  MainToUIMessage,
+  AuditResult,
+  TextLayerData,
+} from '@/shared/types';
+import { getTextNodesFromScope } from './utils/traversal';
+import { extractFontMetadata } from './utils/fontMetadata';
+import { detectStyleAssignment } from './utils/styleDetection';
+import { calculateSummary } from './utils/summary';
 
 // ============================================================================
 // Main Entry Point (Figma Sandbox Context)
@@ -69,32 +78,91 @@ let cancelFlag = false;
  * Handle RUN_AUDIT message - main audit orchestration
  */
 async function handleRunAudit(scope: 'page' | 'selection'): Promise<void> {
-  cancelFlag = false;
+  try {
+    cancelFlag = false;
 
-  sendMessage({ type: 'AUDIT_STARTED' });
+    sendMessage({ type: 'AUDIT_STARTED' });
 
-  // TODO: Implement audit logic in Phase 3 (User Story 1)
-  // This is a skeleton for Phase 2 - will be implemented in T027-T029
+    // Step 1: Get text nodes from scope
+    const { textNodes, scopeName } = await getTextNodesFromScope(
+      scope,
+      () => cancelFlag
+    );
 
-  // Placeholder for demonstration
-  const result: AuditResult = {
-    textLayers: [],
-    summary: {
-      totalTextLayers: 0,
-      uniqueFontFamilies: 0,
-      styleCoveragePercent: 0,
-      librariesInUse: [],
-      potentialMatchesCount: 0,
-      hiddenLayersCount: 0,
-    },
-    timestamp: new Date().toISOString(),
-    fileName: figma.root.name,
-  };
+    if (textNodes.length === 0) {
+      throw new Error('No text layers found in the selected scope');
+    }
 
-  sendMessage({
-    type: 'AUDIT_COMPLETE',
-    result,
-  });
+    // Step 2: Process each text node
+    const textLayers: TextLayerData[] = [];
+    const total = textNodes.length;
+
+    for (let i = 0; i < textNodes.length; i++) {
+      // Check for cancellation
+      if (cancelFlag) {
+        throw new Error('Audit cancelled by user');
+      }
+
+      const node = textNodes[i];
+
+      try {
+        // Extract font metadata
+        const metadata = await extractFontMetadata(node);
+
+        // Detect style assignment
+        const styleAssignment = await detectStyleAssignment(node);
+
+        // Combine into complete TextLayerData
+        const textLayer: TextLayerData = {
+          ...metadata,
+          styleAssignment,
+          // matchSuggestions will be added in Phase 6 (User Story 3)
+        };
+
+        textLayers.push(textLayer);
+
+        // Report progress
+        const progress = Math.round(((i + 1) / total) * 100);
+        sendMessage({
+          type: 'AUDIT_PROGRESS',
+          progress,
+          current: i + 1,
+          total,
+        });
+      } catch (error) {
+        // Log error but continue processing other nodes
+        console.error(`Error processing node ${node.id}:`, error);
+      }
+    }
+
+    // Step 3: Calculate summary
+    const summary = calculateSummary(textLayers);
+
+    // Step 4: Build result
+    const result: AuditResult = {
+      textLayers,
+      summary,
+      timestamp: new Date().toISOString(),
+      fileName: figma.root.name,
+    };
+
+    // Step 5: Send completion message
+    sendMessage({
+      type: 'AUDIT_COMPLETE',
+      result,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Audit failed';
+    const errorType = errorMessage.includes('No text layers')
+      ? ('VALIDATION' as const)
+      : ('UNKNOWN' as const);
+
+    sendMessage({
+      type: 'AUDIT_ERROR',
+      error: errorMessage,
+      errorType,
+    });
+  }
 }
 
 // ============================================================================
