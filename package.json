@@ -4,24 +4,20 @@
   "description": "Comprehensive Figma plugin for font and text style auditing",
   "license": "MIT",
   "scripts": {
-    "build": "build-figma-plugin --typecheck --minify",
-    "watch": "build-figma-plugin --typecheck --watch",
-    "dev": "build-figma-plugin --typecheck --watch",
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit",
     "test": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
-    "@create-figma-plugin/ui": "^4.0.3",
-    "@create-figma-plugin/utilities": "^4.0.3",
     "jspdf": "^2.5.1",
     "papaparse": "^5.4.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@create-figma-plugin/build": "^4.0.3",
-    "@create-figma-plugin/tsconfig": "^4.0.3",
     "@figma/plugin-typings": "1.109.0",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
@@ -41,14 +37,5 @@
     "typescript": "^5.3.3",
     "vite": "^5.0.10",
     "vitest": "^1.1.0"
-  },
-  "figma-plugin": {
-    "editorType": [
-      "figma"
-    ],
-    "id": "figma-font-audit-pro",
-    "name": "Figma Font Audit Pro",
-    "main": "src/main/code.ts",
-    "ui": "src/ui/index.tsx"
   }
 }

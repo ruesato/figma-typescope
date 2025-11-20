@@ -10,8 +10,14 @@ export function useMessageHandler() {
 
   // Listen for messages from main context
   useEffect(() => {
-    const handleMessage = (event: MessageEvent<MainToUIMessage>) => {
-      const msg = event.data;
+    const handleMessage = (event: MessageEvent) => {
+      // Figma wraps plugin messages in event.data.pluginMessage
+      const msg = event.data.pluginMessage as MainToUIMessage;
+
+      // Ignore non-plugin messages
+      if (!msg || !msg.type) {
+        return;
+      }
 
       switch (msg.type) {
         case 'AUDIT_STARTED':

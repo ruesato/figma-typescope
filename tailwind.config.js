@@ -19,6 +19,7 @@ export default {
         'figma-icon-secondary': 'var(--figma-color-icon-secondary)',
         'figma-icon-tertiary': 'var(--figma-color-icon-tertiary)',
         'figma-bg-brand': 'var(--figma-color-bg-brand)',
+        'figma-bg-brand-hover': '#0b7fd1',
         'figma-text-onbrand': 'var(--figma-color-text-onbrand)',
         'figma-bg-success': 'var(--figma-color-bg-success)',
         'figma-bg-warning': 'var(--figma-color-bg-warning)',

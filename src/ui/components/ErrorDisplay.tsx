@@ -1,3 +1,5 @@
+import React from 'react';
+
 interface ErrorDisplayProps {
   error: string;
   errorType?: 'VALIDATION' | 'API' | 'UNKNOWN';

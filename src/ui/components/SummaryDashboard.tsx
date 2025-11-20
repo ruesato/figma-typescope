@@ -1,3 +1,4 @@
+import React from 'react';
 import type { AuditSummary } from '@/shared/types';
 
 interface SummaryDashboardProps {

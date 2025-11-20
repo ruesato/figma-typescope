@@ -1,3 +1,4 @@
+import React from 'react';
 import type { TextLayerData } from '@/shared/types';
 
 interface LayerItemProps {

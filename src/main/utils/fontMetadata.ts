@@ -27,6 +27,11 @@ import { buildComponentHierarchy } from './hierarchy';
 export async function extractFontMetadata(
   node: TextNode
 ): Promise<Omit<TextLayerData, 'styleAssignment' | 'matchSuggestions'>> {
+  // Check if node has any characters
+  if (node.characters.length === 0) {
+    throw new Error('Text node is empty - cannot extract font metadata');
+  }
+
   // Get font properties (using character 0 for mixed styles)
   const fontName = node.getRangeFontName(0, 1) as FontName;
   const fontSize = node.getRangeFontSize(0, 1) as number;

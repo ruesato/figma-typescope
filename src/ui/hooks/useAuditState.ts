@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { AuditResult } from '@/shared/types';
 
 /**
@@ -26,11 +26,11 @@ export function useAuditState() {
   const [, forceUpdate] = useState({});
 
   // Subscribe to state changes
-  useState(() => {
+  useEffect(() => {
     const listener = () => forceUpdate({});
     listeners.add(listener);
     return () => listeners.delete(listener);
-  });
+  }, []);
 
   return {
     auditResult,

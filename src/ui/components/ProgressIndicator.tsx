@@ -1,3 +1,5 @@
+import React from 'react';
+
 interface ProgressIndicatorProps {
   progress: number; // 0-100
   current?: number;

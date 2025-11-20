@@ -13,28 +13,28 @@ import { calculateSummary } from './utils/summary';
 // Main Entry Point (Figma Sandbox Context)
 // ============================================================================
 
+// ============================================================================
+// Plugin Initialization
+// ============================================================================
+
+// The __html__ variable will be injected at build time with the compiled UI HTML
+// @ts-ignore - __html__ is defined at build time
+declare const __html__: string;
+
+// Show the plugin UI
+figma.showUI(__html__, {
+  width: 400,
+  height: 600,
+});
+
+// ============================================================================
+// Message Handler
+// ============================================================================
+
 /**
- * Main plugin function
- *
- * This is called by Figma when the plugin starts.
- * Shows the plugin UI and sets up message handlers.
+ * Handle messages from the UI context
  */
-export default function () {
-  // Show the plugin UI
-  figma.showUI(__html__, {
-    width: 400,
-    height: 600,
-    themeColors: true,
-  });
-
-  // ============================================================================
-  // Message Handler
-  // ============================================================================
-
-  /**
-   * Handle messages from the UI context
-   */
-  figma.ui.onmessage = async (msg: UIToMainMessage) => {
+figma.ui.onmessage = async (msg: UIToMainMessage) => {
     try {
       switch (msg.type) {
         case 'RUN_AUDIT':
@@ -109,6 +109,11 @@ export default function () {
         }
 
         const node = textNodes[i];
+
+        // Skip empty text nodes silently
+        if (node.characters.length === 0) {
+          continue;
+        }
 
         try {
           // Extract font metadata
@@ -212,10 +217,9 @@ export default function () {
    */
   function handleCancelAudit(): void {
     cancelFlag = true;
-    sendMessage({
-      type: 'AUDIT_ERROR',
-      error: 'Audit cancelled by user',
-      errorType: 'UNKNOWN',
-    });
-  }
+  sendMessage({
+    type: 'AUDIT_ERROR',
+    error: 'Audit cancelled by user',
+    errorType: 'UNKNOWN',
+  });
 }

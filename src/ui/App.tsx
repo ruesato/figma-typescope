@@ -1,118 +1,180 @@
 import React from 'react';
-import type { AuditResult } from '@/shared/types';
+import './styles/globals.css';
 import { useMessageHandler } from './hooks/useMessageHandler';
 import { useAuditState } from './hooks/useAuditState';
 import SummaryDashboard from './components/SummaryDashboard';
 import AuditResults from './components/AuditResults';
 import ProgressIndicator from './components/ProgressIndicator';
 import ErrorDisplay from './components/ErrorDisplay';
-import './styles/globals.css';
 
 /**
  * Main App component - Root of the plugin UI
+ *
+ * Orchestrates the audit workflow and displays appropriate views
+ * based on the current audit state.
  */
 export default function App() {
-  // Message handling and state management
+  // Get message handlers for communication with main context
   const { runAudit, navigateToLayer, cancelAudit } = useMessageHandler();
-  const { auditResult, isAuditing, progress, error, setError } = useAuditState();
+
+  // Get audit state
+  const { auditResult, isAuditing, progress, error, reset } = useAuditState();
+
+  // ============================================================================
+  // Event Handlers
+  // ============================================================================
+
+  const handleRunAuditPage = () => {
+    reset();
+    runAudit('page');
+  };
+
+  const handleRunAuditSelection = () => {
+    reset();
+    runAudit('selection');
+  };
+
+  const handleCancelAudit = () => {
+    cancelAudit();
+    reset();
+  };
+
+  const handleNavigateToLayer = (layerId: string) => {
+    navigateToLayer(layerId);
+  };
+
+  const handleDismissError = () => {
+    reset();
+  };
+
+  // ============================================================================
+  // Render Views
+  // ============================================================================
 
   return (
     <div className="min-h-screen bg-figma-bg text-figma-text p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <header className="mb-6">
-          <h1 className="text-2xl font-bold text-figma-text mb-2">
-            Figma Font Audit Pro
-          </h1>
-          <p className="text-figma-text-secondary text-sm">
-            Comprehensive font and text style analysis
-          </p>
-        </header>
-
-        {/* Action Buttons */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => runAudit('page')}
-            disabled={isAuditing}
-            className="px-4 py-2 bg-figma-bg-brand text-figma-text-onbrand rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isAuditing ? 'Auditing...' : 'Run Audit on Page'}
-          </button>
-          <button
-            onClick={() => runAudit('selection')}
-            disabled={isAuditing}
-            className="px-4 py-2 bg-figma-bg-secondary text-figma-text rounded-md hover:bg-figma-bg-tertiary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Audit Selection
-          </button>
-          {isAuditing && (
-            <button
-              onClick={cancelAudit}
-              className="px-4 py-2 bg-figma-bg-danger text-white rounded-md hover:opacity-90"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-
-        {/* Progress Indicator */}
-        {isAuditing && (
-          <div className="mb-6">
-            <ProgressIndicator
-              progress={progress}
-              message="Analyzing text layers..."
-            />
-          </div>
-        )}
-
-        {/* Error Display */}
-        {error && (
-          <div className="mb-6">
-            <ErrorDisplay
-              error={error}
-              onDismiss={() => setError(null)}
-              onRetry={() => runAudit('page')}
-            />
-          </div>
-        )}
-
-        {/* Audit Results */}
-        {auditResult && !isAuditing && (
-          <div className="space-y-6">
-            {/* Summary Dashboard */}
-            <SummaryDashboard summary={auditResult.summary} />
-
-            {/* Detailed Results */}
-            <AuditResults
-              textLayers={auditResult.textLayers}
-              onNavigate={navigateToLayer}
-            />
-
-            {/* Footer Info */}
-            <div className="text-xs text-figma-text-tertiary text-center pt-4 border-t border-figma-border">
-              <p>File: {auditResult.fileName}</p>
-              <p>Timestamp: {new Date(auditResult.timestamp).toLocaleString()}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!auditResult && !isAuditing && !error && (
-          <div className="text-center py-16 px-4">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-lg font-semibold text-figma-text mb-2">
-              Ready to Audit
-            </h3>
-            <p className="text-figma-text-secondary text-sm max-w-md mx-auto">
-              Discover all text layers, analyze font usage, detect text style
-              assignments, and identify opportunities for better consistency.
-            </p>
-            <div className="mt-6 text-xs text-figma-text-tertiary">
-              <p>💡 Tip: Select specific frames to audit just that area</p>
-            </div>
-          </div>
-        )}
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-1">Figma Font Audit Pro</h1>
+        <p className="text-sm text-figma-text-secondary">
+          Comprehensive font and text style analysis
+        </p>
       </div>
+
+      {/* Error State */}
+      {error && !isAuditing && (
+        <ErrorDisplay error={error} onDismiss={handleDismissError} />
+      )}
+
+      {/* Auditing State */}
+      {isAuditing && (
+        <div className="space-y-4">
+          <ProgressIndicator progress={progress} onCancel={handleCancelAudit} />
+          <p className="text-sm text-figma-text-secondary text-center">
+            Analyzing text layers...
+          </p>
+        </div>
+      )}
+
+      {/* Initial State - No Audit */}
+      {!isAuditing && !auditResult && !error && (
+        <div className="space-y-4">
+          <div className="bg-figma-bg-secondary rounded-lg p-6 border border-figma-border">
+            <h2 className="text-lg font-semibold mb-2">Ready to audit</h2>
+            <p className="text-sm text-figma-text-secondary mb-4">
+              Choose a scope to begin analyzing fonts and text styles in your
+              design.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleRunAuditPage}
+                className="
+                  btn btn-primary w-full
+                  px-4 py-2 rounded-md
+                  bg-figma-bg-brand hover:bg-figma-bg-brand-hover
+                  text-white font-medium
+                  transition-colors
+                "
+              >
+                Run Audit on Current Page
+              </button>
+
+              <button
+                onClick={handleRunAuditSelection}
+                className="
+                  btn btn-secondary w-full
+                  px-4 py-2 rounded-md
+                  bg-figma-bg-secondary hover:bg-figma-bg-tertiary
+                  border border-figma-border
+                  text-figma-text font-medium
+                  transition-colors
+                "
+              >
+                Run Audit on Selection
+              </button>
+            </div>
+          </div>
+
+          <div className="text-xs text-figma-text-secondary">
+            <p>
+              <strong>Tip:</strong> The audit will analyze all text layers and
+              provide detailed information about fonts, styles, and potential
+              improvements.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Results State */}
+      {!isAuditing && auditResult && !error && (
+        <div className="space-y-6">
+          {/* Summary Dashboard */}
+          <SummaryDashboard summary={auditResult.summary} />
+
+          {/* Audit Results */}
+          <AuditResults
+            textLayers={auditResult.textLayers}
+            onNavigate={handleNavigateToLayer}
+          />
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4 border-t border-figma-border">
+            <button
+              onClick={handleRunAuditPage}
+              className="
+                flex-1 px-4 py-2 rounded-md
+                bg-figma-bg-brand hover:bg-figma-bg-brand-hover
+                text-white font-medium text-sm
+                transition-colors
+              "
+            >
+              Run New Audit
+            </button>
+
+            <button
+              onClick={reset}
+              className="
+                px-4 py-2 rounded-md
+                bg-figma-bg-secondary hover:bg-figma-bg-tertiary
+                border border-figma-border
+                text-figma-text font-medium text-sm
+                transition-colors
+              "
+            >
+              Clear Results
+            </button>
+          </div>
+
+          {/* Metadata */}
+          <div className="text-xs text-figma-text-secondary">
+            <p>
+              File: {auditResult.fileName} • Completed:{' '}
+              {new Date(auditResult.timestamp).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

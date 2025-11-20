@@ -113,6 +113,11 @@ export function compareStyleProperties(
   };
 
   try {
+    // Check if node has any characters
+    if (node.characters.length === 0) {
+      return matches; // Return all false for empty nodes
+    }
+
     // Get node properties (using character 0 for mixed styles)
     const nodeFontName = node.getRangeFontName(0, 1) as FontName;
     const nodeFontSize = node.getRangeFontSize(0, 1) as number;
@@ -125,7 +130,7 @@ export function compareStyleProperties(
     const styleFontSize = style.fontSize;
     const styleFontWeight = style.fontWeight;
     const styleLineHeight = style.lineHeight;
-    const styleFills = style.fills;
+    const styleFills = style.fills as readonly Paint[] | undefined;
 
     // Compare font family
     if (
@@ -151,7 +156,7 @@ export function compareStyleProperties(
     }
 
     // Compare color (first solid fill)
-    if (compareFills(nodeFills, styleFills)) {
+    if (styleFills && compareFills(nodeFills, styleFills)) {
       matches.color = true;
     }
   } catch (error) {
@@ -201,6 +206,11 @@ function compareFills(
   a: readonly Paint[],
   b: readonly Paint[]
 ): boolean {
+  // Ensure both arrays exist and are valid
+  if (!a || !Array.isArray(a) || !b || !Array.isArray(b)) {
+    return false;
+  }
+
   const solidA = a.find((fill) => fill.type === 'SOLID') as
     | SolidPaint
     | undefined;
