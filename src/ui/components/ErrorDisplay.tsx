@@ -2,9 +2,13 @@ import React from 'react';
 
 interface ErrorDisplayProps {
   error: string;
-  errorType?: 'VALIDATION' | 'API' | 'UNKNOWN';
+  errorType?: 'validation' | 'scanning' | 'processing' | 'checkpoint' | 'permission' | 'VALIDATION' | 'API' | 'UNKNOWN';
+  canRetry?: boolean;
+  canRollback?: boolean;
+  checkpointTitle?: string;
   onDismiss?: () => void;
   onRetry?: () => void;
+  onRollback?: () => void;
 }
 
 /**
@@ -25,14 +29,25 @@ interface ErrorDisplayProps {
 export default function ErrorDisplay({
   error,
   errorType = 'UNKNOWN',
+  canRetry = false,
+  canRollback = false,
+  checkpointTitle,
   onDismiss,
   onRetry,
+  onRollback,
 }: ErrorDisplayProps) {
   // Get error icon based on type
   const getErrorIcon = () => {
     switch (errorType) {
+      case 'validation':
       case 'VALIDATION':
         return '⚠️';
+      case 'permission':
+        return '🔒';
+      case 'checkpoint':
+        return '💾';
+      case 'scanning':
+      case 'processing':
       case 'API':
         return '❌';
       case 'UNKNOWN':
@@ -44,8 +59,17 @@ export default function ErrorDisplay({
   // Get error title based on type
   const getErrorTitle = () => {
     switch (errorType) {
+      case 'validation':
       case 'VALIDATION':
-        return 'Invalid Input';
+        return 'Validation Error';
+      case 'permission':
+        return 'Permission Denied';
+      case 'checkpoint':
+        return 'Checkpoint Error';
+      case 'scanning':
+        return 'Scanning Error';
+      case 'processing':
+        return 'Processing Error';
       case 'API':
         return 'API Error';
       case 'UNKNOWN':
@@ -72,13 +96,18 @@ export default function ErrorDisplay({
           <p className="text-sm text-red-800 dark:text-red-200 mt-1">
             {error}
           </p>
+          {canRollback && checkpointTitle && (
+            <p className="text-xs text-red-700 dark:text-red-300 mt-2">
+              Rollback checkpoint available: <span className="font-mono">{checkpointTitle}</span>
+            </p>
+          )}
         </div>
       </div>
 
       {/* Actions */}
-      {(onRetry || onDismiss) && (
+      {(canRetry || canRollback || onDismiss) && (
         <div className="flex gap-2 mt-3">
-          {onRetry && (
+          {canRetry && onRetry && (
             <button
               onClick={onRetry}
               className="
@@ -89,6 +118,19 @@ export default function ErrorDisplay({
               "
             >
               Try Again
+            </button>
+          )}
+          {canRollback && onRollback && (
+            <button
+              onClick={onRollback}
+              className="
+                px-3 py-1 text-xs rounded
+                bg-yellow-600 text-white
+                hover:bg-yellow-700
+                transition-colors
+              "
+            >
+              Rollback to Checkpoint
             </button>
           )}
           {onDismiss && (
