@@ -33,20 +33,73 @@ figma.showUI(__html__, {
 
 /**
  * Handle messages from the UI context
+ *
+ * Routes messages to appropriate handlers:
+ * - Legacy font audit (RUN_AUDIT, CANCEL_AUDIT)
+ * - Style governance audit (RUN_STYLE_AUDIT, CANCEL_STYLE_AUDIT)
+ * - Replacement operations (REPLACE_STYLE, REPLACE_TOKEN, ROLLBACK_TO_CHECKPOINT)
+ * - Export operations (EXPORT_PDF)
+ * - Navigation (NAVIGATE_TO_LAYER)
  */
 figma.ui.onmessage = async (msg: UIToMainMessage) => {
     try {
       switch (msg.type) {
+        // ==================================================================
+        // Legacy Font Audit (Feature 001)
+        // ==================================================================
         case 'RUN_AUDIT':
           await handleRunAudit(msg.scope);
           break;
 
-        case 'NAVIGATE_TO_LAYER':
-          await handleNavigateToLayer(msg.layerId);
-          break;
-
         case 'CANCEL_AUDIT':
           handleCancelAudit();
+          break;
+
+        // ==================================================================
+        // Style Governance Audit (Feature 002)
+        // ==================================================================
+        case 'RUN_STYLE_AUDIT':
+          await handleRunStyleAudit(msg.payload);
+          break;
+
+        case 'CANCEL_STYLE_AUDIT':
+          handleCancelStyleAudit();
+          break;
+
+        // ==================================================================
+        // Replacement Operations
+        // ==================================================================
+        case 'REPLACE_STYLE':
+          await handleReplaceStyle(
+            msg.payload.sourceStyleId,
+            msg.payload.targetStyleId,
+            msg.payload.affectedLayerIds
+          );
+          break;
+
+        case 'REPLACE_TOKEN':
+          await handleReplaceToken(
+            msg.payload.sourceTokenId,
+            msg.payload.targetTokenId
+          );
+          break;
+
+        case 'ROLLBACK_TO_CHECKPOINT':
+          await handleRollbackToCheckpoint(msg.payload.checkpointId);
+          break;
+
+        // ==================================================================
+        // Export Operations
+        // ==================================================================
+        case 'EXPORT_PDF':
+          await handleExportPDF(msg.payload.auditResult);
+          break;
+
+        // ==================================================================
+        // Navigation
+        // ==================================================================
+        case 'NAVIGATE_TO_LAYER':
+          await handleNavigateToLayer(msg.layerId);
           break;
 
         default:
@@ -221,5 +274,117 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
     type: 'AUDIT_ERROR',
     error: 'Audit cancelled by user',
     errorType: 'UNKNOWN',
+  });
+}
+
+// ============================================================================
+// Style Governance Audit Handlers (Feature 002 - Phase 2)
+// ============================================================================
+
+/**
+ * Handle RUN_STYLE_AUDIT message
+ * PLACEHOLDER: Will be implemented in Phase 2 (T027-T042)
+ */
+async function handleRunStyleAudit(payload?: {
+  includeHiddenLayers?: boolean;
+  includeTokens?: boolean;
+}): Promise<void> {
+  console.log('[StyleAudit] Placeholder handler called with:', payload);
+  sendMessage({
+    type: 'STYLE_AUDIT_ERROR',
+    payload: {
+      error: 'Style audit not yet implemented (Phase 2)',
+      errorType: 'UNKNOWN',
+    },
+  });
+}
+
+/**
+ * Handle CANCEL_STYLE_AUDIT message
+ * PLACEHOLDER: Will be implemented in Phase 2
+ */
+function handleCancelStyleAudit(): void {
+  console.log('[StyleAudit] Cancel placeholder called');
+  sendMessage({
+    type: 'STYLE_AUDIT_CANCELLED',
+    payload: {},
+  });
+}
+
+// ============================================================================
+// Replacement Operation Handlers (Feature 002 - Phase 3)
+// ============================================================================
+
+/**
+ * Handle REPLACE_STYLE message
+ * PLACEHOLDER: Will be implemented in Phase 3 (T043-T054)
+ */
+async function handleReplaceStyle(
+  sourceStyleId: string,
+  targetStyleId: string,
+  affectedLayerIds: string[]
+): Promise<void> {
+  console.log('[Replacement] Replace style placeholder:', {
+    sourceStyleId,
+    targetStyleId,
+    affectedLayerIds,
+  });
+  sendMessage({
+    type: 'REPLACEMENT_ERROR',
+    payload: {
+      error: 'Style replacement not yet implemented (Phase 3)',
+      errorType: 'UNKNOWN',
+      failedLayers: [],
+    },
+  });
+}
+
+/**
+ * Handle REPLACE_TOKEN message
+ * PLACEHOLDER: Will be implemented in Phase 3
+ */
+async function handleReplaceToken(
+  sourceTokenId: string,
+  targetTokenId: string
+): Promise<void> {
+  console.log('[Replacement] Replace token placeholder:', {
+    sourceTokenId,
+    targetTokenId,
+  });
+  sendMessage({
+    type: 'REPLACEMENT_ERROR',
+    payload: {
+      error: 'Token replacement not yet implemented (Phase 3)',
+      errorType: 'UNKNOWN',
+      failedLayers: [],
+    },
+  });
+}
+
+/**
+ * Handle ROLLBACK_TO_CHECKPOINT message
+ * PLACEHOLDER: Will be implemented in Phase 3
+ */
+async function handleRollbackToCheckpoint(checkpointId: string): Promise<void> {
+  console.log('[Replacement] Rollback placeholder:', checkpointId);
+  // Note: Rollback uses version history API, not custom implementation
+  figma.notify('Rollback not yet implemented (Phase 3)', { error: true });
+}
+
+// ============================================================================
+// Export Handler (Feature 002 - Phase 4)
+// ============================================================================
+
+/**
+ * Handle EXPORT_PDF message
+ * PLACEHOLDER: Will be implemented in Phase 4 (T055-T060)
+ */
+async function handleExportPDF(auditResult: any): Promise<void> {
+  console.log('[Export] PDF export placeholder called');
+  sendMessage({
+    type: 'EXPORT_PDF_ERROR',
+    payload: {
+      error: 'PDF export not yet implemented (Phase 4)',
+    },
   });
 }
