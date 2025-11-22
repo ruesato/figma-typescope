@@ -125,23 +125,54 @@ export default function App() {
         <div className="space-y-6">
           {/* Summary Dashboard */}
           <div className="bg-figma-bg-secondary rounded-lg p-6 border border-figma-border">
-            <h2 className="text-lg font-semibold mb-4">Audit Results</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-figma-text-secondary">Document</p>
-                <p className="text-sm font-medium">{styleGovernanceResult.documentName}</p>
+            <h2 className="text-lg font-semibold mb-4">Audit Summary</h2>
+            <div className="space-y-4">
+              {/* Document Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-figma-text-secondary">Document</p>
+                  <p className="text-sm font-medium">{styleGovernanceResult.documentName}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-figma-text-secondary">Pages</p>
+                  <p className="text-sm font-medium">{styleGovernanceResult.totalPages}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-figma-text-secondary">Total Layers</p>
-                <p className="text-sm font-medium">{styleGovernanceResult.totalTextLayers}</p>
+
+              {/* Text Layers Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-figma-text-secondary">Total Layers</p>
+                  <p className="text-sm font-medium">{styleGovernanceResult.totalTextLayers}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-figma-text-secondary">Unstyled</p>
+                  <p className="text-sm font-medium text-red-500">
+                    {styleGovernanceResult.metrics.unstyledCount}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-figma-text-secondary">Pages</p>
-                <p className="text-sm font-medium">{styleGovernanceResult.totalPages}</p>
+
+              {/* Style Adoption */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-figma-text-secondary">Fully Styled</p>
+                  <p className="text-sm font-medium text-green-500">
+                    {styleGovernanceResult.metrics.fullyStyledCount}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-figma-text-secondary">Partially Styled</p>
+                  <p className="text-sm font-medium text-yellow-500">
+                    {styleGovernanceResult.metrics.partiallyStyledCount}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-figma-text-secondary">Unstyled</p>
-                <p className="text-sm font-medium">{styleGovernanceResult.metrics.unstyledCount}</p>
+
+              {/* Audit Details */}
+              <div className="pt-4 border-t border-figma-border">
+                <p className="text-xs text-figma-text-secondary mb-2">Audit Duration</p>
+                <p className="text-sm font-medium">{styleGovernanceResult.auditDuration}ms</p>
               </div>
             </div>
           </div>
