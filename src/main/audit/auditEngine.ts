@@ -51,7 +51,7 @@ export class AuditEngine {
   ): Promise<StyleGovernanceAuditResult> {
     // Reset cancellation flag
     this.cancelled = false;
-    this.startTime = performance.now();
+    this.startTime = Date.now();
 
     try {
       // State 1: VALIDATING
@@ -80,7 +80,7 @@ export class AuditEngine {
         throw new Error('Cannot complete audit: invalid state transition');
       }
 
-      const duration = performance.now() - this.startTime;
+      const duration = Date.now() - this.startTime;
 
       // Send final result to UI
       this.sendMessage({
@@ -450,7 +450,7 @@ export class AuditEngine {
       },
 
       isStale: false,
-      auditDuration: performance.now() - this.startTime,
+      auditDuration: Date.now() - this.startTime,
     };
 
     console.log(`Document processing complete: ${processedLayers.length} layers processed`);
