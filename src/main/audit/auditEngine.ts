@@ -548,8 +548,10 @@ export class AuditEngine {
     }
 
     // Build mock audit result (placeholder)
+    // Note: timestamp is serialized through postMessage, so we use ISO string
+    // which can be parsed on the UI side with new Date(string)
     const auditResult: StyleGovernanceAuditResult = {
-      timestamp: new Date(),
+      timestamp: new Date() as any, // Will be serialized as ISO string by postMessage
       documentName: figma.root ? figma.root.name : figma.currentPage.name || 'Untitled',
       documentId: figma.fileKey || 'unknown',
 

@@ -179,7 +179,11 @@ export default function App() {
             <p>
               Document: {styleGovernanceResult.documentName} • Layers:{' '}
               {styleGovernanceResult.totalTextLayers} • Completed:{' '}
-              {new Date(styleGovernanceResult.timestamp).toLocaleString()}
+              {typeof styleGovernanceResult.timestamp === 'string'
+                ? new Date(styleGovernanceResult.timestamp).toLocaleString()
+                : styleGovernanceResult.timestamp instanceof Date
+                  ? styleGovernanceResult.timestamp.toLocaleString()
+                  : 'Unknown'}
             </p>
           </div>
         </div>
