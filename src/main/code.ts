@@ -1,13 +1,9 @@
-import type {
-  UIToMainMessage,
-  MainToUIMessage,
-  AuditResult,
-  TextLayerData,
-} from '@/shared/types';
+import type { UIToMainMessage, MainToUIMessage, AuditResult, TextLayerData } from '@/shared/types';
 import { getTextNodesFromScope } from './utils/traversal';
 import { extractFontMetadata } from './utils/fontMetadata';
 import { detectStyleAssignment } from './utils/styleDetection';
 import { calculateSummary } from './utils/summary';
+import { AuditEngine } from './audit/auditEngine';
 
 // ============================================================================
 // Main Entry Point (Figma Sandbox Context)
@@ -42,234 +38,226 @@ figma.showUI(__html__, {
  * - Navigation (NAVIGATE_TO_LAYER)
  */
 figma.ui.onmessage = async (msg: UIToMainMessage) => {
-    try {
-      switch (msg.type) {
-        // ==================================================================
-        // Legacy Font Audit (Feature 001)
-        // ==================================================================
-        case 'RUN_AUDIT':
-          await handleRunAudit(msg.scope);
-          break;
+  try {
+    switch (msg.type) {
+      // ==================================================================
+      // Legacy Font Audit (Feature 001)
+      // ==================================================================
+      case 'RUN_AUDIT':
+        await handleRunAudit(msg.scope);
+        break;
 
-        case 'CANCEL_AUDIT':
-          handleCancelAudit();
-          break;
+      case 'CANCEL_AUDIT':
+        handleCancelAudit();
+        break;
 
-        // ==================================================================
-        // Style Governance Audit (Feature 002)
-        // ==================================================================
-        case 'RUN_STYLE_AUDIT':
-          await handleRunStyleAudit(msg.payload);
-          break;
+      // ==================================================================
+      // Style Governance Audit (Feature 002)
+      // ==================================================================
+      case 'RUN_STYLE_AUDIT':
+        await handleRunStyleAudit(msg.payload);
+        break;
 
-        case 'CANCEL_STYLE_AUDIT':
-          handleCancelStyleAudit();
-          break;
+      case 'CANCEL_STYLE_AUDIT':
+        handleCancelStyleAudit();
+        break;
 
-        // ==================================================================
-        // Replacement Operations
-        // ==================================================================
-        case 'REPLACE_STYLE':
-          await handleReplaceStyle(
-            msg.payload.sourceStyleId,
-            msg.payload.targetStyleId,
-            msg.payload.affectedLayerIds
-          );
-          break;
+      // ==================================================================
+      // Replacement Operations
+      // ==================================================================
+      case 'REPLACE_STYLE':
+        await handleReplaceStyle(
+          msg.payload.sourceStyleId,
+          msg.payload.targetStyleId,
+          msg.payload.affectedLayerIds
+        );
+        break;
 
-        case 'REPLACE_TOKEN':
-          await handleReplaceToken(
-            msg.payload.sourceTokenId,
-            msg.payload.targetTokenId
-          );
-          break;
+      case 'REPLACE_TOKEN':
+        await handleReplaceToken(msg.payload.sourceTokenId, msg.payload.targetTokenId);
+        break;
 
-        case 'ROLLBACK_TO_CHECKPOINT':
-          await handleRollbackToCheckpoint(msg.payload.checkpointId);
-          break;
+      // case 'ROLLBACK_TO_CHECKPOINT':
+      //   await handleRollbackToCheckpoint(msg.payload.checkpointId);
+      //   break;
 
-        // ==================================================================
-        // Export Operations
-        // ==================================================================
-        case 'EXPORT_PDF':
-          await handleExportPDF(msg.payload.auditResult);
-          break;
+      // ==================================================================
+      // Export Operations
+      // ==================================================================
+      case 'EXPORT_PDF':
+        await handleExportPDF(msg.payload.auditResult);
+        break;
 
-        // ==================================================================
-        // Navigation
-        // ==================================================================
-        case 'NAVIGATE_TO_LAYER':
-          await handleNavigateToLayer(msg.layerId);
-          break;
+      // ==================================================================
+      // Navigation
+      // ==================================================================
+      case 'NAVIGATE_TO_LAYER':
+        await handleNavigateToLayer(msg.layerId);
+        break;
 
-        default:
-          console.warn('Unknown message type:', (msg as { type: string }).type);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      sendMessage({
-        type: 'AUDIT_ERROR',
-        error: errorMessage,
-        errorType: 'UNKNOWN',
-      });
+      default:
+        console.warn('Unknown message type:', (msg as { type: string }).type);
     }
-  };
-
-  // ============================================================================
-  // Message Sending Helper
-  // ============================================================================
-
-  /**
-   * Send a message to the UI context
-   */
-  function sendMessage(message: MainToUIMessage): void {
-    figma.ui.postMessage(message);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    sendMessage({
+      type: 'AUDIT_ERROR',
+      error: errorMessage,
+      errorType: 'UNKNOWN',
+    });
   }
+};
 
-  // ============================================================================
-  // Audit Handler
-  // ============================================================================
+// ============================================================================
+// Message Sending Helper
+// ============================================================================
 
-  let cancelFlag = false;
+/**
+ * Send a message to the UI context
+ */
+function sendMessage(message: MainToUIMessage): void {
+  figma.ui.postMessage(message);
+}
 
-  /**
-   * Handle RUN_AUDIT message - main audit orchestration
-   */
-  async function handleRunAudit(scope: 'page' | 'selection'): Promise<void> {
-    try {
-      cancelFlag = false;
+// ============================================================================
+// Audit Handler
+// ============================================================================
 
-      sendMessage({ type: 'AUDIT_STARTED' });
+let cancelFlag = false;
 
-      // Step 1: Get text nodes from scope
-      const { textNodes, scopeName } = await getTextNodesFromScope(
-        scope,
-        () => cancelFlag
-      );
+/**
+ * Handle RUN_AUDIT message - main audit orchestration
+ */
+async function handleRunAudit(scope: 'page' | 'selection'): Promise<void> {
+  try {
+    cancelFlag = false;
 
-      if (textNodes.length === 0) {
-        throw new Error('No text layers found in the selected scope');
-      }
+    sendMessage({ type: 'AUDIT_STARTED' });
 
-      // Step 2: Process each text node
-      const textLayers: TextLayerData[] = [];
-      const total = textNodes.length;
+    // Step 1: Get text nodes from scope
+    const { textNodes, scopeName } = await getTextNodesFromScope(scope, () => cancelFlag);
 
-      for (let i = 0; i < textNodes.length; i++) {
-        // Check for cancellation
-        if (cancelFlag) {
-          throw new Error('Audit cancelled by user');
-        }
-
-        const node = textNodes[i];
-
-        // Skip empty text nodes silently
-        if (node.characters.length === 0) {
-          continue;
-        }
-
-        try {
-          // Extract font metadata
-          const metadata = await extractFontMetadata(node);
-
-          // Detect style assignment
-          const styleAssignment = await detectStyleAssignment(node);
-
-          // Combine into complete TextLayerData
-          const textLayer: TextLayerData = {
-            ...metadata,
-            styleAssignment,
-            // matchSuggestions will be added in Phase 6 (User Story 3)
-          };
-
-          textLayers.push(textLayer);
-
-          // Report progress
-          const progress = Math.round(((i + 1) / total) * 100);
-          sendMessage({
-            type: 'AUDIT_PROGRESS',
-            progress,
-            current: i + 1,
-            total,
-          });
-        } catch (error) {
-          // Log error but continue processing other nodes
-          console.error(`Error processing node ${node.id}:`, error);
-        }
-      }
-
-      // Step 3: Calculate summary
-      const summary = calculateSummary(textLayers);
-
-      // Step 4: Build result
-      const result: AuditResult = {
-        textLayers,
-        summary,
-        timestamp: new Date().toISOString(),
-        fileName: figma.root.name,
-      };
-
-      // Step 5: Send completion message
-      sendMessage({
-        type: 'AUDIT_COMPLETE',
-        result,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Audit failed';
-      const errorType = errorMessage.includes('No text layers')
-        ? ('VALIDATION' as const)
-        : ('UNKNOWN' as const);
-
-      sendMessage({
-        type: 'AUDIT_ERROR',
-        error: errorMessage,
-        errorType,
-      });
+    if (textNodes.length === 0) {
+      throw new Error('No text layers found in the selected scope');
     }
-  }
 
-  // ============================================================================
-  // Navigation Handler
-  // ============================================================================
+    // Step 2: Process each text node
+    const textLayers: TextLayerData[] = [];
+    const total = textNodes.length;
 
-  /**
-   * Handle NAVIGATE_TO_LAYER message - focus a layer in Figma
-   */
-  async function handleNavigateToLayer(layerId: string): Promise<void> {
-    try {
-      const node = await figma.getNodeByIdAsync(layerId);
-
-      if (!node) {
-        throw new Error('Layer not found');
+    for (let i = 0; i < textNodes.length; i++) {
+      // Check for cancellation
+      if (cancelFlag) {
+        throw new Error('Audit cancelled by user');
       }
 
-      if (node.type !== 'TEXT') {
-        throw new Error('Layer is not a text layer');
+      const node = textNodes[i];
+
+      // Skip empty text nodes silently
+      if (node.characters.length === 0) {
+        continue;
       }
 
-      // Focus the layer
-      figma.currentPage.selection = [node];
-      figma.viewport.scrollAndZoomIntoView([node]);
+      try {
+        // Extract font metadata
+        const metadata = await extractFontMetadata(node);
 
-      sendMessage({ type: 'NAVIGATE_SUCCESS' });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Navigation failed';
-      sendMessage({
-        type: 'NAVIGATE_ERROR',
-        error: errorMessage,
-      });
+        // Detect style assignment
+        const styleAssignment = await detectStyleAssignment(node);
+
+        // Combine into complete TextLayerData
+        const textLayer: TextLayerData = {
+          ...metadata,
+          styleAssignment,
+          // matchSuggestions will be added in Phase 6 (User Story 3)
+        };
+
+        textLayers.push(textLayer);
+
+        // Report progress
+        const progress = Math.round(((i + 1) / total) * 100);
+        sendMessage({
+          type: 'AUDIT_PROGRESS',
+          progress,
+          current: i + 1,
+          total,
+        });
+      } catch (error) {
+        // Log error but continue processing other nodes
+        console.error(`Error processing node ${node.id}:`, error);
+      }
     }
+
+    // Step 3: Calculate summary
+    const summary = calculateSummary(textLayers);
+
+    // Step 4: Build result
+    const result: AuditResult = {
+      textLayers,
+      summary,
+      timestamp: new Date().toISOString(),
+      fileName: figma.root.name,
+    };
+
+    // Step 5: Send completion message
+    sendMessage({
+      type: 'AUDIT_COMPLETE',
+      result,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Audit failed';
+    const errorType = errorMessage.includes('No text layers') ? 'VALIDATION' : 'UNKNOWN';
+
+    sendMessage({
+      type: 'AUDIT_ERROR',
+      error: errorMessage,
+      errorType,
+    });
   }
+}
 
-  // ============================================================================
-  // Cancel Handler
-  // ============================================================================
+// ============================================================================
+// Navigation Handler
+// ============================================================================
 
-  /**
-   * Handle CANCEL_AUDIT message - stop the current audit
-   */
-  function handleCancelAudit(): void {
-    cancelFlag = true;
+/**
+ * Handle NAVIGATE_TO_LAYER message - focus a layer in Figma
+ */
+async function handleNavigateToLayer(layerId: string): Promise<void> {
+  try {
+    const node = await figma.getNodeByIdAsync(layerId);
+
+    if (!node) {
+      throw new Error('Layer not found');
+    }
+
+    if (node.type !== 'TEXT') {
+      throw new Error('Layer is not a text layer');
+    }
+
+    // Focus the layer
+    figma.currentPage.selection = [node];
+    figma.viewport.scrollAndZoomIntoView([node]);
+
+    sendMessage({ type: 'NAVIGATE_SUCCESS' });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Navigation failed';
+    sendMessage({
+      type: 'NAVIGATE_ERROR',
+      error: errorMessage,
+    });
+  }
+}
+
+// ============================================================================
+// Cancel Handler
+// ============================================================================
+
+/**
+ * Handle CANCEL_AUDIT message - stop the current audit
+ */
+function handleCancelAudit(): void {
+  cancelFlag = true;
   sendMessage({
     type: 'AUDIT_ERROR',
     error: 'Audit cancelled by user',
@@ -283,20 +271,28 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
 
 /**
  * Handle RUN_STYLE_AUDIT message
- * PLACEHOLDER: Will be implemented in Phase 2 (T027-T042)
+ * Implements the new style governance audit using AuditEngine
  */
 async function handleRunStyleAudit(payload?: {
   includeHiddenLayers?: boolean;
   includeTokens?: boolean;
 }): Promise<void> {
-  console.log('[StyleAudit] Placeholder handler called with:', payload);
-  sendMessage({
-    type: 'STYLE_AUDIT_ERROR',
-    payload: {
-      error: 'Style audit not yet implemented (Phase 2)',
-      errorType: 'UNKNOWN',
-    },
-  });
+  try {
+    console.log('[StyleAudit] Starting audit with options:', payload);
+
+    // Create audit engine instance
+    const auditEngine = new AuditEngine();
+
+    // Run the audit
+    await auditEngine.runAudit(payload || {});
+
+    console.log('[StyleAudit] Audit completed successfully');
+  } catch (error) {
+    console.error('[StyleAudit] Audit failed:', error);
+
+    // Error will be handled by AuditEngine and sent via message handler
+    // No need to send additional error message here
+  }
 }
 
 /**
@@ -332,9 +328,10 @@ async function handleReplaceStyle(
   sendMessage({
     type: 'REPLACEMENT_ERROR',
     payload: {
+      operationType: 'style',
       error: 'Style replacement not yet implemented (Phase 3)',
-      errorType: 'UNKNOWN',
-      failedLayers: [],
+      errorType: 'validation',
+      canRollback: false,
     },
   });
 }
@@ -343,10 +340,7 @@ async function handleReplaceStyle(
  * Handle REPLACE_TOKEN message
  * PLACEHOLDER: Will be implemented in Phase 3
  */
-async function handleReplaceToken(
-  sourceTokenId: string,
-  targetTokenId: string
-): Promise<void> {
+async function handleReplaceToken(sourceTokenId: string, targetTokenId: string): Promise<void> {
   console.log('[Replacement] Replace token placeholder:', {
     sourceTokenId,
     targetTokenId,
@@ -354,9 +348,10 @@ async function handleReplaceToken(
   sendMessage({
     type: 'REPLACEMENT_ERROR',
     payload: {
+      operationType: 'token',
       error: 'Token replacement not yet implemented (Phase 3)',
-      errorType: 'UNKNOWN',
-      failedLayers: [],
+      errorType: 'validation',
+      canRollback: false,
     },
   });
 }
@@ -382,8 +377,9 @@ async function handleRollbackToCheckpoint(checkpointId: string): Promise<void> {
 async function handleExportPDF(auditResult: any): Promise<void> {
   console.log('[Export] PDF export placeholder called');
   sendMessage({
-    type: 'EXPORT_PDF_ERROR',
+    type: 'EXPORT_ERROR',
     payload: {
+      exportType: 'pdf',
       error: 'PDF export not yet implemented (Phase 4)',
     },
   });

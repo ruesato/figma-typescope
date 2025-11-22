@@ -5,6 +5,7 @@ Comprehensive Figma plugin for analyzing font usage, text styles, and typography
 ## Overview
 
 Figma Font Audit Pro helps design teams maintain typography consistency by providing deep insights into:
+
 - Font usage across pages and components
 - Text style application and coverage
 - Style assignment status (fully-styled, partially-styled, unstyled)
@@ -14,11 +15,12 @@ Figma Font Audit Pro helps design teams maintain typography consistency by provi
 ## Current Status
 
 **Version**: 1.0.0 (MVP)
-**Implementation**: Phase 3 Complete (40% - 38/96 tasks)
+**Implementation**: Phase 2 In Progress (50% - 44/96 tasks)
 
-### ✅ Implemented Features (Phases 1-3)
+### ✅ Implemented Features (Phases 1-2)
 
-#### Core Audit Functionality
+#### Phase 1: Font Audit (Complete)
+
 - **Text Layer Discovery**: Recursively scan entire page or selection for all text layers
 - **Font Metadata Extraction**: Capture font family, size, weight, line height, and color
 - **Style Assignment Detection**: Identify which text has styles applied (fully/partially/unstyled)
@@ -27,7 +29,17 @@ Figma Font Audit Pro helps design teams maintain typography consistency by provi
 - **Override Detection**: Identify text overrides in component instances
 - **Library Source Identification**: Track which libraries text styles come from
 
+#### Phase 2: Style Governance Audit (In Progress)
+
+- **7-State Audit Engine**: Robust state machine (idle → validating → scanning → processing → complete/error/cancelled)
+- **Document Validator**: Size limits (5k warning, 25k max), accessibility checks
+- **Page Scanner**: Multi-page traversal with progress tracking
+- **Metadata Processor**: Style extraction, library resolution, hierarchy building
+- **Style Tree View**: Hierarchical display of styles grouped by library
+- **Progress Reporting**: Real-time updates during validation, scanning, and processing phases
+
 #### User Interface
+
 - **Summary Dashboard**: High-level statistics with visual indicators
   - Total text layers, unique fonts, style coverage %
   - Hidden layers count, libraries in use
@@ -38,6 +50,7 @@ Figma Font Audit Pro helps design teams maintain typography consistency by provi
 - **Error Handling**: User-friendly error messages with retry/dismiss actions
 - **Loading States**: Proper loading indicators throughout
 - **Empty States**: Helpful empty state with usage tips
+- **Style Tree View**: Library-grouped style hierarchy (new in Phase 2)
 
 ### 🚧 Not Yet Implemented (Phases 4-8)
 
@@ -68,14 +81,14 @@ pnpm install
 ### 2. Build the Plugin
 
 ```bash
-# Production build (minified)
-npx build-figma-plugin --minify
+# Production build
+pnpm build
 
-# Development build with watch mode
+# Development build with watch mode (recommended)
 pnpm dev
 ```
 
-**Note**: Build succeeds with `--minify` flag. The `--typecheck` flag shows TypeScript errors due to build tool configuration, but can be safely ignored as the build works correctly.
+**Note**: The project uses Vite as the build tool. The `pnpm dev` command enables hot reload for faster development. TypeScript errors shown by `pnpm typecheck` are known issues and can be safely ignored as the build works correctly.
 
 ### 3. Load in Figma
 
@@ -103,16 +116,19 @@ pnpm dev
 ### Understanding Results
 
 **Style Coverage**: Percentage of text layers with fully-applied text styles
+
 - 🟢 Green (≥80%): Excellent consistency
 - 🟡 Yellow (50-79%): Moderate consistency
 - 🔴 Red (<50%): Needs improvement
 
 **Assignment Status**:
+
 - **Styled** (green): All properties match the applied text style
 - **Partial** (yellow): Some properties differ from applied style (shows which ones)
 - **Unstyled** (red): No text style applied
 
 **Component Context**:
+
 - Hierarchy path shows component structure (e.g., "Page → Card → Button → Label")
 - Override badges indicate when instance text differs from main component
 
@@ -120,15 +136,20 @@ pnpm dev
 
 - **Filter by status**: Show only styled, partial, or unstyled text
 - **Sort options**: Organize by font family, size, or assignment status
-- **Search**: *(Coming in Phase 4)*
+- **Search**: _(Coming in Phase 4)_
 
 ## Project Structure
 
-```
+````
 figma-fontscope/
 ├── src/
 │   ├── main/                   # Figma sandbox context (plugin main code)
 │   │   ├── code.ts            # Main entry point, message handling
+│   │   ├── audit/             # Style governance audit (Phase 2)
+│   │   │   ├── auditEngine.ts # 7-state audit orchestration
+│   │   │   ├── validator.ts   # Document validation & size limits
+│   │   │   ├── scanner.ts     # Multi-page text layer discovery
+│   │   │   └── processor.ts   # Style metadata extraction
 │   │   └── utils/
 │   │       ├── traversal.ts   # Text node traversal
 │   │       ├── fontMetadata.ts # Font property extraction
@@ -145,59 +166,74 @@ figma-fontscope/
 │   │   │   ├── SummaryDashboard.tsx
 │   │   │   ├── AuditResults.tsx
 │   │   │   ├── LayerItem.tsx
+│   │   │   ├── StyleTreeView.tsx    # Style hierarchy tree (Phase 2)
 │   │   │   ├── ProgressIndicator.tsx
 │   │   │   └── ErrorDisplay.tsx
 │   │   ├── hooks/
 │   │   │   ├── useMessageHandler.ts # PostMessage communication
-│   │   │   └── useAuditState.ts     # State management
+│   │   │   ├── useAuditState.ts     # 7-state machine management
+│   │   │   ├── useDocumentChange.ts # Document change detection
+│   │   │   └── useReplacementState.ts # Style replacement state
 │   │   └── styles/
 │   │       └── globals.css    # Tailwind + Figma design tokens
 │   │
 │   └── shared/
 │       └── types.ts            # Shared TypeScript types
 │
+├── specs/                      # Feature specifications
+│   ├── 001-font-audit/        # Phase 1: Font audit
+│   └── 002-style-governance/  # Phase 2: Style governance
 ├── manifest.json               # Figma plugin manifest
 ├── package.json               # Dependencies & scripts
 ├── tsconfig.json              # TypeScript configuration
 ├── tailwind.config.js         # Tailwind CSS configuration
-└── vite.config.ts             # Vite build configuration
-```
+├── vite.config.ts             # Vite build configuration
+├── README.md                  # This file
+└── TESTING.md                 # Testing guide (new)
 
 ## Tech Stack
 
 ### Core
+
 - **TypeScript 5+**: Strict mode enabled
 - **React 18**: UI framework
 - **Figma Plugin API**: Native Figma integration
 
 ### Build & Dev Tools
+
 - **@create-figma-plugin**: Official Figma plugin build tool
 - **Vite**: Fast build tool with HMR
 - **pnpm**: Fast, disk-efficient package manager
 
 ### Styling
+
 - **Tailwind CSS**: Utility-first CSS framework
 - **Figma Plugin Design System**: Native Figma design tokens
 - **CSS Variables**: Theme support (light/dark mode)
 
 ### State & Communication
+
 - **Custom State Management**: Singleton pattern with React hooks (no external dependencies)
 - **PostMessage Protocol**: Type-safe cross-context communication
 
 ### Utilities
-- **jsPDF**: PDF generation *(Phase 7)*
-- **PapaParse**: CSV export *(Phase 7)*
+
+- **jsPDF**: PDF generation _(Phase 7)_
+- **PapaParse**: CSV export _(Phase 7)_
 
 ## Development Workflow
 
 ### Available Scripts
 
 ```bash
-# Development with hot reload
+# Development with hot reload (recommended)
 pnpm dev
 
 # Production build
-npx build-figma-plugin --minify
+pnpm build
+
+# Type checking (optional - has known errors)
+pnpm typecheck
 
 # Run tests
 pnpm test
@@ -207,7 +243,7 @@ pnpm lint
 
 # Format code
 pnpm format
-```
+````
 
 ### Debugging
 
@@ -263,30 +299,35 @@ Figma plugins run in two separate contexts:
 ## Roadmap
 
 ### Phase 4: Search & Filter (T039-T050)
+
 - Text content search
 - Font family/style name search
 - Advanced filtering options
 - Filter persistence
 
 ### Phase 5: Click-to-Navigate (T051-T058)
+
 - Click layer cards to select in Figma
 - Zoom to layer viewport
 - Multi-select support
 - Navigation history
 
 ### Phase 6: Style Match Suggestions (T059-T068)
+
 - 80%+ similarity scoring
 - Weighted property matching (30/30/20/15/5)
 - Recommended style suggestions
 - Apply suggestions
 
 ### Phase 7: Export (T069-T079)
+
 - PDF audit reports
 - CSV data export
 - Custom report templates
 - Scheduled exports
 
 ### Phase 8: Polish & Performance (T080-T096)
+
 - Keyboard shortcuts
 - Bulk operations
 - Virtual scrolling (large files)
@@ -317,15 +358,22 @@ chore: maintenance tasks
 
 ## Testing
 
-To test the plugin:
+See **[TESTING.md](./TESTING.md)** for comprehensive testing instructions, including:
+
+- Setup instructions for test documents
+- Expected behaviors for each audit phase
+- State machine transition validation
+- Error handling scenarios
+- Performance benchmarks
+
+Quick test:
 
 1. Create a Figma file with various text layers
 2. Apply text styles to some (not all) layers
-3. Create components with text and instances
-4. Override some instance text
-5. Run audit and verify results
+3. Run "Run Style Audit" and verify progress updates
+4. Review results in Style Tree View
 
-See [Installation & Testing Guide](#installation--development) above for detailed test scenarios.
+See [Installation & Testing Guide](#installation--development) above for setup.
 
 ## Documentation
 
@@ -337,11 +385,13 @@ See [Installation & Testing Guide](#installation--development) above for detaile
 ## Resources
 
 ### Plugin Development
+
 - [Create Figma Plugin Docs](https://yuanqing.github.io/create-figma-plugin/)
 - [Figma Plugin API Docs](https://figma.com/plugin-docs/)
 - [Figma Plugin Samples](https://github.com/figma/plugin-samples)
 
 ### Design System
+
 - [Figma Plugin DS](https://github.com/thomas-lowry/figma-plugin-ds)
 - [Tailwind CSS](https://tailwindcss.com/)
 
@@ -356,5 +406,5 @@ Built with [Create Figma Plugin](https://yuanqing.github.io/create-figma-plugin/
 ---
 
 **Current Version**: 1.0.0-alpha
-**Last Updated**: 2025-11-19
-**Status**: MVP Complete (Phase 3/8)
+**Last Updated**: 2025-11-21
+**Status**: Phase 2 In Progress (Style Governance Audit)

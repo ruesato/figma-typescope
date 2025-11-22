@@ -15,7 +15,7 @@ import ErrorDisplay from './components/ErrorDisplay';
  */
 export default function App() {
   // Get message handlers for communication with main context
-  const { runAudit, navigateToLayer, cancelAudit } = useMessageHandler();
+  const { runStyleAudit, navigateToLayer, cancelStyleAudit } = useMessageHandler();
 
   // Get audit state
   const { auditResult, isAuditing, progress, error, reset } = useAuditState();
@@ -26,16 +26,16 @@ export default function App() {
 
   const handleRunAuditPage = () => {
     reset();
-    runAudit('page');
+    runStyleAudit({ includeHiddenLayers: false, includeTokens: false });
   };
 
   const handleRunAuditSelection = () => {
     reset();
-    runAudit('selection');
+    runStyleAudit({ includeHiddenLayers: false, includeTokens: false });
   };
 
   const handleCancelAudit = () => {
-    cancelAudit();
+    cancelStyleAudit();
     reset();
   };
 
@@ -62,17 +62,12 @@ export default function App() {
       </div>
 
       {/* Error State */}
-      {error && !isAuditing && (
-        <ErrorDisplay error={error} onDismiss={handleDismissError} />
-      )}
+      {error && !isAuditing && <ErrorDisplay error={error} onDismiss={handleDismissError} />}
 
       {/* Auditing State */}
       {isAuditing && (
         <div className="space-y-4">
-          <ProgressIndicator progress={progress} onCancel={handleCancelAudit} />
-          <p className="text-sm text-figma-text-secondary text-center">
-            Analyzing text layers...
-          </p>
+          <ProgressIndicator progress={progress} message="Analyzing text layers..." />
         </div>
       )}
 
@@ -82,8 +77,7 @@ export default function App() {
           <div className="bg-figma-bg-secondary rounded-lg p-6 border border-figma-border">
             <h2 className="text-lg font-semibold mb-2">Ready to audit</h2>
             <p className="text-sm text-figma-text-secondary mb-4">
-              Choose a scope to begin analyzing fonts and text styles in your
-              design.
+              Choose a scope to begin analyzing fonts and text styles in your design.
             </p>
 
             <div className="flex flex-col gap-3">
@@ -118,9 +112,8 @@ export default function App() {
 
           <div className="text-xs text-figma-text-secondary">
             <p>
-              <strong>Tip:</strong> The audit will analyze all text layers and
-              provide detailed information about fonts, styles, and potential
-              improvements.
+              <strong>Tip:</strong> The audit will analyze all text layers and provide detailed
+              information about fonts, styles, and potential improvements.
             </p>
           </div>
         </div>
@@ -133,10 +126,7 @@ export default function App() {
           <SummaryDashboard summary={auditResult.summary} />
 
           {/* Audit Results */}
-          <AuditResults
-            textLayers={auditResult.textLayers}
-            onNavigate={handleNavigateToLayer}
-          />
+          <AuditResults textLayers={auditResult.textLayers} onNavigate={handleNavigateToLayer} />
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-figma-border">
