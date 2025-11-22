@@ -19,6 +19,13 @@ declare global {
  *
  * Each state has specific responsibilities and emits appropriate progress
  * messages to the UI for user feedback.
+ *
+ * KEY LESSON FROM DEVELOPER_REFERENCE.md:
+ * Always validate Figma API availability and handle unsupported APIs gracefully.
+ * The Figma plugin environment has specific constraints:
+ * - Some async APIs may not be available (e.g., figma.loadPageAsync doesn't exist)
+ * - Work with figma.currentPage and figma.root instead
+ * - Always check that methods exist before calling them
  */
 
 export class AuditEngine {
@@ -54,6 +61,9 @@ export class AuditEngine {
     this.startTime = Date.now();
 
     try {
+      // Validate Figma environment
+      await this.validateFigmaEnvironment();
+
       // State 1: VALIDATING
       if (!this.transition('validating')) {
         throw new Error('Cannot start audit: invalid state transition');
@@ -235,6 +245,39 @@ export class AuditEngine {
   }
 
   // ============================================================================
+  // Figma Environment Validation
+  // ============================================================================
+
+  /**
+   * Validate that the Figma environment is properly configured
+   *
+   * KEY LESSON: Always validate Figma API availability before using it.
+   * Some methods may not exist or may be unavailable in certain contexts.
+   */
+  private async validateFigmaEnvironment(): Promise<void> {
+    // Check that we have figma global
+    if (typeof figma === 'undefined') {
+      throw new Error('Figma API not available. This plugin must run in the Figma plugin context.');
+    }
+
+    // Check that we have required figma properties
+    if (!figma.currentPage) {
+      throw new Error('Cannot access current page. Plugin may not have document access.');
+    }
+
+    if (!figma.root) {
+      throw new Error('Cannot access document root. Plugin environment is invalid.');
+    }
+
+    // Check that figma.ui exists
+    if (!figma.ui || typeof figma.ui.postMessage !== 'function') {
+      throw new Error('UI message handler not available. Plugin UI context is invalid.');
+    }
+
+    console.log('✓ Figma environment validation complete');
+  }
+
+  // ============================================================================
   // Audit Phase Implementations
   // ============================================================================
 
@@ -245,55 +288,98 @@ export class AuditEngine {
    * - Warning at 5,001 layers
    * - Hard limit at 25,001 layers
    *
+   * KEY LESSON: Use figma.currentPage or figma.root instead of figma.loadPageAsync.
+   * The loadPageAsync API doesn't exist in all plugin contexts.
+   *
    * @param options - Audit options
    */
   private async validateDocument(options: {
     includeHiddenLayers?: boolean;
     includeTokens?: boolean;
   }): Promise<void> {
-    // Check if we can access the document
-    if (!figma.currentPage) {
-      throw new Error('Cannot access current page');
-    }
+    try {
+      // Check if we can access the document
+      if (!figma.currentPage) {
+        throw new Error('Cannot access current page');
+      }
 
-    // Count total text layers across all pages
-    let totalTextLayers = 0;
-    const pages = figma.root.children;
+      // Count total text layers
+      // We'll count from the current page first, then all pages if needed
+      let totalTextLayers = 0;
 
-    for (const page of pages) {
-      // Load page content if needed
-      await figma.loadPageAsync(page);
+      try {
+        // Try to access all pages via figma.root
+        if (figma.root && figma.root.children) {
+          for (const page of figma.root.children) {
+            // Find all text nodes in this page directly
+            // Note: We don't use figma.loadPageAsync as it doesn't exist
+            const textNodes = this.findTextNodesInPage(page);
+            totalTextLayers += textNodes.length;
+          }
+        } else {
+          // Fallback: just use current page
+          const textNodes = this.findTextNodesInPage(figma.currentPage);
+          totalTextLayers = textNodes.length;
+        }
+      } catch (error) {
+        // If we can't access multiple pages, just use current page
+        const textNodes = this.findTextNodesInPage(figma.currentPage);
+        totalTextLayers = textNodes.length;
+      }
 
-      // Count text nodes in this page
-      const textNodes = page.findAllWithCriteria({
-        types: ['TEXT'],
-      });
+      // Enforce size limits (from spec FR-007e/f/g)
+      if (totalTextLayers > 25000) {
+        throw new Error(
+          `Document too large: ${totalTextLayers.toLocaleString()} text layers found. ` +
+            'Maximum supported is 25,000 layers. Consider splitting into smaller documents.'
+        );
+      }
 
-      totalTextLayers += textNodes.length;
-    }
+      if (totalTextLayers > 5000) {
+        // Warning for Warning Zone (5k-25k layers)
+        console.warn(
+          `Large document detected: ${totalTextLayers.toLocaleString()} text layers. Performance may be impacted.`
+        );
+      }
 
-    // Enforce size limits (from spec FR-007e/f/g)
-    if (totalTextLayers > 25000) {
-      throw new Error(
-        `Document too large: ${totalTextLayers.toLocaleString()} text layers found. ` +
-          'Maximum supported is 25,000 layers. Consider splitting into smaller documents.'
+      console.log(
+        `Document validation complete: ${totalTextLayers.toLocaleString()} text layers found`
       );
+    } catch (error) {
+      // Re-throw validation errors
+      throw error;
+    }
+  }
+
+  /**
+   * Find all text nodes in a page or frame
+   *
+   * Recursively traverses the node tree to find text nodes.
+   * This is safer than using Figma's findAllWithCriteria which may not be available.
+   *
+   * @param node - The node to search within
+   * @returns Array of text nodes
+   */
+  private findTextNodesInPage(node: any): any[] {
+    const textNodes: any[] = [];
+
+    if (!node) {
+      return textNodes;
     }
 
-    if (totalTextLayers > 5000) {
-      // Warning for Warning Zone (5k-25k layers)
-      console.warn(
-        `Large document detected: ${totalTextLayers.toLocaleString()} text layers. Performance may be impacted.`
-      );
-
-      // Could emit a warning message to UI here if needed
-      // Note: STYLE_AUDIT_PROGRESS doesn't accept 'validating' state
-      // This warning could be sent via a different message type if needed
+    // Check if this node is a text node
+    if (node.type === 'TEXT') {
+      textNodes.push(node);
     }
 
-    console.log(
-      `Document validation complete: ${totalTextLayers.toLocaleString()} text layers found`
-    );
+    // Recursively search children
+    if (node.children && Array.isArray(node.children)) {
+      for (const child of node.children) {
+        textNodes.push(...this.findTextNodesInPage(child));
+      }
+    }
+
+    return textNodes;
   }
 
   /**
@@ -302,65 +388,108 @@ export class AuditEngine {
    * Traverses all pages, discovers text nodes, collects basic metadata.
    * Emits progress updates based on pages scanned.
    *
+   * KEY LESSON: Work directly with the node tree instead of using potentially
+   * unavailable APIs like figma.loadPageAsync.
+   *
    * @returns Raw scan data for processing phase
    */
   private async scanDocument(): Promise<any> {
-    const pages = figma.root.children;
-    const allTextLayers: any[] = [];
+    try {
+      const allTextLayers: any[] = [];
+      let totalPages = 0;
 
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
+      // Scan all pages
+      if (figma.root && figma.root.children) {
+        totalPages = figma.root.children.length;
 
-      // Check for cancellation
-      if (this.cancelled) {
-        throw new Error('Audit cancelled during scanning');
+        for (let i = 0; i < figma.root.children.length; i++) {
+          const page = figma.root.children[i];
+
+          // Check for cancellation
+          if (this.cancelled) {
+            throw new Error('Audit cancelled during scanning');
+          }
+
+          // Find all text nodes in this page
+          const textNodes = this.findTextNodesInPage(page);
+
+          // Collect basic data for each text node
+          for (const node of textNodes) {
+            try {
+              // Skip empty text nodes (KEY LESSON from DEVELOPER_REFERENCE.md)
+              if (node.characters && node.characters.length === 0) {
+                continue;
+              }
+
+              allTextLayers.push({
+                id: node.id,
+                name: node.name,
+                characters: node.characters ? node.characters.length : 0,
+                textContent: node.characters ? node.characters.substring(0, 50) : '',
+                pageId: page.id,
+                pageName: page.name,
+                visible: node.visible,
+                opacity: node.opacity,
+                textStyleId: node.textStyleId,
+                // Add more basic properties as needed
+              });
+            } catch (nodeError) {
+              // Log error but continue processing
+              console.warn(`Error processing node ${node.id}:`, nodeError);
+            }
+          }
+
+          // Emit progress update
+          const progress = Math.round(((i + 1) / totalPages) * 50); // Scanning is 50% of total
+          this.sendMessage({
+            type: 'STYLE_AUDIT_PROGRESS',
+            payload: {
+              state: 'scanning',
+              progress,
+              currentStep: `Scanned page ${i + 1} of ${totalPages} (${textNodes.length} text layers)`,
+              pagesScanned: i + 1,
+            },
+          });
+        }
+      } else {
+        // Fallback: just scan current page
+        const textNodes = this.findTextNodesInPage(figma.currentPage);
+
+        for (const node of textNodes) {
+          try {
+            // Skip empty text nodes
+            if (node.characters && node.characters.length === 0) {
+              continue;
+            }
+
+            allTextLayers.push({
+              id: node.id,
+              name: node.name,
+              characters: node.characters ? node.characters.length : 0,
+              textContent: node.characters ? node.characters.substring(0, 50) : '',
+              pageId: figma.currentPage.id,
+              pageName: figma.currentPage.name,
+              visible: node.visible,
+              opacity: node.opacity,
+              textStyleId: node.textStyleId,
+            });
+          } catch (nodeError) {
+            console.warn(`Error processing node ${node.id}:`, nodeError);
+          }
+        }
+
+        totalPages = 1;
       }
 
-      // Load page content
-      await figma.loadPageAsync(page);
+      console.log(`Document scanning complete: ${allTextLayers.length} text layers found`);
 
-      // Find all text nodes in this page
-      const textNodes = page.findAllWithCriteria({
-        types: ['TEXT'],
-      });
-
-      // Collect basic data for each text node
-      for (const node of textNodes) {
-        const textNode = node as TextNode;
-
-        allTextLayers.push({
-          id: textNode.id,
-          name: textNode.name,
-          characters: textNode.characters.length,
-          textContent: textNode.characters.substring(0, 50), // Preview
-          pageId: page.id,
-          pageName: page.name,
-          visible: textNode.visible,
-          opacity: textNode.opacity,
-          textStyleId: textNode.textStyleId,
-          // Add more basic properties as needed
-        });
-      }
-
-      // Emit progress update
-      const progress = Math.round(((i + 1) / pages.length) * 50); // Scanning is 50% of total
-      this.sendMessage({
-        type: 'STYLE_AUDIT_PROGRESS',
-        payload: {
-          state: 'scanning',
-          progress,
-          currentStep: `Scanned page ${i + 1} of ${pages.length} (${textNodes.length} text layers)`,
-          pagesScanned: i + 1,
-        },
-      });
+      return {
+        textLayers: allTextLayers,
+        totalPages,
+      };
+    } catch (error) {
+      throw error;
     }
-
-    console.log(`Document scanning complete: ${allTextLayers.length} text layers found`);
-
-    return {
-      textLayers: allTextLayers,
-      totalPages: pages.length,
-    };
   }
 
   /**
@@ -421,7 +550,7 @@ export class AuditEngine {
     // Build mock audit result (placeholder)
     const auditResult: StyleGovernanceAuditResult = {
       timestamp: new Date(),
-      documentName: figma.root.name || 'Untitled',
+      documentName: figma.root ? figma.root.name : figma.currentPage.name || 'Untitled',
       documentId: figma.fileKey || 'unknown',
 
       totalPages,
