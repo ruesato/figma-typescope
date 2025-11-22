@@ -18,7 +18,8 @@ export default function App() {
   const { runStyleAudit, navigateToLayer, cancelStyleAudit } = useMessageHandler();
 
   // Get audit state
-  const { auditResult, isAuditing, progress, error, reset } = useAuditState();
+  const { auditResult, styleGovernanceResult, isAuditing, progress, error, reset, auditState } =
+    useAuditState();
 
   // ============================================================================
   // Event Handlers
@@ -72,7 +73,7 @@ export default function App() {
       )}
 
       {/* Initial State - No Audit */}
-      {!isAuditing && !auditResult && !error && (
+      {!isAuditing && !auditResult && !styleGovernanceResult && !error && (
         <div className="space-y-4">
           <div className="bg-figma-bg-secondary rounded-lg p-6 border border-figma-border">
             <h2 className="text-lg font-semibold mb-2">Ready to audit</h2>
@@ -119,8 +120,73 @@ export default function App() {
         </div>
       )}
 
-      {/* Results State */}
-      {!isAuditing && auditResult && !error && (
+      {/* Results State - Style Governance Audit */}
+      {!isAuditing && styleGovernanceResult && !error && (
+        <div className="space-y-6">
+          {/* Summary Dashboard */}
+          <div className="bg-figma-bg-secondary rounded-lg p-6 border border-figma-border">
+            <h2 className="text-lg font-semibold mb-4">Audit Results</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-figma-text-secondary">Document</p>
+                <p className="text-sm font-medium">{styleGovernanceResult.documentName}</p>
+              </div>
+              <div>
+                <p className="text-xs text-figma-text-secondary">Total Layers</p>
+                <p className="text-sm font-medium">{styleGovernanceResult.totalTextLayers}</p>
+              </div>
+              <div>
+                <p className="text-xs text-figma-text-secondary">Pages</p>
+                <p className="text-sm font-medium">{styleGovernanceResult.totalPages}</p>
+              </div>
+              <div>
+                <p className="text-xs text-figma-text-secondary">Unstyled</p>
+                <p className="text-sm font-medium">{styleGovernanceResult.metrics.unstyledCount}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4 border-t border-figma-border">
+            <button
+              onClick={handleRunAuditPage}
+              className="
+                flex-1 px-4 py-2 rounded-md
+                bg-figma-bg-brand hover:bg-figma-bg-brand-hover
+                text-white font-medium text-sm
+                transition-colors
+              "
+            >
+              Run New Audit
+            </button>
+
+            <button
+              onClick={reset}
+              className="
+                px-4 py-2 rounded-md
+                bg-figma-bg-secondary hover:bg-figma-bg-tertiary
+                border border-figma-border
+                text-figma-text font-medium text-sm
+                transition-colors
+              "
+            >
+              Clear Results
+            </button>
+          </div>
+
+          {/* Metadata */}
+          <div className="text-xs text-figma-text-secondary">
+            <p>
+              Document: {styleGovernanceResult.documentName} • Layers:{' '}
+              {styleGovernanceResult.totalTextLayers} • Completed:{' '}
+              {new Date(styleGovernanceResult.timestamp).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Results State - Legacy Font Audit (backward compatibility) */}
+      {!isAuditing && auditResult && !styleGovernanceResult && !error && (
         <div className="space-y-6">
           {/* Summary Dashboard */}
           <SummaryDashboard summary={auditResult.summary} />
