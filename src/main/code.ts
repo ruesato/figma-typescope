@@ -280,6 +280,14 @@ async function handleRunStyleAudit(payload?: {
   try {
     console.log('[StyleAudit] Starting audit with options:', payload);
 
+    // Send initial message to UI to start state machine
+    figma.ui.postMessage({
+      type: 'STYLE_AUDIT_STARTED',
+      payload: {
+        state: 'validating',
+      },
+    });
+
     // Create audit engine instance
     const auditEngine = new AuditEngine();
 
