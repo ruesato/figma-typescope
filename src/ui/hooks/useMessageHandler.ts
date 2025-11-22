@@ -58,11 +58,10 @@ export function useMessageHandler() {
           break;
 
         case 'STYLE_AUDIT_PROGRESS':
-          auditState.transitionTo(msg.payload.state);
-          auditState.setProgress(
-            msg.payload.progress,
-            msg.payload.currentStep
-          );
+          // Note: Don't transition state here - state was already set by the initial
+          // state message (validating/scanning/processing). Progress updates should
+          // only update progress, not change state.
+          auditState.setProgress(msg.payload.progress, msg.payload.currentStep);
           break;
 
         case 'STYLE_AUDIT_COMPLETE':
@@ -180,10 +179,7 @@ export function useMessageHandler() {
   // Style Governance Audit Helpers (Feature 002)
   // ======================================================================
 
-  const runStyleAudit = (options?: {
-    includeHiddenLayers?: boolean;
-    includeTokens?: boolean;
-  }) => {
+  const runStyleAudit = (options?: { includeHiddenLayers?: boolean; includeTokens?: boolean }) => {
     sendMessage({
       type: 'RUN_STYLE_AUDIT',
       payload: options,
