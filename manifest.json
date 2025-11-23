@@ -4,5 +4,5 @@
   "id": "figma-font-audit-pro",
   "name": "Figma Font Audit Pro",
   "main": "build/main.js",
-  "permissions": ["currentUser", "teamLibrary"]
+  "permissions": ["teamLibrary"]
 }
