@@ -320,27 +320,103 @@ function handleCancelStyleAudit(): void {
 
 /**
  * Handle REPLACE_STYLE message
- * PLACEHOLDER: Will be implemented in Phase 3 (T043-T054)
  */
 async function handleReplaceStyle(
   sourceStyleId: string,
   targetStyleId: string,
   affectedLayerIds: string[]
 ): Promise<void> {
-  console.log('[Replacement] Replace style placeholder:', {
+  console.log('[Replacement] Starting style replacement:', {
     sourceStyleId,
     targetStyleId,
-    affectedLayerIds,
+    affectedLayerCount: affectedLayerIds.length,
   });
-  sendMessage({
-    type: 'REPLACEMENT_ERROR',
-    payload: {
-      operationType: 'style',
-      error: 'Style replacement not yet implemented (Phase 3)',
-      errorType: 'validation',
-      canRollback: false,
-    },
-  });
+
+  // Import ReplacementEngine dynamically
+  const { ReplacementEngine } = await import('./replacement/replacementEngine');
+
+  try {
+    const engine = new ReplacementEngine();
+
+    // Setup progress callbacks
+    engine.onProgress((progress) => {
+      if (progress.state === 'processing') {
+        sendMessage({
+          type: 'REPLACEMENT_PROGRESS',
+          payload: {
+            state: 'processing',
+            progress: progress.percentage,
+            currentBatch: progress.currentBatch,
+            totalBatches: progress.totalBatches,
+            currentBatchSize: progress.currentBatchSize,
+            layersProcessed: progress.layersProcessed,
+            failedLayers: progress.failedLayers,
+          },
+        });
+      } else if (progress.state === 'creating_checkpoint' && progress.checkpointTitle) {
+        sendMessage({
+          type: 'REPLACEMENT_CHECKPOINT_CREATED',
+          payload: {
+            checkpointTitle: progress.checkpointTitle,
+            timestamp: new Date(),
+          },
+        });
+      }
+    });
+
+    // Send start message
+    sendMessage({
+      type: 'REPLACEMENT_STARTED',
+      payload: {
+        operationType: 'style',
+        state: 'validating',
+        sourceId: sourceStyleId,
+        targetId: targetStyleId,
+        affectedLayerCount: affectedLayerIds.length,
+      },
+    });
+
+    // Execute replacement
+    const result = await engine.replaceStyle({
+      sourceStyleId,
+      targetStyleId,
+      affectedLayerIds,
+      preserveOverrides: true,
+    });
+
+    // Send completion message
+    sendMessage({
+      type: 'REPLACEMENT_COMPLETE',
+      payload: {
+        operationType: 'style',
+        layersUpdated: result.layersUpdated,
+        failedLayers: result.failedLayers,
+        duration: result.duration,
+        hasWarnings: result.hasWarnings,
+      },
+    });
+
+    // Clean up
+    engine.dispose();
+
+    console.log('[Replacement] Style replacement complete:', {
+      updated: result.layersUpdated,
+      failed: result.layersFailed,
+      checkpoint: result.checkpointTitle,
+    });
+  } catch (error) {
+    console.error('[Replacement] Style replacement failed:', error);
+    sendMessage({
+      type: 'REPLACEMENT_ERROR',
+      payload: {
+        operationType: 'style',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        errorType: 'processing',
+        checkpointTitle: undefined,
+        canRollback: true,
+      },
+    });
+  }
 }
 
 /**
