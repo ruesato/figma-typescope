@@ -1,4 +1,5 @@
 import type { AuditState, StyleGovernanceAuditResult, MainToUIMessage } from '@/shared/types';
+import { processAuditData, createAuditResult } from './processor';
 
 // Figma Plugin API types
 declare global {
@@ -68,6 +69,12 @@ export class AuditEngine {
       if (!this.transition('validating')) {
         throw new Error('Cannot start audit: invalid state transition');
       }
+
+      // Send AUDIT_STARTED message to UI so it knows we're beginning the audit
+      this.sendMessage({
+        type: 'STYLE_AUDIT_STARTED',
+        payload: { state: 'validating' },
+      });
 
       await this.validateDocument(options);
 
@@ -511,81 +518,43 @@ export class AuditEngine {
   ): Promise<StyleGovernanceAuditResult> {
     const { textLayers, totalPages } = scanResult;
 
-    // This is a placeholder implementation
-    // In reality, this would:
-    // 1. Call styleDetection.ts to get style assignments
-    // 2. Call styleLibrary.ts to resolve library sources
-    // 3. Call tokenDetection.ts if tokens enabled
-    // 4. Call summary.ts to calculate metrics
-    // 5. Build hierarchy trees
+    try {
+      // Process audit data using the processor
+      // Pass a callback that checks if the audit has been cancelled
+      const processed = await processAuditData(
+        {
+          textLayers,
+          totalPages,
+          options,
+        },
+        () => this.cancelled
+      );
 
-    const processedLayers = textLayers.map((layer: any, index: number) => ({
-      ...layer,
-      assignmentStatus: 'unstyled', // Placeholder
-      tokens: [], // Placeholder
-    }));
-
-    // Emit progress updates during processing
-    for (let i = 0; i <= 50; i += 10) {
-      // Check for cancellation
-      if (this.cancelled) {
-        throw new Error('Audit cancelled during processing');
-      }
-
-      const progress = 50 + i; // Processing is remaining 50%
+      // Emit final progress update
       this.sendMessage({
         type: 'STYLE_AUDIT_PROGRESS',
         payload: {
           state: 'processing',
-          progress,
-          currentStep: `Processing layer ${Math.round((i / 50) * processedLayers.length)} of ${processedLayers.length}...`,
-          layersProcessed: Math.round((i / 50) * processedLayers.length),
+          progress: 100,
+          currentStep: `Processing complete: ${processed.layers.length} layers processed`,
+          layersProcessed: processed.layers.length,
         },
       });
 
-      // Simulate processing time
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Build audit result
+      const auditResult = createAuditResult(
+        processed,
+        {
+          documentName: figma.root ? figma.root.name : figma.currentPage.name || 'Untitled',
+          documentId: figma.fileKey || 'unknown',
+          totalPages,
+        },
+        Date.now() - this.startTime
+      );
+
+      return auditResult;
+    } catch (error) {
+      throw error;
     }
-
-    // Build mock audit result (placeholder)
-    // Note: timestamp is serialized through postMessage, so we use ISO string
-    // which can be parsed on the UI side with new Date(string)
-    const auditResult: StyleGovernanceAuditResult = {
-      timestamp: new Date() as any, // Will be serialized as ISO string by postMessage
-      documentName: figma.root ? figma.root.name : figma.currentPage.name || 'Untitled',
-      documentId: figma.fileKey || 'unknown',
-
-      totalPages,
-      totalTextLayers: processedLayers.length,
-
-      styles: [], // Placeholder
-      tokens: [], // Placeholder
-      layers: processedLayers,
-      libraries: [], // Placeholder
-
-      styleHierarchy: [], // Placeholder
-      styledLayers: [], // Placeholder
-      unstyledLayers: processedLayers, // Placeholder
-
-      metrics: {
-        styleAdoptionRate: 0,
-        fullyStyledCount: 0,
-        partiallyStyledCount: 0,
-        unstyledCount: processedLayers.length,
-        libraryDistribution: {},
-        tokenCoverageRate: 0,
-        tokenUsageCount: 0,
-        mixedUsageCount: 0,
-        topStyles: [],
-        deprecatedStyleCount: 0,
-      },
-
-      isStale: false,
-      auditDuration: Date.now() - this.startTime,
-    };
-
-    console.log(`Document processing complete: ${processedLayers.length} layers processed`);
-
-    return auditResult;
   }
 }

@@ -68,6 +68,11 @@ export function useAuditState() {
 
     // State machine methods
     transitionTo: (newState: AuditState): boolean => {
+      // If already in target state, silently succeed (no-op)
+      if (auditState === newState) {
+        return true;
+      }
+
       const validNext = VALID_TRANSITIONS[auditState];
       if (!validNext.includes(newState)) {
         console.error(`[AuditState] Invalid transition: ${auditState} → ${newState}`);

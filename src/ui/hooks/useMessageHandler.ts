@@ -58,9 +58,10 @@ export function useMessageHandler() {
           break;
 
         case 'STYLE_AUDIT_PROGRESS':
-          // Note: Don't transition state here - state was already set by the initial
-          // state message (validating/scanning/processing). Progress updates should
-          // only update progress, not change state.
+          // Transition state if it has changed (e.g., from scanning to processing)
+          if (msg.payload.state) {
+            auditState.transitionTo(msg.payload.state);
+          }
           auditState.setProgress(msg.payload.progress, msg.payload.currentStep);
           break;
 

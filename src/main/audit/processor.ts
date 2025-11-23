@@ -42,12 +42,12 @@ export interface ProcessorOutput {
  * Process scan results and build complete audit result
  *
  * @param input - Raw scan data and processing options
- * @param signal - AbortSignal for cancellation
+ * @param isCancelled - Callback to check if processing should be cancelled
  * @returns Complete processed data for audit result
  */
 export async function processAuditData(
   input: ProcessorInput,
-  signal?: AbortSignal
+  isCancelled?: () => boolean
 ): Promise<ProcessorOutput> {
   const { textLayers, totalPages, options } = input;
 
@@ -84,16 +84,23 @@ export async function processAuditData(
     };
     output.libraries = [localLibrary];
 
-    // Step 3: Process each text layer
-    for (let i = 0; i < textLayers.length; i++) {
+    // Step 3: Process each text layer in batches to avoid blocking main thread
+    const BATCH_SIZE = 100; // Process 100 layers at a time
+    for (let i = 0; i < textLayers.length; i += BATCH_SIZE) {
       // Check for cancellation
-      if (signal?.aborted) {
+      if (isCancelled && isCancelled()) {
         throw new Error('Processing cancelled by user');
       }
 
-      const rawLayer = textLayers[i];
-      const processedLayer = await processTextLayer(rawLayer, styles);
-      output.layers.push(processedLayer);
+      const batch = textLayers.slice(i, Math.min(i + BATCH_SIZE, textLayers.length));
+
+      // Process batch in parallel
+      const batchResults = await Promise.all(batch.map((layer) => processTextLayer(layer, styles)));
+
+      output.layers.push(...batchResults);
+
+      // Yield to the event loop to prevent blocking
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     // Step 4: Categorize layers
@@ -113,10 +120,6 @@ export async function processAuditData(
 
     return output;
   } catch (error) {
-    if (signal?.aborted) {
-      throw new Error('Processing cancelled by user');
-    }
-
     throw error;
   }
 }
