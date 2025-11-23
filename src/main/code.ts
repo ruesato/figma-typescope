@@ -4,6 +4,7 @@ import { extractFontMetadata } from './utils/fontMetadata';
 import { detectStyleAssignment } from './utils/styleDetection';
 import { calculateSummary } from './utils/summary';
 import { AuditEngine } from './audit/auditEngine';
+import { ReplacementEngine } from './replacement/replacementEngine';
 
 // ============================================================================
 // Main Entry Point (Figma Sandbox Context)
@@ -331,9 +332,6 @@ async function handleReplaceStyle(
     targetStyleId,
     affectedLayerCount: affectedLayerIds.length,
   });
-
-  // Import ReplacementEngine dynamically
-  const { ReplacementEngine } = await import('./replacement/replacementEngine');
 
   try {
     const engine = new ReplacementEngine();
