@@ -70,15 +70,24 @@ export async function processAuditData(
     // This includes both local AND remote (library) styles
     const usedStyleIds = new Set<string>();
     for (const layer of textLayers) {
-      if (layer.styleId && typeof layer.styleId === 'string') {
-        usedStyleIds.add(layer.styleId);
+      // Scanner stores style ID as 'textStyleId'
+      const styleId = layer.textStyleId || layer.styleId;
+      if (styleId && typeof styleId === 'string') {
+        usedStyleIds.add(styleId);
       }
     }
-    console.log(`Found ${usedStyleIds.size} unique styles in use`);
+    console.log(
+      `Found ${usedStyleIds.size} unique styles in use (from ${textLayers.length} layers)`
+    );
 
     // Step 2: Fetch metadata for all used styles (local + remote)
     const styles: TextStyle[] = [];
     const libraryMap = await buildLibraryMap(); // Map library keys to names
+    console.log(`Library map has ${libraryMap.size} entries`);
+
+    let localCount = 0;
+    let remoteCount = 0;
+    let failedCount = 0;
 
     for (const styleId of usedStyleIds) {
       try {
@@ -86,12 +95,22 @@ export async function processAuditData(
         if (figmaStyle && figmaStyle.type === 'TEXT') {
           const textStyle = await convertFigmaStyleToTextStyle(figmaStyle, libraryMap);
           styles.push(textStyle);
+
+          if (figmaStyle.remote) {
+            remoteCount++;
+            console.log(`Found remote style: ${figmaStyle.name} (key: ${figmaStyle.key})`);
+          } else {
+            localCount++;
+          }
         }
       } catch (error) {
+        failedCount++;
         console.warn(`Could not load style ${styleId}:`, error);
       }
     }
-    console.log(`Loaded ${styles.length} styles (local + remote)`);
+    console.log(
+      `Loaded ${styles.length} styles: ${localCount} local, ${remoteCount} remote, ${failedCount} failed`
+    );
     output.styles = styles;
 
     // Step 3: Build library sources from all detected styles
