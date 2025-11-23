@@ -134,8 +134,18 @@ const TokenRow: React.FC<TokenRowProps> = ({
 
     return (
       <div
-        className="flex items-center px-4 py-3 cursor-pointer select-none hover:bg-figma-color-bg-secondary border-b border-figma-color-border"
+        className="flex items-center px-4 py-3 cursor-pointer select-none hover:bg-figma-color-bg-secondary border-b border-figma-color-border focus:outline-none focus:ring-1 focus:ring-figma-color-bg-brand"
         onClick={() => onGroupToggle(groupName)}
+        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+          // Space: toggle expand/collapse
+          if (e.code === 'Space') {
+            e.preventDefault();
+            onGroupToggle(groupName);
+          }
+        }}
+        tabIndex={0}
+        role="treeitem"
+        aria-expanded={isExpanded}
       >
         <div
           className="mr-2 flex-shrink-0 transition-transform duration-200"
@@ -171,8 +181,17 @@ const TokenRow: React.FC<TokenRowProps> = ({
 
     return (
       <div
-        className="flex items-center px-4 py-3 cursor-pointer select-none hover:bg-figma-color-bg-secondary border-b border-figma-color-border animate-in fade-in slide-in-from-left-4 duration-150"
+        className="flex items-center px-4 py-3 cursor-pointer select-none hover:bg-figma-color-bg-secondary border-b border-figma-color-border focus:outline-none focus:ring-1 focus:ring-figma-color-bg-brand animate-in fade-in slide-in-from-left-4 duration-150"
         onClick={() => onTokenSelect(token)}
+        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+          // Enter: select token
+          if (e.code === 'Enter') {
+            e.preventDefault();
+            onTokenSelect(token);
+          }
+        }}
+        tabIndex={0}
+        role="treeitem"
       >
         <div style={{ marginLeft: `${(item.indentLevel + 1) * 20}px` }} className="flex-1">
           <div className="flex items-center gap-3">
@@ -484,9 +503,24 @@ export const TokenView: React.FC<TokenViewProps> = ({
 
       {/* Summary Footer */}
       {filteredTokens.length > 0 && (
-        <div className="p-3 text-xs text-center bg-figma-color-bg-secondary text-figma-color-text-tertiary border-t border-figma-color-border flex-shrink-0">
-          Showing {filteredTokens.length} token{filteredTokens.length !== 1 ? 's' : ''}
-          {searchQuery && ` (filtered from ${tokens.length})`}
+        <div className="p-3 text-xs bg-figma-color-bg-secondary text-figma-color-text-tertiary border-t border-figma-color-border flex-shrink-0">
+          <div className="flex flex-col gap-2">
+            <div className="text-center">
+              Showing {filteredTokens.length} token{filteredTokens.length !== 1 ? 's' : ''}
+              {searchQuery && ` (filtered from ${tokens.length})`}
+            </div>
+            <div className="flex flex-wrap gap-2 justify-center text-figma-color-text-secondary text-xs">
+              <span title="Expand or collapse token group">
+                <kbd className="px-2 py-0.5 rounded bg-figma-color-bg-tertiary">Space</kbd> to
+                expand
+              </span>
+              <span>•</span>
+              <span title="Select token to view details">
+                <kbd className="px-2 py-0.5 rounded bg-figma-color-bg-tertiary">Enter</kbd> to
+                select
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>

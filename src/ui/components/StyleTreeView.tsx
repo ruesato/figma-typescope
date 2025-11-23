@@ -49,6 +49,7 @@ export default function StyleTreeView({
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [groupByLibrary, setGroupByLibrary] = useState(true);
+  const [usageFilter, setUsageFilter] = useState<'all' | 'used' | 'unused'>('all');
 
   // Build tree structure from styles and libraries
   const treeData = useMemo(() => {
@@ -93,14 +94,29 @@ export default function StyleTreeView({
     return tree;
   }, [styles, libraries, unstyledLayers, expandedNodes, groupByLibrary]);
 
-  // Filter tree based on search query
+  // Filter tree based on search query and usage filter
   const filteredTree = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return treeData;
+    let result = treeData;
+
+    // Apply usage filter
+    if (usageFilter !== 'all') {
+      result = result.map((node) => ({
+        ...node,
+        children: node.children.filter((child) => {
+          if (usageFilter === 'used') return child.usageCount > 0;
+          if (usageFilter === 'unused') return child.usageCount === 0;
+          return true;
+        }),
+      }));
     }
 
-    return filterTree(treeData, searchQuery.toLowerCase());
-  }, [treeData, searchQuery]);
+    // Apply search filter
+    if (!searchQuery.trim()) {
+      return result;
+    }
+
+    return filterTree(result, searchQuery.toLowerCase());
+  }, [treeData, searchQuery, usageFilter]);
 
   // Toggle node expansion
   const toggleExpansion = (nodeId: string) => {
@@ -140,6 +156,21 @@ export default function StyleTreeView({
               handleNodeClick(node);
             }
           }}
+          onKeyDown={(e) => {
+            // Space: expand/collapse
+            if (e.code === 'Space' && isExpandable) {
+              e.preventDefault();
+              toggleExpansion(node.id);
+            }
+            // Enter: select node
+            if (e.code === 'Enter' && !isExpandable) {
+              e.preventDefault();
+              handleNodeClick(node);
+            }
+          }}
+          tabIndex={0}
+          role="treeitem"
+          aria-expanded={isExpanded}
           style={{ paddingLeft: `${level * 20 + 12}px` }}
         >
           {/* Expand/Collapse Icon */}
@@ -194,6 +225,17 @@ export default function StyleTreeView({
             />
             Group by Library
           </label>
+
+          <select
+            value={usageFilter}
+            onChange={(e) => setUsageFilter(e.target.value as 'all' | 'used' | 'unused')}
+            className="filter-select"
+            title="Filter styles by usage count"
+          >
+            <option value="all">All Styles</option>
+            <option value="used">Used Only</option>
+            <option value="unused">Unused Only</option>
+          </select>
         </div>
       </div>
 
@@ -224,6 +266,22 @@ export default function StyleTreeView({
             <span className="summary-value">{unstyledLayers.length.toLocaleString()}</span>
           </div>
         )}
+      </div>
+
+      {/* Keyboard Shortcuts Help */}
+      <div className="keyboard-shortcuts-help" title="Keyboard shortcuts for tree navigation">
+        <p className="shortcuts-title">Shortcuts:</p>
+        <ul className="shortcuts-list">
+          <li>
+            <kbd>Space</kbd> - Expand/collapse group
+          </li>
+          <li>
+            <kbd>Enter</kbd> - Select style
+          </li>
+          <li>
+            <kbd>Tab</kbd> - Navigate focus
+          </li>
+        </ul>
       </div>
     </div>
   );
