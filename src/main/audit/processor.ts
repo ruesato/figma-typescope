@@ -66,24 +66,36 @@ export async function processAuditData(
   try {
     console.log(`Processing ${textLayers.length} text layers...`);
 
-    // Step 1: Get all available styles
-    const styleSummaries = await getAvailableStyles();
-    const styles = convertSummariesToStyles(styleSummaries);
+    // Step 1: Collect all unique style IDs used in the document
+    // This includes both local AND remote (library) styles
+    const usedStyleIds = new Set<string>();
+    for (const layer of textLayers) {
+      if (layer.styleId && typeof layer.styleId === 'string') {
+        usedStyleIds.add(layer.styleId);
+      }
+    }
+    console.log(`Found ${usedStyleIds.size} unique styles in use`);
+
+    // Step 2: Fetch metadata for all used styles (local + remote)
+    const styles: TextStyle[] = [];
+    const libraryMap = await buildLibraryMap(); // Map library keys to names
+
+    for (const styleId of usedStyleIds) {
+      try {
+        const figmaStyle = await figma.getStyleByIdAsync(styleId);
+        if (figmaStyle && figmaStyle.type === 'TEXT') {
+          const textStyle = await convertFigmaStyleToTextStyle(figmaStyle, libraryMap);
+          styles.push(textStyle);
+        }
+      } catch (error) {
+        console.warn(`Could not load style ${styleId}:`, error);
+      }
+    }
+    console.log(`Loaded ${styles.length} styles (local + remote)`);
     output.styles = styles;
 
-    // Step 2: Create local library source
-    const localLibrary: LibrarySource = {
-      id: 'local',
-      name: 'Local',
-      type: 'local',
-      isEnabled: true,
-      isAvailable: true,
-      styleCount: styles.filter((s) => s.sourceType === 'local').length,
-      styleIds: styles.filter((s) => s.sourceType === 'local').map((s) => s.id),
-      totalUsageCount: 0, // Will be calculated
-      usagePercentage: 0, // Will be calculated
-    };
-    output.libraries = [localLibrary];
+    // Step 3: Build library sources from all detected styles
+    output.libraries = buildLibrarySources(styles);
 
     // Step 3: Get all available tokens (if enabled)
     if (options.includeTokens) {
@@ -400,6 +412,131 @@ function calculateAuditMetrics(
     topStyles,
     deprecatedStyleCount: 0,
   };
+}
+
+/**
+ * Build a map of library keys to library names
+ *
+ * @returns Map of library key to library name
+ */
+async function buildLibraryMap(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+
+  try {
+    const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
+    for (const library of libraries) {
+      map.set(library.key, library.name);
+    }
+  } catch (error) {
+    console.warn('Could not load team libraries:', error);
+  }
+
+  return map;
+}
+
+/**
+ * Convert Figma TextStyle to our TextStyle entity with library resolution
+ *
+ * @param figmaStyle - Figma text style object
+ * @param libraryMap - Map of library keys to names
+ * @returns TextStyle entity
+ */
+async function convertFigmaStyleToTextStyle(
+  figmaStyle: any, // Figma's TextStyle type (has remote, key properties)
+  libraryMap: Map<string, string>
+): Promise<TextStyle> {
+  // Our TextStyle entity type
+  let sourceType: 'local' | 'team_library' = 'local';
+  let libraryName = 'Local';
+  let libraryId = 'local';
+
+  // Resolve library information for remote styles
+  if (figmaStyle.remote) {
+    sourceType = 'team_library';
+
+    // Extract library key from style key (format: "libraryKey/styleKey")
+    const keyParts = figmaStyle.key.split('/');
+    if (keyParts.length >= 2) {
+      const libraryKey = keyParts[0];
+      libraryName = libraryMap.get(libraryKey) || `Library (${libraryKey.substring(0, 8)}...)`;
+      libraryId = libraryKey;
+    } else {
+      libraryName = 'External Library';
+      libraryId = 'external';
+    }
+  }
+
+  return {
+    id: figmaStyle.id,
+    name: figmaStyle.name,
+    key: figmaStyle.key,
+
+    hierarchyPath: parseStyleHierarchy(figmaStyle.name),
+    parentStyleId: undefined,
+    childStyleIds: [],
+
+    sourceType,
+    libraryName,
+    libraryId,
+
+    usageCount: 0, // Will be calculated later
+    pageDistribution: [],
+    componentUsage: {
+      mainComponentCount: 0,
+      instanceCount: 0,
+      plainLayerCount: 0,
+      overrideCount: 0,
+    },
+
+    isDeprecated: false,
+    lastModified: undefined,
+  };
+}
+
+/**
+ * Build LibrarySource objects from detected styles
+ *
+ * @param styles - All text styles (local + remote)
+ * @returns Array of LibrarySource objects, one per library
+ */
+function buildLibrarySources(styles: TextStyle[]): LibrarySource[] {
+  // Group styles by library
+  const stylesByLibrary = new Map<string, TextStyle[]>();
+
+  for (const style of styles) {
+    const libraryKey = style.libraryId || 'local';
+    if (!stylesByLibrary.has(libraryKey)) {
+      stylesByLibrary.set(libraryKey, []);
+    }
+    stylesByLibrary.get(libraryKey)!.push(style);
+  }
+
+  // Create LibrarySource for each library
+  const libraries: LibrarySource[] = [];
+
+  for (const [libraryId, libraryStyles] of stylesByLibrary) {
+    const isLocal = libraryId === 'local';
+    const libraryName = libraryStyles[0]?.libraryName || 'Unknown';
+
+    libraries.push({
+      id: libraryId,
+      name: libraryName,
+      type: isLocal ? 'local' : 'team_library',
+      isEnabled: true,
+      isAvailable: true,
+      styleCount: libraryStyles.length,
+      styleIds: libraryStyles.map((s) => s.id),
+      totalUsageCount: 0, // Will be calculated from layer counts
+      usagePercentage: 0,
+    });
+  }
+
+  // Sort: Local first, then alphabetically
+  return libraries.sort((a, b) => {
+    if (a.type === 'local') return -1;
+    if (b.type === 'local') return 1;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 /**
