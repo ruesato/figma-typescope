@@ -1,0 +1,706 @@
+import React, { useMemo } from 'react';
+import type { AuditResult, StyleGovernanceAuditResult } from '@/shared/types';
+
+interface AnalyticsDashboardProps {
+  auditResult: AuditResult | StyleGovernanceAuditResult;
+  isLoading?: boolean;
+  error?: string;
+}
+
+/**
+ * Animated Counter Component
+ * Animates numeric values from 0 to final value using CSS animation
+ */
+function AnimatedCounter({
+  value,
+  suffix = '',
+  decimals = 0,
+}: {
+  value: number;
+  suffix?: string;
+  decimals?: number;
+}) {
+  const displayValue = value.toFixed(decimals);
+
+  return (
+    <span
+      className="inline-block animate-fadeInUp"
+      style={{
+        animation: 'fadeInUp 0.6s ease-out',
+      }}
+    >
+      {displayValue}
+      {suffix}
+    </span>
+  );
+}
+
+/**
+ * Metric Card Component
+ * Displays a single metric with animated counter
+ */
+function MetricCard({
+  label,
+  value,
+  suffix = '',
+  decimals = 0,
+  icon,
+  variant = 'default',
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+  decimals?: number;
+  icon?: string;
+  variant?: 'default' | 'success' | 'warning' | 'danger';
+}) {
+  const variantClasses = {
+    default: 'border-figma-border',
+    success: 'border-green-400',
+    warning: 'border-yellow-400',
+    danger: 'border-red-400',
+  };
+
+  return (
+    <div
+      className={`border rounded-lg p-4 bg-figma-bg-secondary ${variantClasses[variant]} animate-fadeInScale`}
+      style={{
+        animation: 'fadeInScale 0.4s ease-out',
+      }}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <p className="text-figma-text-secondary text-xs font-medium mb-2">{label}</p>
+          <p className="text-2xl font-bold text-figma-text">
+            <AnimatedCounter value={value} suffix={suffix} decimals={decimals} />
+          </p>
+        </div>
+        {icon && <span className="text-2xl ml-2">{icon}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton Loader Component
+ * Displays loading state for metric cards
+ */
+function MetricSkeleton() {
+  return (
+    <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="h-3 bg-figma-border rounded w-20 mb-3"></div>
+          <div className="h-8 bg-figma-border rounded w-16"></div>
+        </div>
+        <div className="h-8 w-8 bg-figma-border rounded"></div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Top Styles Table Component
+ * Shows the 10 most used styles with adoption metrics
+ */
+function TopStylesTable({
+  styles,
+  totalLayers,
+  isLoading = false,
+}: {
+  styles: Array<{
+    styleName: string;
+    libraryName: string;
+    usageCount: number;
+  }>;
+  totalLayers: number;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-10 bg-figma-border rounded animate-pulse"></div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="overflow-x-auto animate-fadeIn"
+      style={{
+        animation: 'fadeIn 0.5s ease-out 0.2s forwards',
+        opacity: 0,
+      }}
+    >
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-figma-border">
+            <th className="text-left py-2 px-2 text-figma-text-secondary font-semibold text-xs">
+              Style Name
+            </th>
+            <th className="text-left py-2 px-2 text-figma-text-secondary font-semibold text-xs">
+              Library
+            </th>
+            <th className="text-right py-2 px-2 text-figma-text-secondary font-semibold text-xs">
+              Usage
+            </th>
+            <th className="text-right py-2 px-2 text-figma-text-secondary font-semibold text-xs">
+              Adoption
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {styles.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="text-center py-4 text-figma-text-tertiary text-xs">
+                No styles found
+              </td>
+            </tr>
+          ) : (
+            styles.slice(0, 10).map((style, index) => {
+              const adoptionPercent = totalLayers
+                ? ((style.usageCount / totalLayers) * 100).toFixed(1)
+                : '0';
+
+              return (
+                <tr
+                  key={`${style.styleName}-${index}`}
+                  className="border-b border-figma-border hover:bg-figma-bg-tertiary transition-colors animate-fadeInLeft"
+                  style={{
+                    animation: `fadeInLeft 0.3s ease-out ${index * 0.05}s forwards`,
+                    opacity: 0,
+                  }}
+                >
+                  <td className="py-2 px-2 text-figma-text truncate">{style.styleName}</td>
+                  <td className="py-2 px-2 text-figma-text-secondary text-xs truncate">
+                    {style.libraryName}
+                  </td>
+                  <td className="py-2 px-2 text-right text-figma-text font-medium">
+                    {style.usageCount}
+                  </td>
+                  <td className="py-2 px-2 text-right text-figma-text font-medium">
+                    {adoptionPercent}%
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Library Distribution Card Component
+ * Shows breakdown of styles by library
+ */
+function LibraryDistributionCard({
+  distribution,
+  isLoading = false,
+}: {
+  distribution: Record<string, number>;
+  isLoading?: boolean;
+}) {
+  const total = Object.values(distribution).reduce((sum, count) => sum + count, 0);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between p-2 bg-figma-border rounded animate-pulse"
+          >
+            <div className="h-4 bg-figma-bg-tertiary rounded w-24"></div>
+            <div className="h-4 bg-figma-bg-tertiary rounded w-12"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const entries = Object.entries(distribution).sort(([, a], [, b]) => b - a);
+
+  return (
+    <div
+      className="space-y-3 animate-fadeIn"
+      style={{
+        animation: 'fadeIn 0.5s ease-out 0.1s forwards',
+        opacity: 0,
+      }}
+    >
+      {entries.length === 0 ? (
+        <p className="text-figma-text-tertiary text-xs text-center py-4">
+          No library data available
+        </p>
+      ) : (
+        entries.map(([libraryName, count], index) => {
+          const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : '0';
+          const barWidth = total > 0 ? (count / total) * 100 : 0;
+
+          return (
+            <div
+              key={libraryName}
+              className="animate-fadeInLeft"
+              style={{
+                animation: `fadeInLeft 0.3s ease-out ${index * 0.05}s forwards`,
+                opacity: 0,
+              }}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-figma-text text-xs font-medium truncate">{libraryName}</span>
+                <span className="text-figma-text-secondary text-xs ml-2">{percentage}%</span>
+              </div>
+              <div className="w-full h-2 bg-figma-border rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-all duration-600"
+                  style={{
+                    width: `${barWidth}%`,
+                    animation: `slideInRight 0.6s ease-out ${index * 0.05}s forwards`,
+                  }}
+                ></div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/**
+ * Usage Comparison Card Component
+ * Displays token vs style usage visualization
+ */
+function UsageComparisonCard({
+  styleAdoptionRate,
+  tokenCoverageRate,
+  mixedUsageCount,
+  totalLayers,
+  isLoading = false,
+}: {
+  styleAdoptionRate: number;
+  tokenCoverageRate: number;
+  mixedUsageCount: number;
+  totalLayers: number;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-6 bg-figma-border rounded animate-pulse"></div>
+        <div className="h-6 bg-figma-border rounded animate-pulse"></div>
+        <div className="h-6 bg-figma-border rounded animate-pulse"></div>
+      </div>
+    );
+  }
+
+  const mixedUsagePercent =
+    totalLayers > 0 ? ((mixedUsageCount / totalLayers) * 100).toFixed(1) : '0';
+
+  return (
+    <div
+      className="space-y-4 animate-fadeIn"
+      style={{
+        animation: 'fadeIn 0.5s ease-out 0.15s forwards',
+        opacity: 0,
+      }}
+    >
+      {/* Style Usage Bar */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-figma-text text-sm font-medium">Style Usage</span>
+          <span className="text-figma-text font-semibold">{styleAdoptionRate.toFixed(1)}%</span>
+        </div>
+        <div className="w-full h-3 bg-figma-border rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-green-400 to-green-500 rounded-full transition-all duration-600"
+            style={{
+              width: `${styleAdoptionRate}%`,
+              animation: 'slideInRight 0.6s ease-out forwards',
+            }}
+          ></div>
+        </div>
+      </div>
+
+      {/* Token Usage Bar */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-figma-text text-sm font-medium">Token Coverage</span>
+          <span className="text-figma-text font-semibold">{tokenCoverageRate.toFixed(1)}%</span>
+        </div>
+        <div className="w-full h-3 bg-figma-border rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-purple-400 to-purple-500 rounded-full transition-all duration-600"
+            style={{
+              width: `${tokenCoverageRate}%`,
+              animation: 'slideInRight 0.6s ease-out 0.1s forwards',
+            }}
+          ></div>
+        </div>
+      </div>
+
+      {/* Mixed Usage */}
+      <div className="pt-2 border-t border-figma-border">
+        <div className="flex items-center justify-between">
+          <span className="text-figma-text-secondary text-sm">Mixed Usage</span>
+          <span className="text-figma-text font-semibold">
+            {mixedUsageCount} ({mixedUsagePercent}%)
+          </span>
+        </div>
+        <p className="text-figma-text-tertiary text-xs mt-1">Layers using both styles and tokens</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Analytics Dashboard Component
+ *
+ * Displays key metrics and usage analytics for design system adoption.
+ * Includes:
+ * - 4 key metric cards with animated counters
+ * - Top 10 most used styles table
+ * - Library distribution breakdown
+ * - Token vs style usage comparison
+ *
+ * @example
+ * ```tsx
+ * <AnalyticsDashboard
+ *   auditResult={result}
+ *   isLoading={false}
+ * />
+ * ```
+ */
+export default function AnalyticsDashboard({
+  auditResult,
+  isLoading = false,
+  error,
+}: AnalyticsDashboardProps) {
+  // Calculate metrics from audit result
+  const metrics = useMemo(() => {
+    if (!auditResult) {
+      return {
+        styleAdoptionRate: 0,
+        tokenCoverageRate: 0,
+        libraryDistribution: {},
+        topStyles: [],
+        mixedUsageCount: 0,
+      };
+    }
+
+    // Handle both AuditResult and StyleGovernanceAuditResult types
+    const isStyleGovernanceResult = 'metrics' in auditResult && 'layers' in auditResult;
+
+    if (isStyleGovernanceResult) {
+      // StyleGovernanceAuditResult format
+      const result = auditResult as StyleGovernanceAuditResult;
+      const styleAdoptionRate = result.metrics.styleAdoptionRate || 0;
+      const tokenCoverageRate = result.metrics.tokenCoverageRate || 0;
+
+      // Build library distribution from libraries array
+      const libraryDistribution: Record<string, number> = {};
+      result.libraries?.forEach((lib) => {
+        libraryDistribution[lib.name] = lib.totalUsageCount || 0;
+      });
+
+      // Get top styles from metrics
+      const topStyles = (result.metrics.topStyles || [])
+        .map((s: any) => ({
+          styleName: s.styleName || 'Unknown',
+          libraryName: 'Local', // TODO: Get from styles array
+          usageCount: s.usageCount || 0,
+        }))
+        .slice(0, 10);
+
+      const mixedUsageCount = result.metrics.mixedUsageCount || 0;
+
+      return {
+        styleAdoptionRate,
+        tokenCoverageRate,
+        libraryDistribution,
+        topStyles,
+        mixedUsageCount,
+      };
+    } else {
+      // Legacy AuditResult format
+      const result = auditResult as AuditResult;
+      const textLayers = result.textLayers || [];
+
+      const styledLayers = textLayers.filter(
+        (layer: any) => layer.styleAssignment?.assignmentStatus !== 'unstyled'
+      );
+      const styleAdoptionRate =
+        textLayers.length > 0 ? (styledLayers.length / textLayers.length) * 100 : 0;
+
+      const tokenCoverageRate = result.tokenAdoptionRate || 0;
+
+      const libraryDistribution: Record<string, number> = {};
+      textLayers.forEach((layer: any) => {
+        const library = layer.styleAssignment?.libraryName || 'Local';
+        libraryDistribution[library] = (libraryDistribution[library] || 0) + 1;
+      });
+
+      const styleUsageMap = new Map<string, { name: string; library: string; count: number }>();
+      textLayers.forEach((layer: any) => {
+        if (layer.styleAssignment?.styleName) {
+          const key = layer.styleAssignment.styleName;
+          const existing = styleUsageMap.get(key);
+          styleUsageMap.set(key, {
+            name: layer.styleAssignment.styleName,
+            library: layer.styleAssignment.libraryName || 'Local',
+            count: (existing?.count || 0) + 1,
+          });
+        }
+      });
+
+      const topStyles = Array.from(styleUsageMap.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10)
+        .map((style) => ({
+          styleName: style.name,
+          libraryName: style.library,
+          usageCount: style.count,
+        }));
+
+      const mixedUsageCount = textLayers.filter((layer: any) => {
+        const hasStyle = layer.styleAssignment?.assignmentStatus !== 'unstyled';
+        const layerTokens = layer.tokens;
+        const hasToken = layerTokens && layerTokens.length > 0;
+        return hasStyle && hasToken;
+      }).length;
+
+      return {
+        styleAdoptionRate,
+        tokenCoverageRate,
+        libraryDistribution,
+        topStyles,
+        mixedUsageCount,
+      };
+    }
+  }, [auditResult]);
+
+  if (error) {
+    return (
+      <div
+        className="p-4 bg-red-50 border border-red-200 rounded-lg animate-fadeIn"
+        style={{
+          animation: 'fadeIn 0.3s ease-out',
+        }}
+      >
+        <p className="text-red-700 text-sm font-medium">Error loading analytics</p>
+        <p className="text-red-600 text-xs mt-1">{error}</p>
+      </div>
+    );
+  }
+
+  const totalLayers =
+    'textLayers' in (auditResult || {})
+      ? (auditResult as AuditResult).textLayers?.length || 0
+      : 'layers' in (auditResult || {})
+        ? (auditResult as StyleGovernanceAuditResult).layers?.length || 0
+        : 0;
+
+  return (
+    <>
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes fadeInScale {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes fadeInLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes slideInRight {
+          from {
+            width: 0;
+          }
+          to {
+            width: var(--target-width, 100%);
+          }
+        }
+      `}</style>
+
+      <div className="space-y-6 p-4">
+        {/* Header */}
+        <div className="border-b border-figma-border pb-3">
+          <h2 className="text-lg font-semibold text-figma-text">Analytics Dashboard</h2>
+          <p className="text-figma-text-tertiary text-xs mt-1">
+            Design system adoption and token usage metrics
+          </p>
+        </div>
+
+        {/* Key Metrics Grid - 2 columns on desktop, 1 on mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isLoading ? (
+            <>
+              <MetricSkeleton />
+              <MetricSkeleton />
+              <MetricSkeleton />
+              <MetricSkeleton />
+            </>
+          ) : (
+            <>
+              {/* Style Adoption Rate */}
+              <MetricCard
+                label="Style Adoption Rate"
+                value={metrics.styleAdoptionRate}
+                suffix="%"
+                decimals={1}
+                icon="✨"
+                variant={
+                  metrics.styleAdoptionRate >= 80
+                    ? 'success'
+                    : metrics.styleAdoptionRate >= 50
+                      ? 'warning'
+                      : 'danger'
+                }
+              />
+
+              {/* Token Coverage */}
+              <MetricCard
+                label="Token Coverage"
+                value={metrics.tokenCoverageRate}
+                suffix="%"
+                decimals={1}
+                icon="🏷️"
+                variant={
+                  metrics.tokenCoverageRate >= 60
+                    ? 'success'
+                    : metrics.tokenCoverageRate >= 30
+                      ? 'warning'
+                      : 'danger'
+                }
+              />
+
+              {/* Total Styled Layers */}
+              <MetricCard
+                label="Styled Text Layers"
+                value={Math.round((metrics.styleAdoptionRate / 100) * totalLayers)}
+                icon="📄"
+                variant="default"
+              />
+
+              {/* Mixed Usage */}
+              <MetricCard
+                label="Mixed Usage Layers"
+                value={metrics.mixedUsageCount}
+                icon="🔀"
+                variant="default"
+              />
+            </>
+          )}
+        </div>
+
+        {/* Content Grid - 2 columns on desktop, 1 on mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left Column: Top Styles Table */}
+          <div
+            className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
+            style={{
+              animation: 'fadeInScale 0.4s ease-out 0.1s forwards',
+              opacity: 0,
+            }}
+          >
+            <h3 className="text-sm font-semibold text-figma-text mb-4">Top 10 Most Used Styles</h3>
+            <TopStylesTable
+              styles={metrics.topStyles}
+              totalLayers={totalLayers}
+              isLoading={isLoading}
+            />
+          </div>
+
+          {/* Right Column: Distribution & Comparison */}
+          <div className="space-y-6">
+            {/* Library Distribution */}
+            <div
+              className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
+              style={{
+                animation: 'fadeInScale 0.4s ease-out 0.15s forwards',
+                opacity: 0,
+              }}
+            >
+              <h3 className="text-sm font-semibold text-figma-text mb-4">Library Distribution</h3>
+              <LibraryDistributionCard
+                distribution={metrics.libraryDistribution}
+                isLoading={isLoading}
+              />
+            </div>
+
+            {/* Usage Comparison */}
+            <div
+              className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
+              style={{
+                animation: 'fadeInScale 0.4s ease-out 0.2s forwards',
+                opacity: 0,
+              }}
+            >
+              <h3 className="text-sm font-semibold text-figma-text mb-4">Token vs Style Usage</h3>
+              <UsageComparisonCard
+                styleAdoptionRate={metrics.styleAdoptionRate}
+                tokenCoverageRate={metrics.tokenCoverageRate}
+                mixedUsageCount={metrics.mixedUsageCount}
+                totalLayers={totalLayers}
+                isLoading={isLoading}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Info */}
+        {!isLoading && auditResult && (
+          <div
+            className="border-t border-figma-border pt-3 text-xs text-figma-text-tertiary animate-fadeIn"
+            style={{
+              animation: 'fadeIn 0.4s ease-out 0.3s forwards',
+              opacity: 0,
+            }}
+          >
+            <p>
+              Audit performed on {new Date(auditResult.timestamp).toLocaleDateString()} at{' '}
+              {new Date(auditResult.timestamp).toLocaleTimeString()}
+            </p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

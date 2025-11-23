@@ -10,6 +10,7 @@ import type {
 
 import { detectStyleAssignment } from '@/main/utils/styleDetection';
 import { getStyleLibrarySource, getAvailableStyles } from '@/main/utils/styleLibrary';
+import { detectTokensInLayer, getAllDocumentTokens } from '@/main/utils/tokenDetection';
 
 /**
  * Metadata Processor for Style Governance Audit
@@ -84,7 +85,20 @@ export async function processAuditData(
     };
     output.libraries = [localLibrary];
 
-    // Step 3: Process each text layer in batches to avoid blocking main thread
+    // Step 3: Get all available tokens (if enabled)
+    if (options.includeTokens) {
+      console.log('Detecting design tokens...');
+      try {
+        const allTokens = await getAllDocumentTokens();
+        output.tokens = allTokens;
+        console.log(`Found ${allTokens.length} design tokens`);
+      } catch (error) {
+        console.warn('Error detecting tokens:', error);
+        output.tokens = [];
+      }
+    }
+
+    // Step 4: Process each text layer in batches to avoid blocking main thread
     const BATCH_SIZE = 100; // Process 100 layers at a time
     for (let i = 0; i < textLayers.length; i += BATCH_SIZE) {
       // Check for cancellation
@@ -103,16 +117,21 @@ export async function processAuditData(
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    // Step 4: Categorize layers
+    // Step 5: Integrate token usage into layers
+    if (options.includeTokens && output.tokens.length > 0) {
+      await integrateTokenUsageIntoLayers(output.layers, output.tokens);
+    }
+
+    // Step 6: Categorize layers
     const { styled, unstyled } = categorizeLayers(output.layers);
     output.styledLayers = styled;
     output.unstyledLayers = unstyled;
 
-    // Step 5: Build simple hierarchy
+    // Step 7: Build simple hierarchy
     output.styleHierarchy = buildSimpleHierarchy(output.styles);
 
-    // Step 6: Calculate metrics
-    output.metrics = calculateAuditMetrics(output.layers, output.styles);
+    // Step 8: Calculate metrics
+    output.metrics = calculateAuditMetrics(output.layers, output.styles, output.tokens);
 
     console.log(
       `Processing complete: ${output.layers.length} layers, ${output.styles.length} styles`
@@ -285,13 +304,66 @@ function buildSimpleHierarchy(styles: TextStyle[]): StyleHierarchyNode[] {
 }
 
 /**
+ * Integrate token usage information into processed layers
+ *
+ * @param layers - Text layers to augment with token data
+ * @param tokens - All detected tokens in the document
+ */
+async function integrateTokenUsageIntoLayers(
+  layers: TextLayer[],
+  tokens: DesignToken[]
+): Promise<void> {
+  // Create a map of token IDs to tokens for quick lookup
+  const tokenMap = new Map(tokens.map((t) => [t.id, t]));
+
+  // For each layer, detect which tokens it uses
+  for (const layer of layers) {
+    try {
+      // Get the Figma node for detailed analysis
+      const node = await figma.getNodeByIdAsync(layer.id);
+      if (node && 'boundVariables' in node) {
+        // Detect tokens in this specific layer
+        const layerTokens = await detectTokensInLayer(node);
+
+        // Convert detected tokens to TokenBinding objects
+        const bindings = layerTokens.map((token) => ({
+          property: 'fills' as const, // TODO: Detect actual property from boundVariables
+          tokenId: token.id,
+          tokenName: token.name,
+          tokenValue: token.value,
+        }));
+
+        layer.tokens = bindings;
+
+        // Update token usage counts
+        for (const token of layerTokens) {
+          const existingToken = tokenMap.get(token.id);
+          if (existingToken) {
+            existingToken.usageCount = (existingToken.usageCount || 0) + 1;
+          }
+        }
+      }
+    } catch (error) {
+      // Skip this layer if we can't fetch node data
+      console.warn(`Error integrating token usage for layer ${layer.id}:`, error);
+    }
+  }
+}
+
+/**
  * Calculate audit metrics
  *
  * @param layers - All processed text layers
  * @param styles - All text styles
- * @returns Basic audit metrics
+ * @param tokens - All detected design tokens
+ * @returns Complete audit metrics
  */
-function calculateAuditMetrics(layers: TextLayer[], styles: TextStyle[]): AuditMetrics {
+function calculateAuditMetrics(
+  layers: TextLayer[],
+  styles: TextStyle[],
+  tokens: DesignToken[] = []
+): AuditMetrics {
+  // Style metrics
   const styledCount = layers.filter((l) => l.assignmentStatus !== 'unstyled').length;
   const unstyledCount = layers.filter((l) => l.assignmentStatus === 'unstyled').length;
   const partiallyStyledCount = layers.filter(
@@ -300,16 +372,45 @@ function calculateAuditMetrics(layers: TextLayer[], styles: TextStyle[]): AuditM
   const fullyStyledCount = styledCount - partiallyStyledCount;
   const styleAdoptionRate = layers.length > 0 ? Math.round((styledCount / layers.length) * 100) : 0;
 
+  // Token metrics
+  const layersUsingTokens = layers.filter((l) => l.tokens && l.tokens.length > 0).length;
+  const layersWithBothStylesAndTokens = layers.filter(
+    (l) => l.assignmentStatus !== 'unstyled' && l.tokens && l.tokens.length > 0
+  ).length;
+  const totalTokenUsages = layers.reduce((sum, l) => sum + (l.tokens?.length || 0), 0);
+  const tokenCoverageRate =
+    layers.length > 0 ? Math.round((layersUsingTokens / layers.length) * 100) : 0;
+
+  // Calculate top styles by usage (from layer assignments)
+  const styleUsageMap = new Map<string, number>();
+  for (const layer of layers) {
+    if (layer.styleId) {
+      styleUsageMap.set(layer.styleId, (styleUsageMap.get(layer.styleId) || 0) + 1);
+    }
+  }
+  const topStyles = Array.from(styleUsageMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([styleId, usageCount]) => {
+      // Find the style name from the styles array
+      const style = styles.find((s) => s.id === styleId);
+      return {
+        styleId,
+        styleName: style?.name || 'Unknown',
+        usageCount,
+      };
+    });
+
   return {
     styleAdoptionRate,
     fullyStyledCount,
     partiallyStyledCount,
     unstyledCount,
     libraryDistribution: { Local: styledCount }, // Simplified
-    tokenCoverageRate: 0, // TODO: Calculate when tokens implemented
-    tokenUsageCount: 0,
-    mixedUsageCount: 0,
-    topStyles: [], // TODO: Calculate top styles
+    tokenCoverageRate,
+    tokenUsageCount: totalTokenUsages,
+    mixedUsageCount: layersWithBothStylesAndTokens,
+    topStyles,
     deprecatedStyleCount: 0,
   };
 }

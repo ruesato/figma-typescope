@@ -117,6 +117,9 @@ export interface AuditResult {
   summary: AuditSummary; // Aggregate metrics
   timestamp: string; // ISO 8601 format
   fileName: string; // Figma file name
+  tokenInventory: DesignToken[]; // All detected tokens in the design
+  tokenUsageCount: number; // Total instances of tokens used
+  tokenAdoptionRate: number; // Percentage of layers using tokens (0-100)
 }
 
 // ============================================================================
@@ -133,7 +136,10 @@ export type UIToMainMessage =
   | { type: 'NAVIGATE_TO_LAYER'; layerId: string }
 
   // Style governance audit messages
-  | { type: 'RUN_STYLE_AUDIT'; payload?: { includeHiddenLayers?: boolean; includeTokens?: boolean } }
+  | {
+      type: 'RUN_STYLE_AUDIT';
+      payload?: { includeHiddenLayers?: boolean; includeTokens?: boolean };
+    }
   | { type: 'CANCEL_STYLE_AUDIT' }
 
   // Replacement messages
@@ -145,7 +151,7 @@ export type UIToMainMessage =
         affectedLayerIds: string[];
         preserveOverrides?: boolean;
         skipComponentInstances?: boolean;
-      }
+      };
     }
   | {
       type: 'REPLACE_TOKEN';
@@ -154,7 +160,7 @@ export type UIToMainMessage =
         targetTokenId: string;
         affectedLayerIds: string[];
         propertyTypes?: string[];
-      }
+      };
     }
 
   // Export messages
@@ -166,8 +172,8 @@ export type UIToMainMessage =
           includeCharts?: boolean;
           includeDetailedTables?: boolean;
           pageOrientation?: 'portrait' | 'landscape';
-        }
-      }
+        };
+      };
     }
   | {
       type: 'EXPORT_CSV';
@@ -176,8 +182,8 @@ export type UIToMainMessage =
         options?: {
           includeHeaders?: boolean;
           delimiter?: string;
-        }
-      }
+        };
+      };
     };
 
 /**
@@ -213,9 +219,12 @@ export type MainToUIMessage =
         currentStep: string;
         pagesScanned?: number;
         layersProcessed?: number;
-      }
+      };
     }
-  | { type: 'STYLE_AUDIT_COMPLETE'; payload: { result: StyleGovernanceAuditResult; duration: number } }
+  | {
+      type: 'STYLE_AUDIT_COMPLETE';
+      payload: { result: StyleGovernanceAuditResult; duration: number };
+    }
   | {
       type: 'STYLE_AUDIT_ERROR';
       payload: {
@@ -223,15 +232,18 @@ export type MainToUIMessage =
         errorType: 'validation' | 'scanning' | 'processing' | 'unknown';
         canRetry: boolean;
         details?: string;
-      }
+      };
     }
-  | { type: 'STYLE_AUDIT_CANCELLED'; payload: { partialResults?: Partial<StyleGovernanceAuditResult> } }
+  | {
+      type: 'STYLE_AUDIT_CANCELLED';
+      payload: { partialResults?: Partial<StyleGovernanceAuditResult> };
+    }
   | {
       type: 'STYLE_AUDIT_INVALIDATED';
       payload: {
         reason: 'document_modified' | 'style_changed' | 'token_changed';
         changeDetails?: string;
-      }
+      };
     }
 
   // Replacement messages
@@ -243,14 +255,14 @@ export type MainToUIMessage =
         sourceId: string;
         targetId: string;
         affectedLayerCount: number;
-      }
+      };
     }
   | {
       type: 'REPLACEMENT_CHECKPOINT_CREATED';
       payload: {
         checkpointTitle: string;
         timestamp: Date;
-      }
+      };
     }
   | {
       type: 'REPLACEMENT_PROGRESS';
@@ -262,7 +274,7 @@ export type MainToUIMessage =
         currentBatchSize: number;
         layersProcessed: number;
         failedLayers: number;
-      }
+      };
     }
   | {
       type: 'REPLACEMENT_COMPLETE';
@@ -272,7 +284,7 @@ export type MainToUIMessage =
         failedLayers?: FailedLayer[];
         duration: number;
         hasWarnings: boolean;
-      }
+      };
     }
   | {
       type: 'REPLACEMENT_ERROR';
@@ -283,7 +295,7 @@ export type MainToUIMessage =
         checkpointTitle?: string;
         canRollback: boolean;
         details?: string;
-      }
+      };
     }
 
   // Export messages
@@ -294,7 +306,7 @@ export type MainToUIMessage =
         blobUrl: string;
         filename: string;
         fileSize: number;
-      }
+      };
     }
   | { type: 'EXPORT_CSV_STARTED' }
   | {
@@ -304,7 +316,7 @@ export type MainToUIMessage =
         filename: string;
         fileSize: number;
         rowCount: number;
-      }
+      };
     }
   | {
       type: 'EXPORT_ERROR';
@@ -312,7 +324,7 @@ export type MainToUIMessage =
         exportType: 'pdf' | 'csv';
         error: string;
         details?: string;
-      }
+      };
     };
 
 // ============================================================================
@@ -409,24 +421,24 @@ export interface AuditError {
  * Audit operation states
  */
 export type AuditState =
-  | 'idle'          // No audit running; UI shows "Run Audit"
-  | 'validating'    // Checking document accessibility, counting layers
-  | 'scanning'      // Traversing pages, discovering text nodes
-  | 'processing'    // Extracting metadata, building inventory
-  | 'complete'      // Audit finished successfully
-  | 'error'         // Audit failed with error
-  | 'cancelled';    // User cancelled operation
+  | 'idle' // No audit running; UI shows "Run Audit"
+  | 'validating' // Checking document accessibility, counting layers
+  | 'scanning' // Traversing pages, discovering text nodes
+  | 'processing' // Extracting metadata, building inventory
+  | 'complete' // Audit finished successfully
+  | 'error' // Audit failed with error
+  | 'cancelled'; // User cancelled operation
 
 /**
  * Replacement operation states (no cancelled - operations cannot be cancelled after checkpoint)
  */
 export type ReplacementState =
-  | 'idle'                 // No replacement running
-  | 'validating'           // Checking source/target validity, counting layers
-  | 'creating_checkpoint'  // Creating version history savepoint
-  | 'processing'           // Applying changes in batches
-  | 'complete'             // Replacement finished successfully
-  | 'error';               // Replacement failed with error
+  | 'idle' // No replacement running
+  | 'validating' // Checking source/target validity, counting layers
+  | 'creating_checkpoint' // Creating version history savepoint
+  | 'processing' // Applying changes in batches
+  | 'complete' // Replacement finished successfully
+  | 'error'; // Replacement failed with error
 
 // ----------------------------------------------------------------------------
 // Core Entities (Style Governance)
@@ -437,34 +449,34 @@ export type ReplacementState =
  */
 export interface TextLayer {
   // Identity
-  id: string;                    // Figma node ID
-  name: string;                  // Layer name from Figma
+  id: string; // Figma node ID
+  name: string; // Layer name from Figma
 
   // Content
-  textContent: string;           // Text content preview (first 50 chars)
-  characters: number;            // Total character count
+  textContent: string; // Text content preview (first 50 chars)
+  characters: number; // Total character count
 
   // Location
-  pageId: string;                // Parent page ID
-  pageName: string;              // Parent page name
+  pageId: string; // Parent page ID
+  pageName: string; // Parent page name
   parentType: 'MAIN_COMPONENT' | 'INSTANCE' | 'FRAME' | 'GROUP';
-  componentPath?: string;        // Full component hierarchy if in component
+  componentPath?: string; // Full component hierarchy if in component
 
   // Style Assignment
   assignmentStatus: 'fully-styled' | 'partially-styled' | 'unstyled';
-  styleId?: string;              // Assigned text style ID (if any)
-  styleName?: string;            // Resolved style name
-  styleSource?: string;          // Library name or "Local"
+  styleId?: string; // Assigned text style ID (if any)
+  styleName?: string; // Resolved style name
+  styleSource?: string; // Library name or "Local"
 
   // Token Usage
-  tokens: TokenBinding[];        // Design tokens applied to this layer
+  tokens: TokenBinding[]; // Design tokens applied to this layer
 
   // Visual Properties
-  visible: boolean;              // Layer visibility state
-  opacity: number;               // Layer opacity (0-1)
+  visible: boolean; // Layer visibility state
+  opacity: number; // Layer opacity (0-1)
 
   // Override Status (for component instances)
-  hasOverrides: boolean;         // True if style properties locally overridden
+  hasOverrides: boolean; // True if style properties locally overridden
   overriddenProperties?: string[]; // List of overridden property names
 }
 
@@ -473,28 +485,28 @@ export interface TextLayer {
  */
 export interface TextStyle {
   // Identity
-  id: string;                    // Figma style ID
-  name: string;                  // Style name (e.g., "Heading/H1")
-  key: string;                   // Unique key for stable references
+  id: string; // Figma style ID
+  name: string; // Style name (e.g., "Heading/H1")
+  key: string; // Unique key for stable references
 
   // Hierarchy
-  hierarchyPath: string[];       // Path components ["Typography", "Heading", "H1"]
-  parentStyleId?: string;        // Parent style in hierarchy (if exists)
-  childStyleIds: string[];       // Child styles in hierarchy
+  hierarchyPath: string[]; // Path components ["Typography", "Heading", "H1"]
+  parentStyleId?: string; // Parent style in hierarchy (if exists)
+  childStyleIds: string[]; // Child styles in hierarchy
 
   // Source
   sourceType: 'local' | 'team_library' | 'published_component';
-  libraryName: string;           // Library name or "Local"
-  libraryId?: string;            // Library ID (if from library)
+  libraryName: string; // Library name or "Local"
+  libraryId?: string; // Library ID (if from library)
 
   // Usage Metrics
-  usageCount: number;            // Total layers using this style
+  usageCount: number; // Total layers using this style
   pageDistribution: PageUsage[]; // Usage breakdown by page
   componentUsage: ComponentUsage; // Usage in components vs plain layers
 
   // Status
-  isDeprecated: boolean;         // Marked as deprecated
-  lastModified?: Date;           // Last modification timestamp (if available)
+  isDeprecated: boolean; // Marked as deprecated
+  lastModified?: Date; // Last modification timestamp (if available)
 }
 
 export interface PageUsage {
@@ -504,10 +516,10 @@ export interface PageUsage {
 }
 
 export interface ComponentUsage {
-  mainComponentCount: number;    // Usage in main components
-  instanceCount: number;         // Usage in instances
-  plainLayerCount: number;       // Usage in plain frames/groups
-  overrideCount: number;         // Instances with overridden properties
+  mainComponentCount: number; // Usage in main components
+  instanceCount: number; // Usage in instances
+  plainLayerCount: number; // Usage in plain frames/groups
+  overrideCount: number; // Instances with overridden properties
 }
 
 /**
@@ -515,31 +527,34 @@ export interface ComponentUsage {
  */
 export interface DesignToken {
   // Identity
-  id: string;                    // Figma variable ID
-  name: string;                  // Token name (e.g., "text.primary")
-  key: string;                   // Unique stable key
+  id: string; // Figma variable ID
+  name: string; // Token name (e.g., "color/primary")
+  key: string; // Unique stable key
 
   // Type & Value
-  type: 'COLOR' | 'STRING' | 'FLOAT' | 'BOOLEAN';
-  resolvedType: string;          // Human-readable type
-  currentValue: any;             // Resolved value in current mode
+  type: 'color' | 'number' | 'string' | 'boolean'; // Figma Variable type
+  resolvedType: string; // Human-readable type
+  currentValue: any; // Resolved value in current mode
+  value: string | number | boolean; // Resolved value
 
   // Collection & Mode
-  collectionId: string;          // Parent collection ID
-  collectionName: string;        // Collection display name
-  modeId: string;                // Active mode ID
-  modeName: string;              // Mode display name
+  collectionId: string; // Parent collection ID
+  collectionName: string; // Collection display name
+  collections: string[]; // Which token collections it belongs to
+  modeId: string; // Active mode ID
+  modeName: string; // Mode display name
   valuesByMode: Record<string, any>; // All mode values
+  modes: Record<string, string | number | boolean>; // Token value per mode
 
   // Token Chain (for aliases)
-  isAlias: boolean;              // True if references another token
-  aliasedTokenId?: string;       // Source token ID if alias
-  aliasChain?: string[];         // Full chain (e.g., ["text.primary", "brand.blue", "#0066CC"])
+  isAlias: boolean; // True if references another token
+  aliasedTokenId?: string; // Source token ID if alias
+  aliasChain?: string[]; // Full chain (e.g., ["text.primary", "brand.blue", "#0066CC"])
 
   // Usage Metrics
-  usageCount: number;            // Layers using this token
-  layerIds: string[];            // Layer IDs using this token
-  propertyTypes: string[];       // Which properties use it (e.g., ["fills", "fontFamily"])
+  usageCount: number; // How many layers reference this token
+  layerIds: string[]; // Layer IDs using this token
+  propertyTypes: string[]; // Which properties use it (e.g., ["fills", "fontFamily"])
 }
 
 /**
@@ -547,9 +562,9 @@ export interface DesignToken {
  */
 export interface TokenBinding {
   property: 'fills' | 'fontFamily' | 'fontSize' | 'lineHeight' | 'letterSpacing';
-  tokenId: string;               // Variable ID
-  tokenName: string;             // Resolved token name
-  tokenValue: any;               // Resolved value
+  tokenId: string; // Variable ID
+  tokenName: string; // Resolved token name
+  tokenValue: any; // Resolved value
 }
 
 /**
@@ -557,32 +572,32 @@ export interface TokenBinding {
  */
 export interface LibrarySource {
   // Identity
-  id: string;                    // Library ID or "local"
-  name: string;                  // Display name (e.g., "Design System v2" or "Local")
+  id: string; // Library ID or "local"
+  name: string; // Display name (e.g., "Design System v2" or "Local")
   type: 'local' | 'team_library' | 'published_component';
 
   // Status
-  isEnabled: boolean;            // True if library currently enabled
-  isAvailable: boolean;          // True if network-accessible
+  isEnabled: boolean; // True if library currently enabled
+  isAvailable: boolean; // True if network-accessible
 
   // Content
-  styleCount: number;            // Total styles from this source
-  styleIds: string[];            // Style IDs from this source
+  styleCount: number; // Total styles from this source
+  styleIds: string[]; // Style IDs from this source
 
   // Usage
-  totalUsageCount: number;       // Total layers using styles from this source
-  usagePercentage: number;       // % of total styled layers (0-100)
+  totalUsageCount: number; // Total layers using styles from this source
+  usagePercentage: number; // % of total styled layers (0-100)
 }
 
 /**
  * Style hierarchy node for tree rendering
  */
 export interface StyleHierarchyNode {
-  styleName: string;             // Full style name
-  styleId?: string;              // Style ID (if real style, not intermediate node)
-  parentName?: string;           // Parent node name
+  styleName: string; // Full style name
+  styleId?: string; // Style ID (if real style, not intermediate node)
+  parentName?: string; // Parent node name
   children: StyleHierarchyNode[]; // Child nodes
-  usageCount: number;            // Total usage (including children)
+  usageCount: number; // Total usage (including children)
 }
 
 /**
@@ -590,22 +605,22 @@ export interface StyleHierarchyNode {
  */
 export interface AuditMetrics {
   // Style Adoption
-  styleAdoptionRate: number;     // % of layers with style (0-100)
-  fullyStyledCount: number;      // Layers matching style exactly
-  partiallyStyledCount: number;  // Layers with overrides
-  unstyledCount: number;         // Layers without style
+  styleAdoptionRate: number; // % of layers with style (0-100)
+  fullyStyledCount: number; // Layers matching style exactly
+  partiallyStyledCount: number; // Layers with overrides
+  unstyledCount: number; // Layers without style
 
   // Library Distribution
   libraryDistribution: Record<string, number>; // Library name → layer count
 
   // Token Adoption
-  tokenCoverageRate: number;     // % of layers using tokens (0-100)
-  tokenUsageCount: number;       // Layers with at least one token
-  mixedUsageCount: number;       // Layers with both style and tokens
+  tokenCoverageRate: number; // % of layers using tokens (0-100)
+  tokenUsageCount: number; // Layers with at least one token
+  mixedUsageCount: number; // Layers with both style and tokens
 
   // Top Styles
   topStyles: Array<{ styleId: string; styleName: string; usageCount: number }>;
-  deprecatedStyleCount: number;  // Count of deprecated style instances
+  deprecatedStyleCount: number; // Count of deprecated style instances
 }
 
 /**
@@ -613,33 +628,33 @@ export interface AuditMetrics {
  */
 export interface StyleGovernanceAuditResult {
   // Metadata
-  timestamp: Date;               // When audit was performed
-  documentName: string;          // Figma file name
-  documentId: string;            // Figma file ID
+  timestamp: Date; // When audit was performed
+  documentName: string; // Figma file name
+  documentId: string; // Figma file ID
 
   // Scope
-  totalPages: number;            // Pages scanned
-  totalTextLayers: number;       // Text layers found
+  totalPages: number; // Pages scanned
+  totalTextLayers: number; // Text layers found
 
   // Inventories
-  styles: TextStyle[];           // All detected styles
-  tokens: DesignToken[];         // All detected tokens
-  layers: TextLayer[];           // All text layers
-  libraries: LibrarySource[];    // All library sources
+  styles: TextStyle[]; // All detected styles
+  tokens: DesignToken[]; // All detected tokens
+  layers: TextLayer[]; // All text layers
+  libraries: LibrarySource[]; // All library sources
 
   // Hierarchy
   styleHierarchy: StyleHierarchyNode[]; // Computed hierarchy tree
 
   // Categorization
-  styledLayers: TextLayer[];     // Layers with style assigned
-  unstyledLayers: TextLayer[];   // Layers without style
+  styledLayers: TextLayer[]; // Layers with style assigned
+  unstyledLayers: TextLayer[]; // Layers without style
 
   // Analytics
-  metrics: AuditMetrics;         // Computed metrics
+  metrics: AuditMetrics; // Computed metrics
 
   // Status
-  isStale: boolean;              // True if document modified since audit
-  auditDuration: number;         // Time taken in milliseconds
+  isStale: boolean; // True if document modified since audit
+  auditDuration: number; // Time taken in milliseconds
 }
 
 // ----------------------------------------------------------------------------
@@ -661,23 +676,23 @@ export interface FailedLayer {
  */
 export interface ReplacementResult {
   success: boolean;
-  layersUpdated: number;         // Successfully updated
-  layersFailed: number;          // Failed to update
-  failedLayers: FailedLayer[];   // Details of failures
-  checkpointTitle: string;       // Version history checkpoint
-  duration: number;              // Time taken in ms
-  hasWarnings: boolean;          // True if partial failures
+  layersUpdated: number; // Successfully updated
+  layersFailed: number; // Failed to update
+  failedLayers: FailedLayer[]; // Details of failures
+  checkpointTitle: string; // Version history checkpoint
+  duration: number; // Time taken in ms
+  hasWarnings: boolean; // True if partial failures
 }
 
 /**
  * Batch processor state for adaptive sizing
  */
 export interface BatchProcessorState {
-  currentBatchSize: number;      // Current batch size (25-100)
-  consecutiveSuccesses: number;  // Count of successful batches since last resize
-  totalLayersProcessed: number;  // Total layers updated so far
-  totalLayersToProcess: number;  // Total layers in operation
-  failedLayers: FailedLayer[];   // Layers that failed to update
+  currentBatchSize: number; // Current batch size (25-100)
+  consecutiveSuccesses: number; // Count of successful batches since last resize
+  totalLayersProcessed: number; // Total layers updated so far
+  totalLayersToProcess: number; // Total layers in operation
+  failedLayers: FailedLayer[]; // Layers that failed to update
 }
 
 // ----------------------------------------------------------------------------
@@ -689,10 +704,10 @@ export interface BatchProcessorState {
  */
 export interface ExportResult {
   success: boolean;
-  blobUrl: string;                 // Blob URL for download
-  filename: string;                // Suggested filename
-  fileSize: number;                // Size in bytes
-  mimeType: string;                // 'application/pdf' or 'text/csv'
+  blobUrl: string; // Blob URL for download
+  filename: string; // Suggested filename
+  fileSize: number; // Size in bytes
+  mimeType: string; // 'application/pdf' or 'text/csv'
   metadata: ExportMetadata;
 }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './styles/globals.css';
 import { useMessageHandler } from './hooks/useMessageHandler';
 import { useAuditState } from './hooks/useAuditState';
@@ -6,6 +6,8 @@ import SummaryDashboard from './components/SummaryDashboard';
 import AuditResults from './components/AuditResults';
 import ProgressIndicator from './components/ProgressIndicator';
 import ErrorDisplay from './components/ErrorDisplay';
+import TokenView from './components/TokenView';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 
 /**
  * Main App component - Root of the plugin UI
@@ -14,6 +16,9 @@ import ErrorDisplay from './components/ErrorDisplay';
  * based on the current audit state.
  */
 export default function App() {
+  // Tab state for results view
+  const [activeTab, setActiveTab] = useState<'summary' | 'tokens' | 'analytics'>('summary');
+
   // Get message handlers for communication with main context
   const { runStyleAudit, navigateToLayer, cancelStyleAudit } = useMessageHandler();
 
@@ -123,57 +128,133 @@ export default function App() {
       {/* Results State - Style Governance Audit */}
       {!isAuditing && styleGovernanceResult && !error && (
         <div className="space-y-6">
-          {/* Summary Dashboard */}
-          <div className="bg-figma-bg-secondary rounded-lg p-6 border border-figma-border">
-            <h2 className="text-lg font-semibold mb-4">Audit Summary</h2>
-            <div className="space-y-4">
-              {/* Document Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-figma-text-secondary">Document</p>
-                  <p className="text-sm font-medium">{styleGovernanceResult.documentName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-figma-text-secondary">Pages</p>
-                  <p className="text-sm font-medium">{styleGovernanceResult.totalPages}</p>
-                </div>
-              </div>
+          {/* Tabs */}
+          <div className="bg-figma-bg-secondary rounded-lg border border-figma-border">
+            <div className="flex border-b border-figma-border">
+              <button
+                onClick={() => setActiveTab('summary')}
+                className={`
+                   flex-1 px-4 py-3 text-sm font-medium text-center
+                   transition-colors border-b-2
+                   ${
+                     activeTab === 'summary'
+                       ? 'border-figma-bg-brand text-figma-text'
+                       : 'border-transparent text-figma-text-secondary hover:text-figma-text'
+                   }
+                 `}
+              >
+                Summary
+              </button>
+              <button
+                onClick={() => setActiveTab('tokens')}
+                className={`
+                   flex-1 px-4 py-3 text-sm font-medium text-center
+                   transition-colors border-b-2
+                   ${
+                     activeTab === 'tokens'
+                       ? 'border-figma-bg-brand text-figma-text'
+                       : 'border-transparent text-figma-text-secondary hover:text-figma-text'
+                   }
+                 `}
+              >
+                Tokens ({styleGovernanceResult.tokens.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`
+                   flex-1 px-4 py-3 text-sm font-medium text-center
+                   transition-colors border-b-2
+                   ${
+                     activeTab === 'analytics'
+                       ? 'border-figma-bg-brand text-figma-text'
+                       : 'border-transparent text-figma-text-secondary hover:text-figma-text'
+                   }
+                 `}
+              >
+                Analytics
+              </button>
+            </div>
 
-              {/* Text Layers Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-figma-text-secondary">Total Layers</p>
-                  <p className="text-sm font-medium">{styleGovernanceResult.totalTextLayers}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-figma-text-secondary">Unstyled</p>
-                  <p className="text-sm font-medium text-red-500">
-                    {styleGovernanceResult.metrics.unstyledCount}
-                  </p>
-                </div>
-              </div>
+            {/* Tab Content */}
+            <div className="p-6">
+              {/* Summary Tab */}
+              {activeTab === 'summary' && (
+                <div className="space-y-4">
+                  {/* Document Info */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-figma-text-secondary">Document</p>
+                      <p className="text-sm font-medium">{styleGovernanceResult.documentName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-figma-text-secondary">Pages</p>
+                      <p className="text-sm font-medium">{styleGovernanceResult.totalPages}</p>
+                    </div>
+                  </div>
 
-              {/* Style Adoption */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-figma-text-secondary">Fully Styled</p>
-                  <p className="text-sm font-medium text-green-500">
-                    {styleGovernanceResult.metrics.fullyStyledCount}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-figma-text-secondary">Partially Styled</p>
-                  <p className="text-sm font-medium text-yellow-500">
-                    {styleGovernanceResult.metrics.partiallyStyledCount}
-                  </p>
-                </div>
-              </div>
+                  {/* Text Layers Info */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-figma-text-secondary">Total Layers</p>
+                      <p className="text-sm font-medium">{styleGovernanceResult.totalTextLayers}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-figma-text-secondary">Unstyled</p>
+                      <p className="text-sm font-medium text-red-500">
+                        {styleGovernanceResult.metrics.unstyledCount}
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Audit Details */}
-              <div className="pt-4 border-t border-figma-border">
-                <p className="text-xs text-figma-text-secondary mb-2">Audit Duration</p>
-                <p className="text-sm font-medium">{styleGovernanceResult.auditDuration}ms</p>
-              </div>
+                  {/* Style Adoption */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-figma-text-secondary">Fully Styled</p>
+                      <p className="text-sm font-medium text-green-500">
+                        {styleGovernanceResult.metrics.fullyStyledCount}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-figma-text-secondary">Partially Styled</p>
+                      <p className="text-sm font-medium text-yellow-500">
+                        {styleGovernanceResult.metrics.partiallyStyledCount}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Token Info */}
+                  {styleGovernanceResult.tokens.length > 0 && (
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-figma-border">
+                      <div>
+                        <p className="text-xs text-figma-text-secondary">Total Tokens</p>
+                        <p className="text-sm font-medium">{styleGovernanceResult.tokens.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-figma-text-secondary">Token Coverage</p>
+                        <p className="text-sm font-medium">
+                          {styleGovernanceResult.metrics.tokenCoverageRate}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Audit Details */}
+                  <div className="pt-4 border-t border-figma-border">
+                    <p className="text-xs text-figma-text-secondary mb-2">Audit Duration</p>
+                    <p className="text-sm font-medium">{styleGovernanceResult.auditDuration}ms</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tokens Tab */}
+              {activeTab === 'tokens' && (
+                <TokenView tokens={styleGovernanceResult.tokens} isLoading={false} />
+              )}
+
+              {/* Analytics Tab */}
+              {activeTab === 'analytics' && (
+                <AnalyticsDashboard auditResult={styleGovernanceResult} isLoading={false} />
+              )}
             </div>
           </div>
 
