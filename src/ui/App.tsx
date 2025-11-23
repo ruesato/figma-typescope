@@ -20,7 +20,9 @@ import type { TextStyle, DesignToken } from '@/shared/types';
  */
 export default function App() {
   // Tab state for results view
-  const [activeTab, setActiveTab] = useState<'summary' | 'tokens' | 'analytics'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'styles' | 'tokens' | 'analytics'>(
+    'summary'
+  );
   // Detail panel selection state
   const [selectedStyle, setSelectedStyle] = useState<TextStyle | null>(null);
   const [selectedToken, setSelectedToken] = useState<DesignToken | null>(null);
@@ -147,16 +149,30 @@ export default function App() {
                 Summary
               </button>
               <button
+                onClick={() => setActiveTab('styles')}
+                className={`
+                    flex-1 px-4 py-3 text-sm font-medium text-center
+                    transition-colors border-b-2
+                    ${
+                      activeTab === 'styles'
+                        ? 'border-figma-bg-brand text-figma-text'
+                        : 'border-transparent text-figma-text-secondary hover:text-figma-text'
+                    }
+                  `}
+              >
+                Styles ({styleGovernanceResult.styles.length})
+              </button>
+              <button
                 onClick={() => setActiveTab('tokens')}
                 className={`
-                   flex-1 px-4 py-3 text-sm font-medium text-center
-                   transition-colors border-b-2
-                   ${
-                     activeTab === 'tokens'
-                       ? 'border-figma-bg-brand text-figma-text'
-                       : 'border-transparent text-figma-text-secondary hover:text-figma-text'
-                   }
-                 `}
+                    flex-1 px-4 py-3 text-sm font-medium text-center
+                    transition-colors border-b-2
+                    ${
+                      activeTab === 'tokens'
+                        ? 'border-figma-bg-brand text-figma-text'
+                        : 'border-transparent text-figma-text-secondary hover:text-figma-text'
+                    }
+                  `}
               >
                 Tokens ({styleGovernanceResult.tokens.length})
               </button>
@@ -245,6 +261,16 @@ export default function App() {
                     <p className="text-sm font-medium">{styleGovernanceResult.auditDuration}ms</p>
                   </div>
                 </div>
+              )}
+
+              {/* Styles Tab */}
+              {activeTab === 'styles' && (
+                <StyleTreeView
+                  styles={styleGovernanceResult.styles}
+                  libraries={styleGovernanceResult.libraries}
+                  unstyledLayers={styleGovernanceResult.unstyledLayers}
+                  onStyleSelect={setSelectedStyle}
+                />
               )}
 
               {/* Tokens Tab */}
