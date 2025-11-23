@@ -52,12 +52,16 @@ export async function detectStyleAssignment(node: TextNode): Promise<StyleAssign
     // The processor.ts now handles full library resolution,
     // but we provide basic resolution here for consistency
     try {
-      const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
-      const keyParts = textStyle.key.split('/');
-      if (keyParts.length >= 2) {
-        const libraryKey = keyParts[0];
-        const library = libraries.find((lib: any) => lib.key === libraryKey);
-        libraryName = library?.name || `Library (${libraryKey.substring(0, 8)}...)`;
+      if (figma.teamLibrary && typeof figma.teamLibrary.getAvailableLibrariesAsync === 'function') {
+        const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
+        const keyParts = textStyle.key.split('/');
+        if (keyParts.length >= 2) {
+          const libraryKey = keyParts[0];
+          const library = libraries.find((lib: any) => lib.key === libraryKey);
+          libraryName = library?.name || `Library (${libraryKey.substring(0, 8)}...)`;
+        } else {
+          libraryName = 'External Library';
+        }
       } else {
         libraryName = 'External Library';
       }

@@ -423,12 +423,18 @@ async function buildLibraryMap(): Promise<Map<string, string>> {
   const map = new Map<string, string>();
 
   try {
-    const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
-    for (const library of libraries) {
-      map.set(library.key, library.name);
+    // Note: teamLibrary API may not be available in all contexts
+    // If unavailable, we'll fall back to basic library name resolution
+    if (figma.teamLibrary && typeof figma.teamLibrary.getAvailableLibrariesAsync === 'function') {
+      const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
+      for (const library of libraries) {
+        map.set(library.key, library.name);
+      }
+    } else {
+      console.warn('teamLibrary API not available');
     }
   } catch (error) {
-    console.warn('Could not load team libraries:', error);
+    console.warn('Could not load team libraries - proceeding with basic name resolution:', error);
   }
 
   return map;
