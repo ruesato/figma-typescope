@@ -1,4 +1,6 @@
 import type { ReplacementResult, FailedLayer } from '@/shared/types';
+import { BatchProcessor } from './batchProcessor';
+import { retryWithBackoff, classifyError } from './errorRecovery';
 
 /**
  * Replacement Engine for Style Governance
@@ -92,10 +94,88 @@ export class ReplacementEngine {
   }
 
   /**
-   * Register state change callback
+   * Process style replacement with adaptive batching and error recovery
    */
-  onStateChange(callback: ReplacementStateChangeCallback): void {
-    this.stateChangeCallbacks.push(callback);
+  private async processStyleReplacement(
+    options: StyleReplacementOptions
+  ): Promise<Omit<ReplacementResult, 'checkpointTitle' | 'duration'>> {
+    const { affectedLayerIds, targetStyleId } = options;
+
+    let layersUpdated = 0;
+    let layersFailed = 0;
+    const failedLayers: FailedLayer[] = [];
+
+    const totalLayers = affectedLayerIds.length;
+
+    // Create batch processor with adaptive sizing
+    const batchProcessor = new BatchProcessor({
+      initialBatchSize: 100,
+      minBatchSize: 25,
+      maxBatchSize: 100,
+      successThreshold: 5,
+      onBatchComplete: (result) => {
+        // Update counts
+        layersUpdated += result.layersProcessed;
+        layersFailed += result.layersFailed;
+
+        // Collect failed layers
+        for (const error of result.errors) {
+          failedLayers.push({
+            layerId: error.layerId,
+            layerName: error.layerName,
+            reason: error.error.message,
+            retryCount: error.retryCount,
+          });
+        }
+
+        // Emit progress
+        const totalProcessed = layersUpdated + layersFailed;
+        const percentage = Math.round((totalProcessed / totalLayers) * 90) + 10; // 10-100%
+
+        this.emitProgress({
+          state: 'processing',
+          percentage,
+          currentBatch: result.batchNumber,
+          totalBatches: Math.ceil(totalLayers / batchProcessor.getCurrentBatchSize()),
+          currentBatchSize: result.batchSize,
+          layersProcessed: totalProcessed,
+          failedLayers: layersFailed,
+          checkpointTitle: this.checkpointTitle,
+        });
+      },
+    });
+
+    console.log(`Processing ${totalLayers} layers with adaptive batching`);
+
+    // Process layers with adaptive batching
+    for await (const _batchResult of batchProcessor.processBatches(
+      affectedLayerIds,
+      async (layerId) => {
+        // Apply style replacement with retry logic
+        await retryWithBackoff(async () => {
+          const node = await figma.getNodeByIdAsync(layerId);
+
+          if (!node || node.type !== 'TEXT') {
+            throw new Error('Not a text layer');
+          }
+
+          // Apply new style
+          (node as TextNode).textStyleId = targetStyleId;
+        });
+      }
+    )) {
+      // Batch processed - progress emitted via callback
+    }
+
+    console.log(`Replacement complete: ${layersUpdated} updated, ${layersFailed} failed`);
+
+    return {
+      success: layersFailed === 0,
+      layersUpdated,
+      layersFailed,
+      failedLayers,
+      hasWarnings: layersFailed > 0,
+    };
   }
 
   /**
@@ -289,114 +369,3 @@ export class ReplacementEngine {
     }
   }
 
-  /**
-   * Process style replacement with adaptive batching
-   */
-  private async processStyleReplacement(
-    options: StyleReplacementOptions
-  ): Promise<Omit<ReplacementResult, 'checkpointTitle' | 'duration'>> {
-    const { affectedLayerIds, targetStyleId, preserveOverrides = true } = options;
-
-    let layersUpdated = 0;
-    let layersFailed = 0;
-    const failedLayers: FailedLayer[] = [];
-
-    // Calculate batches
-    const totalLayers = affectedLayerIds.length;
-    let batchSize = 100; // Start with 100
-    const totalBatches = Math.ceil(totalLayers / batchSize);
-
-    console.log(
-      `Processing ${totalLayers} layers in ${totalBatches} batches (initial size: ${batchSize})`
-    );
-
-    // Process in batches
-    for (let i = 0; i < affectedLayerIds.length; i += batchSize) {
-      const batchLayerIds = affectedLayerIds.slice(i, i + batchSize);
-      const currentBatch = Math.floor(i / batchSize) + 1;
-
-      try {
-        // Process this batch
-        for (const layerId of batchLayerIds) {
-          try {
-            const node = await figma.getNodeByIdAsync(layerId);
-            if (node && node.type === 'TEXT') {
-              // Apply new style
-              (node as TextNode).textStyleId = targetStyleId;
-              layersUpdated++;
-            } else {
-              layersFailed++;
-              failedLayers.push({
-                layerId,
-                layerName: node?.name || 'Unknown',
-                reason: 'Not a text layer',
-                retryCount: 0,
-              });
-            }
-          } catch (error) {
-            layersFailed++;
-            failedLayers.push({
-              layerId,
-              layerName: 'Unknown',
-              reason: error instanceof Error ? error.message : 'Unknown error',
-              retryCount: 0,
-            });
-          }
-        }
-
-        // Emit progress
-        this.emitProgress({
-          state: 'processing',
-          percentage: Math.round(((i + batchSize) / totalLayers) * 90) + 10, // 10-100%
-          currentBatch,
-          totalBatches,
-          currentBatchSize: batchSize,
-          layersProcessed: layersUpdated + layersFailed,
-          failedLayers: layersFailed,
-          checkpointTitle: this.checkpointTitle,
-        });
-
-        // Yield to event loop
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      } catch (error) {
-        console.error(`Batch ${currentBatch} failed:`, error);
-        // TODO: Implement adaptive batch size reduction
-        // For now, continue with next batch
-      }
-    }
-
-    console.log(`Replacement complete: ${layersUpdated} updated, ${layersFailed} failed`);
-
-    return {
-      success: layersFailed === 0,
-      layersUpdated,
-      layersFailed,
-      failedLayers,
-      hasWarnings: layersFailed > 0,
-    };
-  }
-
-  /**
-   * Process token replacement with adaptive batching
-   */
-  private async processTokenReplacement(
-    options: TokenReplacementOptions
-  ): Promise<Omit<ReplacementResult, 'checkpointTitle' | 'duration'>> {
-    // TODO: Implement token replacement using setBoundVariable API
-    // For now, return empty result
-    console.warn('Token replacement not yet implemented');
-
-    return {
-      success: false,
-      layersUpdated: 0,
-      layersFailed: options.affectedLayerIds.length,
-      failedLayers: options.affectedLayerIds.map((id) => ({
-        layerId: id,
-        layerName: 'Unknown',
-        reason: 'Token replacement not yet implemented',
-        retryCount: 0,
-      })),
-      hasWarnings: true,
-    };
-  }
-}
