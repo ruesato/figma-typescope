@@ -11,6 +11,7 @@ import AnalyticsDashboard from './components/AnalyticsDashboard';
 import DetailPanel from './components/DetailPanel';
 import StyleTreeView from './components/StyleTreeView';
 import StylePicker from './components/StylePicker';
+import { TokenPicker } from './components/TokenPicker';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import type { TextStyle, DesignToken } from '@/shared/types';
 
@@ -30,14 +31,16 @@ export default function App() {
   const [selectedToken, setSelectedToken] = useState<DesignToken | null>(null);
 
   // Replacement workflow state
-  const [replacementState, setReplacementState] = useState<'idle' | 'picking' | 'confirming'>(
-    'idle'
-  );
+  const [replacementState, setReplacementState] = useState<
+    'idle' | 'picking-style' | 'picking-token' | 'confirming'
+  >('idle');
   const [sourceStyle, setSourceStyle] = useState<TextStyle | null>(null);
+  const [sourceToken, setSourceToken] = useState<DesignToken | null>(null);
+  const [replacementType, setReplacementType] = useState<'style' | 'token' | null>(null);
   const [affectedLayerIds, setAffectedLayerIds] = useState<string[]>([]);
 
   // Get message handlers for communication with main context
-  const { runStyleAudit, navigateToLayer, replaceStyle } = useMessageHandler();
+  const { runStyleAudit, navigateToLayer, replaceStyle, replaceToken } = useMessageHandler();
 
   // Get audit state
   const { auditResult, styleGovernanceResult, isAuditing, progress, error, reset } =
@@ -68,23 +71,40 @@ export default function App() {
   // Replacement workflow handlers
   const handleReplaceStyle = (style: TextStyle, layerIds: string[]) => {
     setSourceStyle(style);
+    setSourceToken(null);
+    setReplacementType('style');
     setAffectedLayerIds(layerIds);
-    setReplacementState('picking');
+    setReplacementState('picking-style');
+  };
+
+  const handleReplaceToken = (token: DesignToken, layerIds: string[]) => {
+    setSourceToken(token);
+    setSourceStyle(null);
+    setReplacementType('token');
+    setAffectedLayerIds(layerIds);
+    setReplacementState('picking-token');
   };
 
   const handleStylePickerSelect = (targetStyle: TextStyle) => {
-    if (sourceStyle) {
+    if (sourceStyle && replacementType === 'style') {
+      setReplacementState('confirming');
+    }
+  };
+
+  const handleTokenPickerSelect = (targetToken: DesignToken) => {
+    if (sourceToken && replacementType === 'token') {
       setReplacementState('confirming');
     }
   };
 
   const handleConfirmReplacement = async () => {
-    if (sourceStyle && affectedLayerIds.length > 0) {
+    if (affectedLayerIds.length === 0) return;
+
+    if (replacementType === 'style' && sourceStyle) {
       // Find target style from the picker state
       const targetStyle = styleGovernanceResult?.styles.find(
         (s) =>
-          s.id ===
-          (document.querySelector('[data-selected-target-id]') as any)?.dataset.selectedTargetId
+          s.id === (document.querySelector('[data-style-picker]') as any)?.dataset.selectedTargetId
       );
 
       if (targetStyle) {
@@ -93,6 +113,23 @@ export default function App() {
         // Reset replacement state
         setReplacementState('idle');
         setSourceStyle(null);
+        setReplacementType(null);
+        setAffectedLayerIds([]);
+      }
+    } else if (replacementType === 'token' && sourceToken) {
+      // Find target token from the picker state
+      const targetToken = styleGovernanceResult?.tokens.find(
+        (t) =>
+          t.id === (document.querySelector('[data-token-picker]') as any)?.dataset.selectedTargetId
+      );
+
+      if (targetToken) {
+        await replaceToken(sourceToken.id, targetToken.id, affectedLayerIds);
+
+        // Reset replacement state
+        setReplacementState('idle');
+        setSourceToken(null);
+        setReplacementType(null);
         setAffectedLayerIds([]);
       }
     }
@@ -387,6 +424,7 @@ export default function App() {
                 allLayers={styleGovernanceResult.layers}
                 onNavigateToLayer={handleNavigateToLayer}
                 onReplaceStyle={handleReplaceStyle}
+                onReplaceToken={handleReplaceToken}
               />
             </div>
           )}
@@ -440,13 +478,13 @@ export default function App() {
         </div>
       )}
 
-      {/* StylePicker Modal for Replacement */}
-      {styleGovernanceResult && replacementState === 'picking' && (
+      {/* StylePicker Modal for Style Replacement */}
+      {styleGovernanceResult && replacementState === 'picking-style' && sourceStyle && (
         <StylePicker
-          isOpen={replacementState === 'picking'}
+          isOpen={replacementState === 'picking-style'}
           styles={styleGovernanceResult.styles}
           libraries={styleGovernanceResult.libraries}
-          currentStyleId={sourceStyle?.id}
+          currentStyleId={sourceStyle.id}
           onSelect={(targetStyle) => {
             // Store selected target style and move to confirmation
             const picker = document.querySelector('[data-style-picker]') as any;
@@ -458,23 +496,64 @@ export default function App() {
           }}
           onCancel={handleCancelReplacement}
           title="Select Target Style"
-          description={`Replace "${sourceStyle?.name}" in ${affectedLayerIds.length} layer${affectedLayerIds.length !== 1 ? 's' : ''}`}
+          description={`Replace "${sourceStyle.name}" in ${affectedLayerIds.length} layer${affectedLayerIds.length !== 1 ? 's' : ''}`}
         />
       )}
 
-      {/* Confirmation Dialog for Replacement */}
-      {styleGovernanceResult && replacementState === 'confirming' && (
-        <ConfirmationDialog
-          isOpen={replacementState === 'confirming'}
-          title="Confirm Style Replacement"
-          message={`Replace all instances of "${sourceStyle?.name}" with the selected style in ${affectedLayerIds.length} layer${affectedLayerIds.length !== 1 ? 's' : ''}?\n\nThis will create a version checkpoint for safety.`}
-          confirmLabel="Replace"
-          cancelLabel="Cancel"
-          variant="warning"
-          onConfirm={handleConfirmReplacement}
-          onCancel={() => setReplacementState('picking')}
+      {/* TokenPicker Modal for Token Replacement */}
+      {styleGovernanceResult && replacementState === 'picking-token' && sourceToken && (
+        <TokenPicker
+          isOpen={replacementState === 'picking-token'}
+          tokens={styleGovernanceResult.tokens}
+          currentTokenId={sourceToken.id}
+          onSelect={(targetToken) => {
+            // Store selected target token and move to confirmation
+            const picker = document.querySelector('[data-token-picker]') as any;
+            if (picker) {
+              picker.dataset.selectedTargetId = targetToken.id;
+              picker.dataset.selectedTargetName = targetToken.name;
+            }
+            handleTokenPickerSelect(targetToken);
+          }}
+          onCancel={handleCancelReplacement}
+          title="Select Target Token"
+          description={`Replace "${sourceToken.name}" in ${affectedLayerIds.length} layer${affectedLayerIds.length !== 1 ? 's' : ''}`}
         />
       )}
+
+      {/* Confirmation Dialog for Style Replacement */}
+      {styleGovernanceResult &&
+        replacementState === 'confirming' &&
+        sourceStyle &&
+        replacementType === 'style' && (
+          <ConfirmationDialog
+            isOpen={replacementState === 'confirming'}
+            title="Confirm Style Replacement"
+            message={`Replace all instances of "${sourceStyle.name}" with the selected style in ${affectedLayerIds.length} layer${affectedLayerIds.length !== 1 ? 's' : ''}?\n\nThis will create a version checkpoint for safety.`}
+            confirmLabel="Replace"
+            cancelLabel="Cancel"
+            variant="warning"
+            onConfirm={handleConfirmReplacement}
+            onCancel={() => setReplacementState('picking-style')}
+          />
+        )}
+
+      {/* Confirmation Dialog for Token Replacement */}
+      {styleGovernanceResult &&
+        replacementState === 'confirming' &&
+        sourceToken &&
+        replacementType === 'token' && (
+          <ConfirmationDialog
+            isOpen={replacementState === 'confirming'}
+            title="Confirm Token Replacement"
+            message={`Replace all instances of "${sourceToken.name}" with the selected token in ${affectedLayerIds.length} layer${affectedLayerIds.length !== 1 ? 's' : ''}?\n\nThis will create a version checkpoint for safety.`}
+            confirmLabel="Replace"
+            cancelLabel="Cancel"
+            variant="warning"
+            onConfirm={handleConfirmReplacement}
+            onCancel={() => setReplacementState('picking-token')}
+          />
+        )}
     </div>
   );
 }

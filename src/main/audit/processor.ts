@@ -10,7 +10,7 @@ import type {
 
 import { detectStyleAssignment } from '@/main/utils/styleDetection';
 import { getAvailableStyles } from '@/main/utils/styleLibrary';
-import { getAllDocumentTokens } from '@/main/utils/tokenDetection';
+import { getAllDocumentTokens, integrateTokenUsageIntoLayers } from '@/main/utils/tokenDetection';
 
 /**
  * Metadata Processor for Style Governance Audit
@@ -332,40 +332,6 @@ function buildSimpleHierarchy(styles: TextStyle[]): StyleHierarchyNode[] {
   }
 
   return rootNodes;
-}
-
-/**
- * Integrate token usage information into processed layers
- *
- * @param layers - Text layers to augment with token data
- * @param tokens - All detected tokens in the document
- */
-async function integrateTokenUsageIntoLayers(
-  layers: TextLayer[],
-  tokens: DesignToken[]
-): Promise<void> {
-  // Create a map of token IDs to tokens for quick lookup
-  const tokenMap = new Map(tokens.map((t) => [t.id, t]));
-
-  // For each layer, detect which tokens it uses
-  // TODO: Implement token detection from boundVariables
-  // This requires enumerating boundVariables structure and matching to tokens
-  // Placeholder for Phase 3 token integration
-  for (const layer of layers) {
-    try {
-      // Get the Figma node for detailed analysis
-      const node = await figma.getNodeByIdAsync(layer.id);
-      if (node && 'boundVariables' in node) {
-        // Note: boundVariables detection requires analyzing the boundVariables property
-        // on TextNode to extract token bindings. This is deferred to Phase 3 enhancement.
-        // For now, layer.tokens remains empty array
-        layer.tokens = [];
-      }
-    } catch (error) {
-      // Skip this layer if we can't fetch node data
-      console.warn(`Error integrating token usage for layer ${layer.id}:`, error);
-    }
-  }
 }
 
 /**

@@ -210,12 +210,17 @@ export function useMessageHandler() {
     });
   };
 
-  const replaceToken = (sourceTokenId: string, targetTokenId: string) => {
+  const replaceToken = (
+    sourceTokenId: string,
+    targetTokenId: string,
+    affectedLayerIds: string[]
+  ) => {
     sendMessage({
       type: 'REPLACE_TOKEN',
       payload: {
         sourceTokenId,
         targetTokenId,
+        affectedLayerIds,
       },
     });
   };

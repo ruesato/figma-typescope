@@ -309,6 +309,120 @@ export class ReplacementEngine {
   }
 
   /**
+   * Process token replacement with adaptive batching and error recovery
+   */
+  private async processTokenReplacement(
+    options: TokenReplacementOptions
+  ): Promise<Omit<ReplacementResult, 'checkpointTitle' | 'duration'>> {
+    const { affectedLayerIds, targetTokenId } = options;
+
+    let layersUpdated = 0;
+    let layersFailed = 0;
+    const failedLayers: FailedLayer[] = [];
+
+    const totalLayers = affectedLayerIds.length;
+
+    // Create batch processor with adaptive sizing
+    const batchProcessor = new BatchProcessor({
+      initialBatchSize: 100,
+      minBatchSize: 25,
+      maxBatchSize: 100,
+      successThreshold: 5,
+      onBatchComplete: (result) => {
+        // Update counts
+        layersUpdated += result.layersProcessed;
+        layersFailed += result.layersFailed;
+
+        // Collect failed layers
+        for (const error of result.errors) {
+          failedLayers.push({
+            layerId: error.layerId,
+            layerName: error.layerName,
+            reason: error.error.message,
+            retryCount: error.retryCount,
+          });
+        }
+
+        // Emit progress
+        const totalProcessed = layersUpdated + layersFailed;
+        const percentage = Math.round((totalProcessed / totalLayers) * 90) + 10; // 10-100%
+
+        this.emitProgress({
+          state: 'processing',
+          percentage,
+          currentBatch: result.batchNumber,
+          totalBatches: Math.ceil(totalLayers / batchProcessor.getCurrentBatchSize()),
+          currentBatchSize: result.batchSize,
+          layersProcessed: totalProcessed,
+          failedLayers: layersFailed,
+          checkpointTitle: this.checkpointTitle,
+        });
+      },
+    });
+
+    console.log(`Processing ${totalLayers} layers for token replacement`);
+
+    // Process layers with adaptive batching
+    for await (const _ of batchProcessor.processBatches(affectedLayerIds, async (batch) => {
+      for (const layerId of batch) {
+        try {
+          // Get the text node
+          const node = await figma.getNodeByIdAsync(layerId);
+          if (!node || node.type !== 'TEXT') {
+            throw new Error('Layer is not a text node');
+          }
+
+          // Replace token binding
+          // Use setBoundVariable to replace token on the node
+          if ('setBoundVariable' in node && typeof node.setBoundVariable === 'function') {
+            // The setBoundVariable API allows us to bind a variable to a property
+            // For token replacement, we need to identify which properties have the source token
+            // and replace them with the target token
+            const boundVariables = node.boundVariables || {};
+
+            // Check each property for token bindings
+            for (const [property, bindings] of Object.entries(boundVariables)) {
+              const bindingArray = Array.isArray(bindings) ? bindings : [bindings];
+
+              for (const binding of bindingArray) {
+                if (
+                  binding &&
+                  typeof binding === 'object' &&
+                  binding.id === options.sourceTokenId
+                ) {
+                  // Found the source token - replace it with target token
+                  node.setBoundVariable(property, targetTokenId);
+                }
+              }
+            }
+          } else {
+            throw new Error('Cannot bind variable on this node type');
+          }
+        } catch (error) {
+          throw {
+            layerId,
+            layerName: (await figma.getNodeByIdAsync(layerId))?.name || layerId,
+            error: error instanceof Error ? error : new Error(String(error)),
+            retryCount: 0,
+          };
+        }
+      }
+    })) {
+      // Batch processed - progress emitted via callback
+    }
+
+    console.log(`Token replacement complete: ${layersUpdated} updated, ${layersFailed} failed`);
+
+    return {
+      success: layersFailed === 0,
+      layersUpdated,
+      layersFailed,
+      failedLayers,
+      hasWarnings: layersFailed > 0,
+    };
+  }
+
+  /**
    * Validate style replacement options
    */
   private async validateStyleReplacement(options: StyleReplacementOptions): Promise<void> {
@@ -368,5 +482,4 @@ export class ReplacementEngine {
       throw new Error(`Checkpoint creation failed: ${error}`);
     }
   }
-
 }

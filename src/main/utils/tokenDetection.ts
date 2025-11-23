@@ -1,4 +1,4 @@
-import type { DesignToken } from '@/shared/types';
+import type { DesignToken, TextLayer, TokenBinding } from '@/shared/types';
 
 /**
  * Token Detection Utility
@@ -19,10 +19,10 @@ import type { DesignToken } from '@/shared/types';
 /**
  * Format token value for display
  * @param value - The raw token value
- * @param _tokenType - Token type classification (reserved for future use)
+ * @param tokenType - Token type classification
  * @returns Formatted string representation
  */
-function formatTokenValue(value: any, _tokenType: string): string {
+function formatTokenValue(value: any, tokenType?: string): string {
   if (value === null || value === undefined) {
     return '';
   }
@@ -54,26 +54,48 @@ function formatTokenValue(value: any, _tokenType: string): string {
 }
 
 /**
+ * Get token type from Figma variable
+ * @param variable - Figma variable object
+ * @returns Token type (color | number | string | boolean)
+ */
+function getTokenType(variable: any): 'color' | 'number' | 'string' | 'boolean' {
+  if (!variable.resolvedType) {
+    return 'string';
+  }
+  const type = variable.resolvedType.toLowerCase();
+  if (type === 'color') return 'color';
+  if (type === 'number') return 'number';
+  if (type === 'boolean') return 'boolean';
+  return 'string';
+}
+
+/**
  * Extract token modes if variable supports multiple modes
  *
  * @param variable - Figma variable object
- * @returns Map of mode ID → value, or undefined for single-mode tokens
+ * @returns Map of mode ID → value, or empty object for single-mode tokens
  */
-function extractTokenModes(variable: any): Record<string, string> | undefined {
+function extractTokenModes(variable: any): Record<string, string | number | boolean> {
   try {
     const modes = variable.valuesByMode;
     if (!modes || Object.keys(modes).length <= 1) {
-      return undefined; // Single mode or no modes
+      return {}; // Single mode or no modes
     }
 
     // Multi-mode token - return mode information
-    const modeMap: Record<string, string> = {};
-    for (const [modeId, value] of Object.entries(modes)) {
-      modeMap[modeId] = formatTokenValue(value, 'custom');
+    const modeMap: Record<string, string | number | boolean> = {};
+    for (const [_modeId, value] of Object.entries(modes)) {
+      // For now, store string representations
+      // In future, could preserve typed values
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        modeMap[_modeId] = value;
+      } else {
+        modeMap[_modeId] = formatTokenValue(value, variable.resolvedType);
+      }
     }
     return modeMap;
   } catch (error) {
-    return undefined;
+    return {};
   }
 }
 
@@ -99,15 +121,27 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
         if (!tokenMap.has(variable.id)) {
           const firstModeId = Object.keys(variable.valuesByMode)[0];
           const firstValue = variable.valuesByMode[firstModeId];
+          const tokenType = getTokenType(variable);
+
           const token: DesignToken = {
             id: variable.id,
             name: variable.name,
-            collection: collection.name,
-            value: formatTokenValue(firstValue, 'custom'),
-            type: 'custom',
+            key: `${collection.id}/${variable.id}`,
+            type: tokenType,
+            resolvedType: tokenType,
+            currentValue: firstValue,
+            value: firstValue,
+            collectionId: collection.id,
+            collectionName: collection.name,
+            collections: [collection.name],
+            modeId: firstModeId,
+            modeName: 'Default',
+            valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
+            modes: extractTokenModes(variable),
+            isAlias: false,
             usageCount: 0,
             layerIds: [],
-            modes: extractTokenModes(variable),
+            propertyTypes: [],
           };
           tokenMap.set(variable.id, token);
         }
@@ -119,6 +153,51 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
     console.warn('Error getting all document tokens:', error);
     return [];
   }
+}
+
+/**
+ * Detect token bindings on a text layer
+ *
+ * @param node - Figma TextNode
+ * @param tokenMap - Map of token IDs to tokens for quick lookup
+ * @returns Array of token bindings
+ */
+export function detectTokenBindings(node: any, tokenMap: Map<string, DesignToken>): TokenBinding[] {
+  const bindings: TokenBinding[] = [];
+
+  try {
+    if (!node.boundVariables) {
+      return bindings;
+    }
+
+    // Enumerate all bound variables on this node
+    for (const [propertyName, variableBindings] of Object.entries(node.boundVariables)) {
+      const bindingsArray = Array.isArray(variableBindings) ? variableBindings : [variableBindings];
+
+      for (const binding of bindingsArray) {
+        if (binding && typeof binding === 'object' && 'id' in binding) {
+          const token = tokenMap.get(binding.id);
+          if (token) {
+            bindings.push({
+              property: propertyName as
+                | 'fills'
+                | 'fontFamily'
+                | 'fontSize'
+                | 'lineHeight'
+                | 'letterSpacing',
+              tokenId: token.id,
+              tokenName: token.name,
+              tokenValue: token.value,
+            });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`Error detecting token bindings for node ${node.id}:`, error);
+  }
+
+  return bindings;
 }
 
 /**
@@ -161,4 +240,49 @@ export function findLayersUsingToken(tokenId: string): string[] {
   }
 
   return layerIds;
+}
+
+/**
+ * Integrate token usage into text layers
+ *
+ * Updates each layer with detected token bindings by fetching node data.
+ *
+ * @param layers - Text layers to augment with token data
+ * @param tokens - All detected tokens in the document
+ */
+export async function integrateTokenUsageIntoLayers(
+  layers: TextLayer[],
+  tokens: DesignToken[]
+): Promise<void> {
+  // Create a map of token IDs to tokens for quick lookup
+  const tokenMap = new Map(tokens.map((t) => [t.id, t]));
+
+  // For each layer, detect which tokens it uses
+  for (const layer of layers) {
+    try {
+      // Get the Figma node for detailed analysis
+      const node = await figma.getNodeByIdAsync(layer.id);
+      if (node && 'boundVariables' in node) {
+        // Detect token bindings on this node
+        layer.tokens = detectTokenBindings(node, tokenMap);
+
+        // Update token usage counts
+        for (const binding of layer.tokens) {
+          const token = tokenMap.get(binding.tokenId);
+          if (token) {
+            token.usageCount++;
+            if (!token.layerIds.includes(layer.id)) {
+              token.layerIds.push(layer.id);
+            }
+            if (!token.propertyTypes.includes(binding.property)) {
+              token.propertyTypes.push(binding.property);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Skip this layer if we can't fetch node data
+      console.warn(`Error integrating token usage for layer ${layer.id}:`, error);
+    }
+  }
 }
