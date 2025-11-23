@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import './styles/globals.css';
 import { useMessageHandler } from './hooks/useMessageHandler';
 import { useAuditState } from './hooks/useAuditState';
@@ -8,6 +8,9 @@ import ProgressIndicator from './components/ProgressIndicator';
 import ErrorDisplay from './components/ErrorDisplay';
 import TokenView from './components/TokenView';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
+import DetailPanel from './components/DetailPanel';
+import StyleTreeView from './components/StyleTreeView';
+import type { TextStyle, DesignToken } from '@/shared/types';
 
 /**
  * Main App component - Root of the plugin UI
@@ -18,6 +21,9 @@ import AnalyticsDashboard from './components/AnalyticsDashboard';
 export default function App() {
   // Tab state for results view
   const [activeTab, setActiveTab] = useState<'summary' | 'tokens' | 'analytics'>('summary');
+  // Detail panel selection state
+  const [selectedStyle, setSelectedStyle] = useState<TextStyle | null>(null);
+  const [selectedToken, setSelectedToken] = useState<DesignToken | null>(null);
 
   // Get message handlers for communication with main context
   const { runStyleAudit, navigateToLayer } = useMessageHandler();
@@ -243,7 +249,11 @@ export default function App() {
 
               {/* Tokens Tab */}
               {activeTab === 'tokens' && (
-                <TokenView tokens={styleGovernanceResult.tokens} isLoading={false} />
+                <TokenView
+                  tokens={styleGovernanceResult.tokens}
+                  isLoading={false}
+                  onTokenSelect={setSelectedToken}
+                />
               )}
 
               {/* Analytics Tab */}
@@ -293,6 +303,18 @@ export default function App() {
                   : 'Unknown'}
             </p>
           </div>
+
+          {/* Detail Panel for selected style/token */}
+          {(selectedStyle || selectedToken) && (
+            <div className="border-t border-figma-border pt-4">
+              <DetailPanel
+                selectedStyle={selectedStyle}
+                selectedToken={selectedToken}
+                allLayers={styleGovernanceResult.layers}
+                onNavigateToLayer={handleNavigateToLayer}
+              />
+            </div>
+          )}
         </div>
       )}
 
