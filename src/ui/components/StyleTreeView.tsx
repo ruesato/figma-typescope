@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import type { TextStyle, TextLayer, StyleHierarchyNode, LibrarySource } from '@/shared/types';
+import type { TextStyle, TextLayer, LibrarySource } from '@/shared/types';
 
 /**
  * Style Tree View Component
@@ -133,7 +133,13 @@ export default function StyleTreeView({
       <div key={node.id} className={`tree-node level-${level} ${isSelected ? 'selected' : ''}`}>
         <div
           className="tree-node-content"
-          onClick={() => handleNodeClick(node)}
+          onClick={() => {
+            if (isExpandable) {
+              toggleExpansion(node.id);
+            } else {
+              handleNodeClick(node);
+            }
+          }}
           style={{ paddingLeft: `${level * 20 + 12}px` }}
         >
           {/* Expand/Collapse Icon */}

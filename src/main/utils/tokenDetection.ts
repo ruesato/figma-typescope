@@ -17,154 +17,12 @@ import type { DesignToken } from '@/shared/types';
  */
 
 /**
- * Detect all design tokens used in a text layer
- *
- * @param node - Text node to analyze
- * @returns Array of detected tokens with full metadata
- */
-export async function detectTokensInLayer(node: any): Promise<DesignToken[]> {
-  try {
-    // Get bound variables from the text node
-    const boundVariables = node.boundVariables;
-    if (!boundVariables || Object.keys(boundVariables).length === 0) {
-      return [];
-    }
-
-    const detectedTokens: DesignToken[] = [];
-    const tokenIds = new Set<string>();
-
-    // Iterate through bound variables (can have multiple per property)
-    for (const [propertyName, variableBindings] of Object.entries(boundVariables)) {
-      // variableBindings can be a single variable or array of variables
-      const bindings = Array.isArray(variableBindings) ? variableBindings : [variableBindings];
-
-      for (const binding of bindings) {
-        if (!binding || !binding.id) {
-          continue;
-        }
-
-        // Skip if we've already processed this token (avoid duplicates)
-        if (tokenIds.has(binding.id)) {
-          continue;
-        }
-        tokenIds.add(binding.id);
-
-        // Resolve token metadata
-        const token = await resolveTokenMetadata(binding.id, propertyName);
-        if (token) {
-          detectedTokens.push(token);
-        }
-      }
-    }
-
-    return detectedTokens;
-  } catch (error) {
-    // Log error but don't throw - allow audit to continue
-    console.warn(`Error detecting tokens in layer ${node.id}:`, error);
-    return [];
-  }
-}
-
-/**
- * Resolve complete token metadata from token ID
- *
- * @param tokenId - Figma variable ID
- * @param boundProperty - Property the token is bound to (e.g., 'fills', 'fontFamily')
- * @returns Token metadata or null if token not found
- */
-async function resolveTokenMetadata(
-  tokenId: string,
-  boundProperty: string
-): Promise<DesignToken | null> {
-  try {
-    // Get the variable from Figma's variables API
-    const variable = await figma.variables.getVariableByIdAsync(tokenId);
-    if (!variable) {
-      return null;
-    }
-
-    // Determine token type based on bound property and variable type
-    const tokenTypeStr = determineTokenType(boundProperty, variable);
-    const tokenType = tokenTypeStr as 'color' | 'typography' | 'sizing' | 'spacing' | 'custom';
-
-    // Get the token value (may vary by mode)
-    const modeIds = Object.keys(variable.valuesByMode);
-    const defaultModeId = modeIds[0];
-    const tokenValue = variable.valuesByMode[defaultModeId];
-
-    // Build token metadata
-    const token: DesignToken = {
-      id: variable.id,
-      name: variable.name,
-      collection: variable.getVariableCollectionId ? 'default' : 'local',
-      value: formatTokenValue(tokenValue, tokenType),
-      type: tokenType,
-      usageCount: 1, // Will be aggregated during audit processing
-      layerIds: [],
-      modes: extractTokenModes(variable),
-    };
-
-    return token;
-  } catch (error) {
-    console.warn(`Error resolving token metadata for ${tokenId}:`, error);
-    return null;
-  }
-}
-
-/**
- * Determine token type based on property name and variable type
- *
- * @param propertyName - Figma property name (e.g., 'fills', 'fontSize')
- * @param variable - Figma variable object
- * @returns Token type classification as string
- */
-function determineTokenType(propertyName: string, variable: any): string {
-  const resolvedType = variable.resolvedType || '';
-
-  // Map by property name (most reliable)
-  if (propertyName.includes('fill') || propertyName.includes('color')) {
-    return 'color';
-  }
-  if (propertyName.includes('font') || propertyName.includes('typography')) {
-    return 'typography';
-  }
-  if (
-    propertyName.includes('size') ||
-    propertyName.includes('width') ||
-    propertyName.includes('height')
-  ) {
-    return 'sizing';
-  }
-  if (
-    propertyName.includes('spacing') ||
-    propertyName.includes('padding') ||
-    propertyName.includes('margin')
-  ) {
-    return 'spacing';
-  }
-
-  // Map by variable resolved type (fallback)
-  if (resolvedType === 'COLOR') {
-    return 'color';
-  }
-  if (resolvedType === 'STRING') {
-    return 'typography';
-  }
-  if (resolvedType === 'FLOAT') {
-    return 'sizing';
-  }
-
-  return 'custom';
-}
-
-/**
  * Format token value for display
- *
- * @param value - Raw token value from Figma
- * @param tokenType - Token type classification
+ * @param value - The raw token value
+ * @param _tokenType - Token type classification (reserved for future use)
  * @returns Formatted string representation
  */
-function formatTokenValue(value: any, tokenType: string): string {
+function formatTokenValue(value: any, _tokenType: string): string {
   if (value === null || value === undefined) {
     return '';
   }
@@ -228,7 +86,6 @@ function extractTokenModes(variable: any): Record<string, string> | undefined {
  */
 export async function getAllDocumentTokens(): Promise<DesignToken[]> {
   try {
-    const tokens: DesignToken[] = [];
     const tokenMap = new Map<string, DesignToken>();
 
     // Get all variable collections

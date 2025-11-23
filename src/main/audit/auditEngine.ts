@@ -300,7 +300,7 @@ export class AuditEngine {
    *
    * @param options - Audit options
    */
-  private async validateDocument(options: {
+  private async validateDocument(_options: {
     includeHiddenLayers?: boolean;
     includeTokens?: boolean;
   }): Promise<void> {

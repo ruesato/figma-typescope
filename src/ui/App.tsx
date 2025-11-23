@@ -20,10 +20,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'summary' | 'tokens' | 'analytics'>('summary');
 
   // Get message handlers for communication with main context
-  const { runStyleAudit, navigateToLayer, cancelStyleAudit } = useMessageHandler();
+  const { runStyleAudit, navigateToLayer } = useMessageHandler();
 
   // Get audit state
-  const { auditResult, styleGovernanceResult, isAuditing, progress, error, reset, auditState } =
+  const { auditResult, styleGovernanceResult, isAuditing, progress, error, reset } =
     useAuditState();
 
   // ============================================================================
@@ -38,11 +38,6 @@ export default function App() {
   const handleRunAuditSelection = () => {
     reset();
     runStyleAudit({ includeHiddenLayers: false, includeTokens: false });
-  };
-
-  const handleCancelAudit = () => {
-    cancelStyleAudit();
-    reset();
   };
 
   const handleNavigateToLayer = (layerId: string) => {

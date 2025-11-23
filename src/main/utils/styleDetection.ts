@@ -25,9 +25,7 @@ import type { StyleAssignment, PropertyMatchMap } from '@/shared/types';
  * }
  * ```
  */
-export async function detectStyleAssignment(
-  node: TextNode
-): Promise<StyleAssignment> {
+export async function detectStyleAssignment(node: TextNode): Promise<StyleAssignment> {
   // Check if node has a text style applied
   const textStyleId = node.textStyleId;
 
@@ -50,7 +48,6 @@ export async function detectStyleAssignment(
   // Get library source if it's from a library
   let libraryName: string | undefined;
   if (textStyle.remote) {
-    const libraryKey = textStyle.key;
     // Try to get library name from the key
     // Note: In a real implementation, you'd need to map keys to library names
     // For now, we'll mark it as a library style
@@ -100,10 +97,7 @@ export async function detectStyleAssignment(
  * }
  * ```
  */
-export function compareStyleProperties(
-  node: TextNode,
-  style: TextStyle
-): PropertyMatchMap {
+export function compareStyleProperties(node: TextNode, style: TextStyle): PropertyMatchMap {
   const matches: PropertyMatchMap = {
     fontFamily: false,
     fontSize: false,
@@ -174,10 +168,7 @@ export function compareStyleProperties(
  * @param b - Second line height
  * @returns True if line heights are equal
  */
-function compareLineHeight(
-  a: LineHeight,
-  b: LineHeight
-): boolean {
+function compareLineHeight(a: LineHeight, b: LineHeight): boolean {
   if (typeof a === 'symbol' && typeof b === 'symbol') {
     return true; // Both AUTO
   }
@@ -202,21 +193,14 @@ function compareLineHeight(
  * @param b - Second fills array
  * @returns True if fills are equal
  */
-function compareFills(
-  a: readonly Paint[],
-  b: readonly Paint[]
-): boolean {
+function compareFills(a: readonly Paint[], b: readonly Paint[]): boolean {
   // Ensure both arrays exist and are valid
   if (!a || !Array.isArray(a) || !b || !Array.isArray(b)) {
     return false;
   }
 
-  const solidA = a.find((fill) => fill.type === 'SOLID') as
-    | SolidPaint
-    | undefined;
-  const solidB = b.find((fill) => fill.type === 'SOLID') as
-    | SolidPaint
-    | undefined;
+  const solidA = a.find((fill) => fill.type === 'SOLID') as SolidPaint | undefined;
+  const solidB = b.find((fill) => fill.type === 'SOLID') as SolidPaint | undefined;
 
   if (!solidA || !solidB) {
     return false; // Can't compare non-solid fills
@@ -240,9 +224,7 @@ function compareFills(
  * @param propertyMatches - Map of property matches
  * @returns Percentage of properties that match (0-100)
  */
-export function calculateStyleCoverage(
-  propertyMatches: PropertyMatchMap
-): number {
+export function calculateStyleCoverage(propertyMatches: PropertyMatchMap): number {
   const matched = Object.values(propertyMatches).filter(Boolean).length;
   const total = Object.keys(propertyMatches).length;
   return Math.round((matched / total) * 100);

@@ -55,13 +55,14 @@ export default function LayerItem({ layer, onNavigate }: LayerItemProps) {
     switch (componentContext.componentType) {
       case 'main-component':
         return <span className="badge badge-neutral">Component</span>;
-      case 'instance':
+      case 'instance': {
         const isOverridden = componentContext.overrideStatus === 'overridden';
         return (
           <span className={`badge ${isOverridden ? 'badge-warning' : 'badge-neutral'}`}>
             {isOverridden ? 'Instance (Override)' : 'Instance'}
           </span>
         );
+      }
       case 'plain':
         return null;
     }
@@ -88,9 +89,7 @@ export default function LayerItem({ layer, onNavigate }: LayerItemProps) {
           )}
 
           {/* Text content preview */}
-          <div className="text-sm text-figma-text font-medium truncate">
-            {content || '(empty)'}
-          </div>
+          <div className="text-sm text-figma-text font-medium truncate">{content || '(empty)'}</div>
         </div>
 
         {/* Status badges */}
@@ -110,38 +109,28 @@ export default function LayerItem({ layer, onNavigate }: LayerItemProps) {
         <div className="text-xs text-figma-text-secondary mb-2">
           Style: <span className="font-medium">{styleAssignment.styleName}</span>
           {styleAssignment.libraryName && (
-            <span className="text-figma-text-tertiary ml-1">
-              ({styleAssignment.libraryName})
-            </span>
+            <span className="text-figma-text-tertiary ml-1">({styleAssignment.libraryName})</span>
           )}
         </div>
       )}
 
       {/* Component type badge */}
-      {getComponentBadge() && (
-        <div className="mt-2">
-          {getComponentBadge()}
-        </div>
-      )}
+      {getComponentBadge() && <div className="mt-2">{getComponentBadge()}</div>}
 
       {/* Property matches (for partially styled) */}
       {styleAssignment.assignmentStatus === 'partially-styled' &&
         styleAssignment.propertyMatches && (
           <div className="mt-2 pt-2 border-t border-figma-border">
-            <div className="text-xs text-figma-text-tertiary mb-1">
-              Property Matches:
-            </div>
+            <div className="text-xs text-figma-text-tertiary mb-1">Property Matches:</div>
             <div className="flex flex-wrap gap-1">
-              {Object.entries(styleAssignment.propertyMatches).map(
-                ([property, matches]) => (
-                  <span
-                    key={property}
-                    className={`badge ${matches ? 'badge-success' : 'badge-danger'}`}
-                  >
-                    {property}
-                  </span>
-                )
-              )}
+              {Object.entries(styleAssignment.propertyMatches).map(([property, matches]) => (
+                <span
+                  key={property}
+                  className={`badge ${matches ? 'badge-success' : 'badge-danger'}`}
+                >
+                  {property}
+                </span>
+              ))}
             </div>
           </div>
         )}

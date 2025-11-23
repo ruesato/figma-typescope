@@ -14,7 +14,6 @@ import { AuditEngine } from './audit/auditEngine';
 // ============================================================================
 
 // The __html__ variable will be injected at build time with the compiled UI HTML
-// @ts-ignore - __html__ is defined at build time
 declare const __html__: string;
 
 // Show the plugin UI
@@ -135,7 +134,7 @@ async function handleRunAudit(scope: 'page' | 'selection'): Promise<void> {
     sendMessage({ type: 'AUDIT_STARTED' });
 
     // Step 1: Get text nodes from scope
-    const { textNodes, scopeName } = await getTextNodesFromScope(scope, () => cancelFlag);
+    const { textNodes } = await getTextNodesFromScope(scope, () => cancelFlag);
 
     if (textNodes.length === 0) {
       throw new Error('No text layers found in the selected scope');
@@ -366,13 +365,14 @@ async function handleReplaceToken(sourceTokenId: string, targetTokenId: string):
 
 /**
  * Handle ROLLBACK_TO_CHECKPOINT message
- * PLACEHOLDER: Will be implemented in Phase 3
+ * PLACEHOLDER: Will be implemented in Phase 5
+ * Currently commented out - route not yet active
  */
-async function handleRollbackToCheckpoint(checkpointId: string): Promise<void> {
-  console.log('[Replacement] Rollback placeholder:', checkpointId);
-  // Note: Rollback uses version history API, not custom implementation
-  figma.notify('Rollback not yet implemented (Phase 3)', { error: true });
-}
+// async function handleRollbackToCheckpoint(checkpointId: string): Promise<void> {
+//   console.log('[Replacement] Rollback placeholder:', checkpointId);
+//   // Note: Rollback uses version history API, not custom implementation
+//   figma.notify('Rollback not yet implemented (Phase 5)', { error: true });
+// }
 
 // ============================================================================
 // Export Handler (Feature 002 - Phase 4)
@@ -380,9 +380,9 @@ async function handleRollbackToCheckpoint(checkpointId: string): Promise<void> {
 
 /**
  * Handle EXPORT_PDF message
- * PLACEHOLDER: Will be implemented in Phase 4 (T055-T060)
+ * PLACEHOLDER: Will be implemented in Phase 7 (Export)
  */
-async function handleExportPDF(auditResult: any): Promise<void> {
+async function handleExportPDF(_auditResult: any): Promise<void> {
   console.log('[Export] PDF export placeholder called');
   sendMessage({
     type: 'EXPORT_ERROR',

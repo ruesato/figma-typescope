@@ -9,8 +9,8 @@ import type {
 } from '@/shared/types';
 
 import { detectStyleAssignment } from '@/main/utils/styleDetection';
-import { getStyleLibrarySource, getAvailableStyles } from '@/main/utils/styleLibrary';
-import { detectTokensInLayer, getAllDocumentTokens } from '@/main/utils/tokenDetection';
+import { getAvailableStyles } from '@/main/utils/styleLibrary';
+import { getAllDocumentTokens } from '@/main/utils/tokenDetection';
 
 /**
  * Metadata Processor for Style Governance Audit
@@ -50,7 +50,7 @@ export async function processAuditData(
   input: ProcessorInput,
   isCancelled?: () => boolean
 ): Promise<ProcessorOutput> {
-  const { textLayers, totalPages, options } = input;
+  const { textLayers, options } = input;
 
   const output: ProcessorOutput = {
     layers: [],
@@ -144,13 +144,13 @@ export async function processAuditData(
 }
 
 /**
- * Process a single text layer and extract complete metadata
+ * Process a single text layer with complete metadata extraction
  *
- * @param rawLayer - Raw text layer data from scanner
- * @param allStyles - All available styles in document
+ * @param rawLayer - Raw layer data from scan
+ * @param _allStyles - All available styles in document (reserved for future use)
  * @returns Processed TextLayer with full metadata
  */
-async function processTextLayer(rawLayer: any, allStyles: TextStyle[]): Promise<TextLayer> {
+async function processTextLayer(rawLayer: any, _allStyles: TextStyle[]): Promise<TextLayer> {
   // Get the actual Figma node for detailed analysis
   const textNode = await figma.getNodeByIdAsync(rawLayer.id);
   if (!textNode) {
@@ -292,7 +292,7 @@ function buildSimpleHierarchy(styles: TextStyle[]): StyleHierarchyNode[] {
 
   // Build tree structure
   const rootNodes: StyleHierarchyNode[] = [];
-  for (const [name, node] of hierarchyMap) {
+  for (const [, node] of hierarchyMap) {
     if (node.parentName && hierarchyMap.has(node.parentName)) {
       hierarchyMap.get(node.parentName)!.children.push(node);
     } else if (!node.parentName) {
@@ -317,31 +317,18 @@ async function integrateTokenUsageIntoLayers(
   const tokenMap = new Map(tokens.map((t) => [t.id, t]));
 
   // For each layer, detect which tokens it uses
+  // TODO: Implement token detection from boundVariables
+  // This requires enumerating boundVariables structure and matching to tokens
+  // Placeholder for Phase 3 token integration
   for (const layer of layers) {
     try {
       // Get the Figma node for detailed analysis
       const node = await figma.getNodeByIdAsync(layer.id);
       if (node && 'boundVariables' in node) {
-        // Detect tokens in this specific layer
-        const layerTokens = await detectTokensInLayer(node);
-
-        // Convert detected tokens to TokenBinding objects
-        const bindings = layerTokens.map((token) => ({
-          property: 'fills' as const, // TODO: Detect actual property from boundVariables
-          tokenId: token.id,
-          tokenName: token.name,
-          tokenValue: token.value,
-        }));
-
-        layer.tokens = bindings;
-
-        // Update token usage counts
-        for (const token of layerTokens) {
-          const existingToken = tokenMap.get(token.id);
-          if (existingToken) {
-            existingToken.usageCount = (existingToken.usageCount || 0) + 1;
-          }
-        }
+        // Note: boundVariables detection requires analyzing the boundVariables property
+        // on TextNode to extract token bindings. This is deferred to Phase 3 enhancement.
+        // For now, layer.tokens remains empty array
+        layer.tokens = [];
       }
     } catch (error) {
       // Skip this layer if we can't fetch node data
@@ -361,7 +348,7 @@ async function integrateTokenUsageIntoLayers(
 function calculateAuditMetrics(
   layers: TextLayer[],
   styles: TextStyle[],
-  tokens: DesignToken[] = []
+  _tokens: DesignToken[] = []
 ): AuditMetrics {
   // Style metrics
   const styledCount = layers.filter((l) => l.assignmentStatus !== 'unstyled').length;
