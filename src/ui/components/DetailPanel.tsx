@@ -16,6 +16,9 @@ export interface DetailPanelProps {
   onLayerSelect?: (layerId: string) => void;
   /** Callback to navigate to layer in canvas */
   onNavigateToLayer?: (layerId: string) => void;
+  /** Callback when replace button is clicked */
+  onReplaceStyle?: (style: TextStyle, affectedLayerIds: string[]) => void;
+  onReplaceToken?: (token: DesignToken, affectedLayerIds: string[]) => void;
   /** Loading state */
   isLoading?: boolean;
   /** Error message */
@@ -307,6 +310,8 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   allLayers,
   onLayerSelect,
   onNavigateToLayer,
+  onReplaceStyle,
+  onReplaceToken,
   isLoading = false,
   error,
 }) => {
@@ -453,6 +458,45 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         <p className="text-xs text-figma-text-secondary">
           Used by {relevantLayers.length} layer{relevantLayers.length !== 1 ? 's' : ''}
         </p>
+
+        {/* Actions */}
+        {selectedStyle && onReplaceStyle && relevantLayers.length > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={() => {
+                const affectedLayerIds = relevantLayers.map((l) => l.id);
+                onReplaceStyle(selectedStyle, affectedLayerIds);
+              }}
+              className="
+                px-3 py-1.5 text-xs rounded font-medium
+                bg-figma-color-bg-brand hover:bg-figma-color-bg-brand-hover
+                text-figma-color-text-onbrand
+                transition-colors
+              "
+            >
+              Replace Style ({relevantLayers.length} layers)
+            </button>
+          </div>
+        )}
+
+        {selectedToken && onReplaceToken && relevantLayers.length > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={() => {
+                const affectedLayerIds = relevantLayers.map((l) => l.id);
+                onReplaceToken(selectedToken, affectedLayerIds);
+              }}
+              className="
+                px-3 py-1.5 text-xs rounded font-medium
+                bg-figma-color-bg-brand hover:bg-figma-color-bg-brand-hover
+                text-figma-color-text-onbrand
+                transition-colors
+              "
+            >
+              Replace Token ({relevantLayers.length} layers)
+            </button>
+          </div>
+        )}
 
         {/* Status Summary */}
         <div className="flex flex-wrap gap-2 mt-2">
