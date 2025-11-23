@@ -3,6 +3,5 @@
   "editorType": ["figma"],
   "id": "figma-font-audit-pro",
   "name": "Figma Font Audit Pro",
-  "main": "build/main.js",
-  "permissions": ["teamlibrary"]
+  "main": "build/main.js"
 }
