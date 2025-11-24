@@ -22,16 +22,12 @@ declare const __html__: string;
 // Using figma.ui.resize() allows dynamic sizing after showing UI
 const calculatePluginSize = () => {
   // Figma plugin window constraints (in pixels)
-  const minWidth = 800;
   const maxWidth = 1200;
   const defaultHeight = 800;
 
-  // Start with max width as default
-  let width = maxWidth;
-
   // The plugin window will constrain itself to available space
   // but we set it to maxWidth which provides optimal experience
-  return { width, height: defaultHeight };
+  return { width: maxWidth, height: defaultHeight };
 };
 
 const pluginSize = calculatePluginSize();
@@ -39,12 +35,11 @@ const pluginSize = calculatePluginSize();
 figma.showUI(__html__, {
   width: pluginSize.width,
   height: pluginSize.height,
+  themeColors: true,
+  // Note: Figma plugin windows are resizable by default (draggable edges)
+  // Users can manually resize by dragging the window edges in Figma
+  // The window will respect the minimum and maximum constraints below if specified
 });
-
-// Optionally, you can also resize after a delay if needed:
-// setTimeout(() => {
-//   figma.ui.resize(pluginSize.width, pluginSize.height);
-// }, 100);
 
 // ============================================================================
 // Message Handler
@@ -220,6 +215,9 @@ async function handleRunAudit(scope: 'page' | 'selection'): Promise<void> {
       summary,
       timestamp: new Date().toISOString(),
       fileName: figma.root.name,
+      tokenInventory: [],
+      tokenUsageCount: 0,
+      tokenAdoptionRate: 0,
     };
 
     // Step 5: Send completion message
