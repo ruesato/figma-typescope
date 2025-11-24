@@ -110,42 +110,111 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
   try {
     const tokenMap = new Map<string, DesignToken>();
 
-    // Get all variable collections
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    // Step 1: Get all LOCAL variable collections
+    try {
+      const localCollections = await figma.variables.getLocalVariableCollectionsAsync();
 
-    for (const collection of collections) {
-      // Get all variables in this collection
-      const variables = await figma.variables.getVariablesInCollectionAsync(collection.id);
+      for (const collection of localCollections) {
+        // Get all variables in this collection
+        const variables = await figma.variables.getVariablesInCollectionAsync(collection.id);
 
-      for (const variable of variables) {
-        if (!tokenMap.has(variable.id)) {
-          const firstModeId = Object.keys(variable.valuesByMode)[0];
-          const firstValue = variable.valuesByMode[firstModeId];
-          const tokenType = getTokenType(variable);
+        for (const variable of variables) {
+          if (!tokenMap.has(variable.id)) {
+            const firstModeId = Object.keys(variable.valuesByMode)[0];
+            const firstValue = variable.valuesByMode[firstModeId];
+            const tokenType = getTokenType(variable);
 
-          const token: DesignToken = {
-            id: variable.id,
-            name: variable.name,
-            key: `${collection.id}/${variable.id}`,
-            type: tokenType,
-            resolvedType: tokenType,
-            currentValue: firstValue,
-            value: firstValue,
-            collectionId: collection.id,
-            collectionName: collection.name,
-            collections: [collection.name],
-            modeId: firstModeId,
-            modeName: 'Default',
-            valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
-            modes: extractTokenModes(variable),
-            isAlias: false,
-            usageCount: 0,
-            layerIds: [],
-            propertyTypes: [],
-          };
-          tokenMap.set(variable.id, token);
+            const token: DesignToken = {
+              id: variable.id,
+              name: variable.name,
+              key: `${collection.id}/${variable.id}`,
+              type: tokenType,
+              resolvedType: tokenType,
+              currentValue: firstValue,
+              value: firstValue,
+              collectionId: collection.id,
+              collectionName: collection.name,
+              collections: [collection.name],
+              modeId: firstModeId,
+              modeName: 'Default',
+              valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
+              modes: extractTokenModes(variable),
+              isAlias: false,
+              usageCount: 0,
+              layerIds: [],
+              propertyTypes: [],
+            };
+            tokenMap.set(variable.id, token);
+          }
         }
       }
+    } catch (error) {
+      console.warn('Error getting local variable collections:', error);
+    }
+
+    // Step 2: Get all LIBRARY variable collections (from linked libraries)
+    try {
+      if (figma.teamLibrary) {
+        const libraryCollections =
+          await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
+
+        for (const libraryCollection of libraryCollections) {
+          try {
+            const libraryVariables = await figma.teamLibrary.getVariablesInLibraryCollectionAsync(
+              libraryCollection.key
+            );
+
+            for (const variable of libraryVariables) {
+              // Use a unique key combining library collection key and variable id
+              const uniqueId = `${libraryCollection.key}/${variable.id}`;
+
+              if (!tokenMap.has(uniqueId)) {
+                // Library variables may have different structure, handle gracefully
+                const firstModeId = variable.valuesByMode
+                  ? Object.keys(variable.valuesByMode)[0]
+                  : 'default';
+                const firstValue = variable.valuesByMode?.[firstModeId] ?? variable.value;
+                const tokenType = variable.resolvedType
+                  ? (variable.resolvedType.toLowerCase() as
+                      | 'color'
+                      | 'number'
+                      | 'string'
+                      | 'boolean')
+                  : 'string';
+
+                const token: DesignToken = {
+                  id: variable.id,
+                  name: variable.name,
+                  key: uniqueId,
+                  type: tokenType,
+                  resolvedType: tokenType,
+                  currentValue: firstValue,
+                  value: firstValue,
+                  collectionId: libraryCollection.key,
+                  collectionName: libraryCollection.name,
+                  collections: [libraryCollection.name],
+                  modeId: firstModeId,
+                  modeName: 'Default',
+                  valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
+                  modes: variable.valuesByMode ? extractTokenModes(variable) : {},
+                  isAlias: false,
+                  usageCount: 0,
+                  layerIds: [],
+                  propertyTypes: [],
+                };
+                tokenMap.set(uniqueId, token);
+              }
+            }
+          } catch (error) {
+            console.warn(
+              `Error getting variables for library collection ${libraryCollection.name}:`,
+              error
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Error getting library variable collections:', error);
     }
 
     return Array.from(tokenMap.values());
