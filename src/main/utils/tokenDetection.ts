@@ -184,26 +184,20 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
 
             for (const variable of libraryVariables) {
               try {
-                // Use a unique key combining library collection key and variable id
-                const uniqueId = `${libraryCollection.key}/${variable.id}`;
+                // LibraryVariable has a 'key' property, not 'id'
+                // Use the variable key as the unique identifier
+                const variableKey = variable.key;
 
-                if (!tokenMap.has(uniqueId)) {
-                  // Library variables may have different structure, handle gracefully
-                  const firstModeId = variable.valuesByMode
-                    ? Object.keys(variable.valuesByMode)[0]
-                    : 'default';
-                  const firstValue = variable.valuesByMode?.[firstModeId] ?? variable.value;
-
+                if (!tokenMap.has(variableKey)) {
                   // Debug logging for first few tokens to see structure
                   if (tokenMap.size < 10) {
                     console.log(`[TokenDetection] Processing library variable:`, {
                       name: variable.name,
-                      id: variable.id,
-                      hasValuesByMode: !!variable.valuesByMode,
+                      key: variable.key,
                       resolvedType: variable.resolvedType,
-                      firstValue,
                     });
                   }
+
                   const tokenType = variable.resolvedType
                     ? (variable.resolvedType.toLowerCase() as
                         | 'color'
@@ -212,29 +206,30 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                         | 'boolean')
                     : 'string';
 
+                  // LibraryVariable has limited data - we only have name, key, and resolvedType
+                  // We don't have access to the actual value without importing it
                   const token: DesignToken = {
-                    id: variable.id,
+                    id: variableKey, // Use key as ID for library variables
                     name: variable.name,
-                    key: uniqueId,
+                    key: variableKey,
                     type: tokenType,
                     resolvedType: tokenType,
-                    currentValue: firstValue,
-                    value: firstValue,
+                    currentValue: '', // Placeholder - library variables don't expose values directly
+                    value: '', // Placeholder value
                     collectionId: libraryCollection.key,
                     collectionName: libraryCollection.name,
                     collections: [libraryCollection.name],
-                    modeId: firstModeId,
+                    modeId: 'default',
                     modeName: 'Default',
-                    valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
-                    modes: variable.valuesByMode ? extractTokenModes(variable) : {},
+                    valuesByMode: {}, // Empty for library variables
+                    modes: {},
                     isAlias: false,
                     usageCount: 0,
                     layerIds: [],
                     propertyTypes: [],
                   };
-                  // Store by both unique key (for display) and variable ID (for lookups)
-                  tokenMap.set(uniqueId, token);
-                  tokenMap.set(variable.id, token);
+                  // Store by variable key for lookups
+                  tokenMap.set(variableKey, token);
                 }
               } catch (error) {
                 console.warn(`Error processing library variable ${variable?.name}:`, error);
