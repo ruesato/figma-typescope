@@ -157,8 +157,11 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
 
     // Step 2: Get all LIBRARY variable collections (from linked libraries)
     try {
+      console.log('[TokenDetection] Checking if figma.teamLibrary is available...');
       if (figma.teamLibrary) {
-        console.log('[TokenDetection] Checking for library variable collections...');
+        console.log(
+          '[TokenDetection] figma.teamLibrary is available, fetching library collections...'
+        );
         const libraryCollections =
           await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
         console.log(`[TokenDetection] Found ${libraryCollections.length} library collections`);
@@ -217,6 +220,8 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
             );
           }
         }
+      } else {
+        console.log('[TokenDetection] figma.teamLibrary is NOT available (undefined or null)');
       }
     } catch (error) {
       console.warn('Error getting library variable collections:', error);
