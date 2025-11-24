@@ -54,12 +54,12 @@ export default function App() {
 
   const handleRunAuditPage = () => {
     reset();
-    runStyleAudit({ includeHiddenLayers: false, includeTokens: false });
+    runStyleAudit({ includeHiddenLayers: false, includeTokens: true });
   };
 
   const handleRunAuditSelection = () => {
     reset();
-    runStyleAudit({ includeHiddenLayers: false, includeTokens: false });
+    runStyleAudit({ includeHiddenLayers: false, includeTokens: true });
   };
 
   const handleNavigateToLayer = (layerId: string) => {
