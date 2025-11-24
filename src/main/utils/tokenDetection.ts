@@ -220,7 +220,9 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                   layerIds: [],
                   propertyTypes: [],
                 };
+                // Store by both unique key (for display) and variable ID (for lookups)
                 tokenMap.set(uniqueId, token);
+                tokenMap.set(variable.id, token);
               }
             }
           } catch (error) {
