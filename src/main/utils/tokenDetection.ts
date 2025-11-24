@@ -183,46 +183,61 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
             );
 
             for (const variable of libraryVariables) {
-              // Use a unique key combining library collection key and variable id
-              const uniqueId = `${libraryCollection.key}/${variable.id}`;
+              try {
+                // Use a unique key combining library collection key and variable id
+                const uniqueId = `${libraryCollection.key}/${variable.id}`;
 
-              if (!tokenMap.has(uniqueId)) {
-                // Library variables may have different structure, handle gracefully
-                const firstModeId = variable.valuesByMode
-                  ? Object.keys(variable.valuesByMode)[0]
-                  : 'default';
-                const firstValue = variable.valuesByMode?.[firstModeId] ?? variable.value;
-                const tokenType = variable.resolvedType
-                  ? (variable.resolvedType.toLowerCase() as
-                      | 'color'
-                      | 'number'
-                      | 'string'
-                      | 'boolean')
-                  : 'string';
+                if (!tokenMap.has(uniqueId)) {
+                  // Library variables may have different structure, handle gracefully
+                  const firstModeId = variable.valuesByMode
+                    ? Object.keys(variable.valuesByMode)[0]
+                    : 'default';
+                  const firstValue = variable.valuesByMode?.[firstModeId] ?? variable.value;
 
-                const token: DesignToken = {
-                  id: variable.id,
-                  name: variable.name,
-                  key: uniqueId,
-                  type: tokenType,
-                  resolvedType: tokenType,
-                  currentValue: firstValue,
-                  value: firstValue,
-                  collectionId: libraryCollection.key,
-                  collectionName: libraryCollection.name,
-                  collections: [libraryCollection.name],
-                  modeId: firstModeId,
-                  modeName: 'Default',
-                  valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
-                  modes: variable.valuesByMode ? extractTokenModes(variable) : {},
-                  isAlias: false,
-                  usageCount: 0,
-                  layerIds: [],
-                  propertyTypes: [],
-                };
-                // Store by both unique key (for display) and variable ID (for lookups)
-                tokenMap.set(uniqueId, token);
-                tokenMap.set(variable.id, token);
+                  // Debug logging for first few tokens to see structure
+                  if (tokenMap.size < 10) {
+                    console.log(`[TokenDetection] Processing library variable:`, {
+                      name: variable.name,
+                      id: variable.id,
+                      hasValuesByMode: !!variable.valuesByMode,
+                      resolvedType: variable.resolvedType,
+                      firstValue,
+                    });
+                  }
+                  const tokenType = variable.resolvedType
+                    ? (variable.resolvedType.toLowerCase() as
+                        | 'color'
+                        | 'number'
+                        | 'string'
+                        | 'boolean')
+                    : 'string';
+
+                  const token: DesignToken = {
+                    id: variable.id,
+                    name: variable.name,
+                    key: uniqueId,
+                    type: tokenType,
+                    resolvedType: tokenType,
+                    currentValue: firstValue,
+                    value: firstValue,
+                    collectionId: libraryCollection.key,
+                    collectionName: libraryCollection.name,
+                    collections: [libraryCollection.name],
+                    modeId: firstModeId,
+                    modeName: 'Default',
+                    valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
+                    modes: variable.valuesByMode ? extractTokenModes(variable) : {},
+                    isAlias: false,
+                    usageCount: 0,
+                    layerIds: [],
+                    propertyTypes: [],
+                  };
+                  // Store by both unique key (for display) and variable ID (for lookups)
+                  tokenMap.set(uniqueId, token);
+                  tokenMap.set(variable.id, token);
+                }
+              } catch (error) {
+                console.warn(`Error processing library variable ${variable?.name}:`, error);
               }
             }
           } catch (error) {
