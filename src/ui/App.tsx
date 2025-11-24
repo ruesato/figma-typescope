@@ -58,7 +58,8 @@ export default function App() {
   const { runStyleAudit, navigateToLayer, replaceStyle, replaceToken } = useMessageHandler();
 
   // Get audit state
-  const { styleGovernanceResult, isAuditing, progress, error, reset } = useAuditState();
+  const { styleGovernanceResult, isAuditing, progress, error, reset, setStyleGovernanceResult } =
+    useAuditState();
 
   // Calculate which tabs should be disabled
   const disabledTabs: TabType[] = !styleGovernanceResult ? ['styles', 'tokens'] : [];
@@ -193,6 +194,86 @@ export default function App() {
     setReplacementPanelError(undefined);
   };
 
+  // Optimistic update: Update audit results locally after replacement
+  const updateAuditResultsAfterReplacement = (
+    sourceStyleId: string,
+    targetStyleId: string,
+    affectedLayerIds: string[]
+  ) => {
+    if (!styleGovernanceResult) return;
+
+    console.log('[UI] Optimistically updating audit results:', {
+      sourceStyleId,
+      targetStyleId,
+      affectedLayerCount: affectedLayerIds.length,
+    });
+
+    // Clone the result to avoid mutation
+    const updatedResult = { ...styleGovernanceResult };
+
+    // Update styles array
+    updatedResult.styles = styleGovernanceResult.styles.map((style) => {
+      if (style.id === sourceStyleId) {
+        // Decrement source style usage count
+        return {
+          ...style,
+          usageCount: Math.max(0, style.usageCount - affectedLayerIds.length),
+        };
+      } else if (style.id === targetStyleId) {
+        // Increment target style usage count
+        return {
+          ...style,
+          usageCount: style.usageCount + affectedLayerIds.length,
+        };
+      }
+      return style;
+    });
+
+    // Update layers array - change styleId for affected layers
+    updatedResult.layers = styleGovernanceResult.layers.map((layer) => {
+      if (affectedLayerIds.includes(layer.id) && layer.styleId === sourceStyleId) {
+        // Find target style name and source
+        const targetStyle = styleGovernanceResult.styles.find((s) => s.id === targetStyleId);
+        return {
+          ...layer,
+          styleId: targetStyleId,
+          styleName: targetStyle?.name || layer.styleName,
+          styleSource: targetStyle?.libraryName || layer.styleSource,
+        };
+      }
+      return layer;
+    });
+
+    // Update library sources if needed
+    if (updatedResult.libraries) {
+      updatedResult.libraries = styleGovernanceResult.libraries.map((lib) => {
+        const sourceStyle = styleGovernanceResult.styles.find((s) => s.id === sourceStyleId);
+        const targetStyle = styleGovernanceResult.styles.find((s) => s.id === targetStyleId);
+
+        // If source style was from this library, decrement usage
+        if (sourceStyle && sourceStyle.libraryName === lib.name) {
+          return {
+            ...lib,
+            totalUsageCount: Math.max(0, lib.totalUsageCount - affectedLayerIds.length),
+          };
+        }
+        // If target style is from this library, increment usage
+        else if (targetStyle && targetStyle.libraryName === lib.name) {
+          return {
+            ...lib,
+            totalUsageCount: lib.totalUsageCount + affectedLayerIds.length,
+          };
+        }
+        return lib;
+      });
+    }
+
+    // Apply the update
+    setStyleGovernanceResult(updatedResult);
+
+    console.log('[UI] Audit results updated optimistically');
+  };
+
   const handleReplacementPanelReplace = async (source: TextStyle, target: TextStyle) => {
     console.log('[UI] Slide-over replacement:', {
       sourceStyleId: source.id,
@@ -209,6 +290,9 @@ export default function App() {
       // Mark style as replaced (show green circle)
       setReplacedStyleIds((prev) => new Set(prev).add(source.id));
 
+      // Optimistically update audit results
+      updateAuditResultsAfterReplacement(source.id, target.id, affectedLayerIds);
+
       // Show success toast
       setToast({
         message: `Successfully replaced "${source.name}" with "${target.name}"`,
@@ -218,8 +302,6 @@ export default function App() {
       // Reset state
       setSourceStyle(null);
       setAffectedLayerIds([]);
-
-      // TODO: Auto-refresh audit results
     } catch (error) {
       // Show error and re-open panel
       const errorMessage = error instanceof Error ? error.message : 'Replacement failed';
