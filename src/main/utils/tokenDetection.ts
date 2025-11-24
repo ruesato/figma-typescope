@@ -109,10 +109,12 @@ function extractTokenModes(variable: any): Record<string, string | number | bool
 export async function getAllDocumentTokens(): Promise<DesignToken[]> {
   try {
     const tokenMap = new Map<string, DesignToken>();
+    console.log('[TokenDetection] Starting token detection...');
 
     // Step 1: Get all LOCAL variable collections
     try {
       const localCollections = await figma.variables.getLocalVariableCollectionsAsync();
+      console.log(`[TokenDetection] Found ${localCollections.length} local collections`);
 
       for (const collection of localCollections) {
         // Get all variables in this collection
@@ -148,6 +150,7 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
           }
         }
       }
+      console.log(`[TokenDetection] Processed local collections, tokenMap size: ${tokenMap.size}`);
     } catch (error) {
       console.warn('Error getting local variable collections:', error);
     }
@@ -155,8 +158,10 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
     // Step 2: Get all LIBRARY variable collections (from linked libraries)
     try {
       if (figma.teamLibrary) {
+        console.log('[TokenDetection] Checking for library variable collections...');
         const libraryCollections =
           await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
+        console.log(`[TokenDetection] Found ${libraryCollections.length} library collections`);
 
         for (const libraryCollection of libraryCollections) {
           try {
@@ -217,9 +222,11 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
       console.warn('Error getting library variable collections:', error);
     }
 
-    return Array.from(tokenMap.values());
+    const tokens = Array.from(tokenMap.values());
+    console.log(`[TokenDetection] Token detection complete. Total tokens found: ${tokens.length}`);
+    return tokens;
   } catch (error) {
-    console.warn('Error getting all document tokens:', error);
+    console.error('[TokenDetection] Fatal error during token detection:', error);
     return [];
   }
 }
