@@ -1,4 +1,5 @@
 import { BarChart3, FolderKanban, Coins } from 'lucide-react';
+import Badge from './Badge';
 
 export type TabType = 'analytics' | 'styles' | 'tokens';
 
@@ -6,6 +7,8 @@ interface SidebarProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   disabledTabs?: TabType[];
+  styleBadgeCount?: number;
+  tokenBadgeCount?: number;
 }
 
 const tabs = [
@@ -29,7 +32,13 @@ const tabs = [
   },
 ];
 
-export default function Sidebar({ activeTab, onTabChange, disabledTabs = [] }: SidebarProps) {
+export default function Sidebar({
+  activeTab,
+  onTabChange,
+  disabledTabs = [],
+  styleBadgeCount = 0,
+  tokenBadgeCount = 0,
+}: SidebarProps) {
   return (
     <div
       className="fixed left-0 top-0 h-full flex flex-col items-center gap-4"
@@ -44,6 +53,14 @@ export default function Sidebar({ activeTab, onTabChange, disabledTabs = [] }: S
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
         const isDisabled = disabledTabs.includes(tab.id);
+
+        // Get badge count for this tab
+        let badgeCount = 0;
+        if (tab.id === 'styles') {
+          badgeCount = styleBadgeCount;
+        } else if (tab.id === 'tokens') {
+          badgeCount = tokenBadgeCount;
+        }
 
         return (
           <button
@@ -81,6 +98,8 @@ export default function Sidebar({ activeTab, onTabChange, disabledTabs = [] }: S
             }}
           >
             <Icon size={16} />
+            {/* Badge - only for Styles and Tokens tabs */}
+            {badgeCount > 0 && <Badge count={badgeCount} />}
             {/* Tooltip */}
             {!isDisabled && (
               <div

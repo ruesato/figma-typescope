@@ -61,6 +61,10 @@ export default function App() {
   const { styleGovernanceResult, isAuditing, progress, error, reset, setStyleGovernanceResult } =
     useAuditState();
 
+  // Calculate badge counts from audit results
+  const styleBadgeCount = styleGovernanceResult?.styles.length ?? 0;
+  const tokenBadgeCount = styleGovernanceResult?.tokens.length ?? 0;
+
   // Calculate which tabs should be disabled
   const disabledTabs: TabType[] = !styleGovernanceResult ? ['styles', 'tokens'] : [];
 
@@ -325,8 +329,14 @@ export default function App() {
         color: 'var(--figma-color-text)',
       }}
     >
-      {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} disabledTabs={disabledTabs} />
+      {/* Sidebar Navigation with Badge Counts */}
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        disabledTabs={disabledTabs}
+        styleBadgeCount={styleBadgeCount}
+        tokenBadgeCount={tokenBadgeCount}
+      />
 
       {/* Main Content Area */}
       <div
