@@ -36,9 +36,9 @@ figma.showUI(__html__, {
   width: pluginSize.width,
   height: pluginSize.height,
   themeColors: true,
-  // Note: Figma plugin windows are resizable by default (draggable edges)
-  // Users can manually resize by dragging the window edges in Figma
-  // The window will respect the minimum and maximum constraints below if specified
+  // Note: Figma plugin windows are NOT resizable via the API
+  // The window size is fixed at initialization (1200x800)
+  // Users can programmatically resize via figma.ui.resize() if needed
 });
 
 // ============================================================================
