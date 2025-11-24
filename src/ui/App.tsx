@@ -47,6 +47,10 @@ export default function App() {
   const [showReplacementPanel, setShowReplacementPanel] = useState(false);
   const [replacementPanelError, setReplacementPanelError] = useState<string | undefined>();
   const [replacedStyleIds, setReplacedStyleIds] = useState<Set<string>>(new Set());
+  // Track replacement mapping: original style ID -> { targetStyleId, targetStyleName, count }
+  const [replacementHistory, setReplacementHistory] = useState<
+    Map<string, { targetStyleId: string; targetStyleName: string; count: number }>
+  >(new Map());
 
   // Toast notification state
   const [toast, setToast] = useState<{
@@ -294,6 +298,18 @@ export default function App() {
       // Mark style as replaced (show green circle)
       setReplacedStyleIds((prev) => new Set(prev).add(source.id));
 
+      // Track replacement in history (for showing replacement details)
+      setReplacementHistory((prev) => {
+        const newHistory = new Map(prev);
+        const existingEntry = newHistory.get(source.id);
+        newHistory.set(source.id, {
+          targetStyleId: target.id,
+          targetStyleName: target.name,
+          count: (existingEntry?.count ?? 0) + affectedLayerIds.length,
+        });
+        return newHistory;
+      });
+
       // Optimistically update audit results
       updateAuditResultsAfterReplacement(source.id, target.id, affectedLayerIds);
 
@@ -443,6 +459,7 @@ export default function App() {
                         onStyleSelect={setSelectedStyle}
                         selectedStyleId={selectedStyle?.id}
                         replacedStyleIds={replacedStyleIds}
+                        replacementHistory={replacementHistory}
                       />
                     </div>
 
@@ -463,6 +480,8 @@ export default function App() {
                           allLayers={styleGovernanceResult.layers}
                           onNavigateToLayer={handleNavigateToLayer}
                           onReplaceStyle={handleReplaceStyle}
+                          replacementHistory={replacementHistory}
+                          allStyles={styleGovernanceResult.styles}
                         />
                       ) : (
                         <div
@@ -505,6 +524,8 @@ export default function App() {
                           allLayers={styleGovernanceResult.layers}
                           onNavigateToLayer={handleNavigateToLayer}
                           onReplaceToken={handleReplaceToken}
+                          replacementHistory={replacementHistory}
+                          allStyles={styleGovernanceResult.styles}
                         />
                       </div>
                     )}

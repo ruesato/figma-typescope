@@ -26,6 +26,10 @@ interface StyleTreeViewProps {
   selectedStyleId?: string;
   disabledStyleId?: string; // Style that cannot be selected (shown with "Current" badge)
   replacedStyleIds?: Set<string>; // Styles that have been replaced (shown with green circle)
+  replacementHistory?: Map<
+    string,
+    { targetStyleId: string; targetStyleName: string; count: number }
+  >; // Track original styles that were replaced
   className?: string;
 }
 
@@ -49,6 +53,7 @@ export default function StyleTreeView({
   selectedStyleId,
   disabledStyleId,
   replacedStyleIds,
+  replacementHistory,
   className = '',
 }: StyleTreeViewProps) {
   // Initialize expanded nodes with all library nodes expanded by default
@@ -270,16 +275,24 @@ export default function StyleTreeView({
     const isExpanded = expandedNodes.has(node.id);
     const isSelected = node.type === 'style' && node.style?.id === selectedStyleId;
     const isDisabled = node.type === 'style' && node.style?.id === disabledStyleId;
-    const isReplaced =
+    // Check if this style is an old style that was replaced (has replacement history entry)
+    const isReplacedStyle =
+      node.type === 'style' && node.style?.id && replacementHistory?.has(node.style.id);
+    // Check if this style is a new style that received replacements (target of a replacement)
+    const receivedReplacements =
       node.type === 'style' && node.style?.id && replacedStyleIds?.has(node.style.id);
     const hasChildren = node.children.length > 0;
     const isExpandable = hasChildren || node.type === 'library';
+    // Get replacement count for new styles
+    const replacementCount = Array.from(replacementHistory?.values() || [])
+      .filter((entry) => entry.targetStyleId === node.style?.id)
+      .reduce((sum, entry) => sum + entry.count, 0);
 
     return (
       <div key={node.id}>
         <div
           onClick={() => {
-            if (isDisabled) return; // Don't allow clicking disabled styles
+            if (isDisabled || isReplacedStyle) return; // Don't allow clicking disabled or replaced styles
             if (isExpandable) {
               toggleExpansion(node.id);
             } else {
@@ -292,13 +305,17 @@ export default function StyleTreeView({
             gap: '8px',
             padding: '6px 8px',
             paddingLeft: `${level * 20 + 8}px`,
-            cursor: isDisabled ? 'not-allowed' : 'pointer',
+            cursor: isDisabled || isReplacedStyle ? 'not-allowed' : 'pointer',
             backgroundColor: isSelected ? 'var(--figma-color-bg-brand)' : 'transparent',
-            color: isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text)',
+            color: isSelected
+              ? 'var(--figma-color-text-onbrand)'
+              : isReplacedStyle
+                ? 'var(--figma-color-text-tertiary)'
+                : 'var(--figma-color-text)',
             borderRadius: '4px',
             fontSize: '12px',
             transition: 'background-color 0.15s ease',
-            opacity: isDisabled ? 0.6 : 1,
+            opacity: isDisabled || isReplacedStyle ? 0.6 : 1,
           }}
           onMouseEnter={(e) => {
             if (!isSelected && !isDisabled) {
@@ -318,26 +335,58 @@ export default function StyleTreeView({
             </span>
           )}
 
-          {/* Replaced indicator (green circle) */}
-          {isReplaced && (
-            <div
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: '#10b981',
-                flexShrink: 0,
-              }}
-              title="Style has been replaced"
-            />
+          {/* Replacement Indicator */}
+          {node.type === 'style' && (
+            <>
+              {/* Gray circle for old/replaced styles */}
+              {isReplacedStyle && (
+                <div
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--figma-color-bg-tertiary)',
+                    flexShrink: 0,
+                  }}
+                  title="This style was replaced"
+                />
+              )}
+              {/* Green circle for new styles that received replacements */}
+              {receivedReplacements && (
+                <div
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981',
+                    flexShrink: 0,
+                  }}
+                  title="This style received replacements from other styles"
+                />
+              )}
+            </>
           )}
 
           {/* Node Name with count */}
           <span
-            style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            style={{
+              flex: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: isReplacedStyle ? 'var(--figma-color-text-tertiary)' : 'inherit',
+            }}
           >
             {node.name} {node.type === 'library' && `(${node.usageCount})`}
-            {node.type === 'style' && node.usageCount > 0 && ` (${node.usageCount})`}
+            {node.type === 'style' &&
+              (isReplacedStyle ? (
+                ` (0)`
+              ) : (
+                <>
+                  {node.usageCount > 0 && ` (${node.usageCount})`}
+                  {receivedReplacements && replacementCount > 0 && ` (+${replacementCount})`}
+                </>
+              ))}
           </span>
 
           {/* Current badge */}

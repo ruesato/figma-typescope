@@ -24,6 +24,13 @@ export interface DetailPanelProps {
   isLoading?: boolean;
   /** Error message */
   error?: string;
+  /** Replacement history: original style ID -> { targetStyleId, targetStyleName, count } */
+  replacementHistory?: Map<
+    string,
+    { targetStyleId: string; targetStyleName: string; count: number }
+  >;
+  /** All styles for looking up replaced target styles */
+  allStyles?: TextStyle[];
 }
 
 interface LayerGroup {
@@ -312,6 +319,8 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   onReplaceToken,
   isLoading = false,
   error,
+  replacementHistory,
+  allStyles,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const parentRef = React.useRef<HTMLDivElement>(null);
@@ -404,13 +413,21 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
     );
   }
 
-  // Render empty results
+  // Check if selected style was replaced
+  const isStyleReplaced = selectedStyle && replacementHistory?.has(selectedStyle.id);
+  const replacementInfo =
+    selectedStyle && isStyleReplaced ? replacementHistory?.get(selectedStyle.id) : null;
+
+  // Render empty results (or replaced style info)
   if (relevantLayers.length === 0) {
     return (
       <div className="flex flex-col h-full bg-figma-bg">
         <div className="p-4 border-b border-figma-border flex-shrink-0">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-figma-text">
+            <h2
+              className="text-sm font-semibold text-figma-text"
+              style={{ opacity: isStyleReplaced ? 0.6 : 1 }}
+            >
               {selectedStyle ? selectedStyle.name : selectedToken?.name || 'Details'}
             </h2>
             <button
@@ -425,9 +442,22 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         {isExpanded && (
           <div className="flex-1 flex flex-col items-center justify-center p-8">
             <div className="text-center">
-              <p className="text-sm text-figma-text-secondary">
-                No layers using this{selectedStyle ? 'style' : 'token'}
-              </p>
+              {isStyleReplaced && replacementInfo ? (
+                <>
+                  <p className="text-sm text-figma-color-text-secondary mb-2">0 current uses</p>
+                  <p className="text-sm font-medium text-figma-color-text">
+                    This style was replaced by{' '}
+                    <span style={{ fontWeight: 700 }}>{replacementInfo.targetStyleName}</span>
+                  </p>
+                  <p className="text-xs text-figma-text-secondary mt-2">
+                    {replacementInfo.count} instance{replacementInfo.count !== 1 ? 's' : ''} moved
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-figma-text-secondary">
+                  No layers using this{selectedStyle ? 'style' : 'token'}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -577,36 +607,116 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
       {/* Scrollable layers list */}
       {isExpanded && (
         <div
-          ref={parentRef}
           style={{
             flex: 1,
-            overflow: 'auto',
-            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            overflow: 'hidden',
           }}
         >
-          <div style={{ height: `${totalSize}px`, width: '100%', position: 'relative' }}>
-            {virtualItems.map((virtualItem) => {
-              const item = flattenedItems[virtualItem.index];
-              return (
-                <div
-                  key={virtualItem.key}
+          <div
+            ref={parentRef}
+            style={{
+              flex: 1,
+              overflow: 'auto',
+              position: 'relative',
+            }}
+          >
+            <div style={{ height: `${totalSize}px`, width: '100%', position: 'relative' }}>
+              {virtualItems.map((virtualItem) => {
+                const item = flattenedItems[virtualItem.index];
+                return (
+                  <div
+                    key={virtualItem.key}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
+                    <DetailRow
+                      item={item}
+                      onLayerSelect={onLayerSelect || (() => {})}
+                      onNavigateToLayer={onNavigateToLayer || (() => {})}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Replacement History Section - shown at bottom for styles that received replacements */}
+          {selectedStyle &&
+            replacementHistory &&
+            Array.from(replacementHistory.entries()).some(
+              ([_, entry]) => entry.targetStyleId === selectedStyle.id
+            ) && (
+              <div
+                style={{
+                  borderTop: '1px solid var(--figma-color-border)',
+                  padding: 'var(--figma-space-md)',
+                  backgroundColor: 'var(--figma-color-bg-secondary)',
+                  flexShrink: 0,
+                }}
+              >
+                <h3
                   style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    transform: `translateY(${virtualItem.start}px)`,
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--figma-color-text)',
+                    margin: '0 0 var(--figma-space-sm) 0',
                   }}
                 >
-                  <DetailRow
-                    item={item}
-                    onLayerSelect={onLayerSelect || (() => {})}
-                    onNavigateToLayer={onNavigateToLayer || (() => {})}
-                  />
+                  Replacement History
+                </h3>
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 'var(--figma-space-sm)' }}
+                >
+                  {Array.from(replacementHistory.entries())
+                    .filter(([_, entry]) => entry.targetStyleId === selectedStyle.id)
+                    .map(([originalStyleId, entry]) => {
+                      const originalStyle = allStyles?.find((s) => s.id === originalStyleId);
+                      return (
+                        <div
+                          key={originalStyleId}
+                          style={{
+                            padding: '8px',
+                            backgroundColor: 'var(--figma-color-bg)',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                          }}
+                        >
+                          <p
+                            style={{
+                              margin: '0 0 4px 0',
+                              color: 'var(--figma-color-text-secondary)',
+                            }}
+                          >
+                            <span
+                              style={{
+                                textDecoration: 'line-through',
+                                color: 'var(--figma-color-text-tertiary)',
+                              }}
+                            >
+                              {originalStyle?.name || originalStyleId}
+                            </span>
+                            {' → '}
+                            <span style={{ fontWeight: 600, color: 'var(--figma-color-text)' }}>
+                              {entry.targetStyleName}
+                            </span>
+                          </p>
+                          <p style={{ margin: 0, color: 'var(--figma-color-text-tertiary)' }}>
+                            {entry.count} instance{entry.count !== 1 ? 's' : ''} moved
+                          </p>
+                        </div>
+                      );
+                    })}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            )}
         </div>
       )}
     </div>
