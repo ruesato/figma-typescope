@@ -172,8 +172,14 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
 
         for (const libraryCollection of libraryCollections) {
           try {
+            console.log(
+              `[TokenDetection] Processing library collection: ${libraryCollection.name} (key: ${libraryCollection.key})`
+            );
             const libraryVariables = await figma.teamLibrary.getVariablesInLibraryCollectionAsync(
               libraryCollection.key
+            );
+            console.log(
+              `[TokenDetection] Found ${libraryVariables.length} variables in collection "${libraryCollection.name}"`
             );
 
             for (const variable of libraryVariables) {
