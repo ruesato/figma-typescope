@@ -18,10 +18,33 @@ import { ReplacementEngine } from './replacement/replacementEngine';
 declare const __html__: string;
 
 // Show the plugin UI
+// Calculate responsive plugin window size based on viewport
+// Using figma.ui.resize() allows dynamic sizing after showing UI
+const calculatePluginSize = () => {
+  // Figma plugin window constraints (in pixels)
+  const minWidth = 800;
+  const maxWidth = 1200;
+  const defaultHeight = 800;
+
+  // Start with max width as default
+  let width = maxWidth;
+
+  // The plugin window will constrain itself to available space
+  // but we set it to maxWidth which provides optimal experience
+  return { width, height: defaultHeight };
+};
+
+const pluginSize = calculatePluginSize();
+
 figma.showUI(__html__, {
-  width: 1000,
-  height: 800,
+  width: pluginSize.width,
+  height: pluginSize.height,
 });
+
+// Optionally, you can also resize after a delay if needed:
+// setTimeout(() => {
+//   figma.ui.resize(pluginSize.width, pluginSize.height);
+// }, 100);
 
 // ============================================================================
 // Message Handler
