@@ -24,6 +24,8 @@ interface StyleTreeViewProps {
   onStyleSelect?: (style: TextStyle) => void;
   onUnstyledSelect?: (layers: TextLayer[]) => void;
   selectedStyleId?: string;
+  disabledStyleId?: string; // Style that cannot be selected (shown with "Current" badge)
+  replacedStyleIds?: Set<string>; // Styles that have been replaced (shown with green circle)
   className?: string;
 }
 
@@ -45,6 +47,8 @@ export default function StyleTreeView({
   onStyleSelect,
   onUnstyledSelect,
   selectedStyleId,
+  disabledStyleId,
+  replacedStyleIds,
   className = '',
 }: StyleTreeViewProps) {
   // Initialize expanded nodes with all library nodes expanded by default
@@ -265,6 +269,9 @@ export default function StyleTreeView({
   const renderNode = (node: TreeNode, level: number = 0): JSX.Element => {
     const isExpanded = expandedNodes.has(node.id);
     const isSelected = node.type === 'style' && node.style?.id === selectedStyleId;
+    const isDisabled = node.type === 'style' && node.style?.id === disabledStyleId;
+    const isReplaced =
+      node.type === 'style' && node.style?.id && replacedStyleIds?.has(node.style.id);
     const hasChildren = node.children.length > 0;
     const isExpandable = hasChildren || node.type === 'library';
 
@@ -272,6 +279,7 @@ export default function StyleTreeView({
       <div key={node.id}>
         <div
           onClick={() => {
+            if (isDisabled) return; // Don't allow clicking disabled styles
             if (isExpandable) {
               toggleExpansion(node.id);
             } else {
@@ -284,20 +292,21 @@ export default function StyleTreeView({
             gap: '8px',
             padding: '6px 8px',
             paddingLeft: `${level * 20 + 8}px`,
-            cursor: 'pointer',
+            cursor: isDisabled ? 'not-allowed' : 'pointer',
             backgroundColor: isSelected ? 'var(--figma-color-bg-brand)' : 'transparent',
             color: isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text)',
             borderRadius: '4px',
             fontSize: '12px',
             transition: 'background-color 0.15s ease',
+            opacity: isDisabled ? 0.6 : 1,
           }}
           onMouseEnter={(e) => {
-            if (!isSelected) {
+            if (!isSelected && !isDisabled) {
               e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
             }
           }}
           onMouseLeave={(e) => {
-            if (!isSelected) {
+            if (!isSelected && !isDisabled) {
               e.currentTarget.style.backgroundColor = 'transparent';
             }
           }}
@@ -309,6 +318,20 @@ export default function StyleTreeView({
             </span>
           )}
 
+          {/* Replaced indicator (green circle) */}
+          {isReplaced && (
+            <div
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: '#10b981',
+                flexShrink: 0,
+              }}
+              title="Style has been replaced"
+            />
+          )}
+
           {/* Node Name with count */}
           <span
             style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -316,6 +339,23 @@ export default function StyleTreeView({
             {node.name} {node.type === 'library' && `(${node.usageCount})`}
             {node.type === 'style' && node.usageCount > 0 && ` (${node.usageCount})`}
           </span>
+
+          {/* Current badge */}
+          {isDisabled && (
+            <span
+              style={{
+                padding: '2px 6px',
+                borderRadius: '4px',
+                backgroundColor: 'var(--figma-color-bg-disabled)',
+                color: 'var(--figma-color-text-disabled)',
+                fontSize: '10px',
+                fontWeight: 500,
+                flexShrink: 0,
+              }}
+            >
+              Current
+            </span>
+          )}
         </div>
 
         {/* Children */}

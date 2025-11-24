@@ -12,6 +12,8 @@ import AnalyticsDashboard from './components/AnalyticsDashboard';
 import DetailPanel from './components/DetailPanel';
 import StyleTreeView from './components/StyleTreeView';
 import StylePicker from './components/StylePicker';
+import StyleReplacementPanel from './components/StyleReplacementPanel';
+import Toast from './components/Toast';
 import { TokenPicker } from './components/TokenPicker';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import type { TextStyle, DesignToken } from '@/shared/types';
@@ -30,7 +32,7 @@ export default function App() {
   const [selectedStyle, setSelectedStyle] = useState<TextStyle | null>(null);
   const [selectedToken, setSelectedToken] = useState<DesignToken | null>(null);
 
-  // Replacement workflow state
+  // Replacement workflow state (old modal-based - keeping for token replacement)
   const [replacementState, setReplacementState] = useState<
     'idle' | 'picking-style' | 'picking-token' | 'confirming'
   >('idle');
@@ -40,6 +42,17 @@ export default function App() {
   const [targetToken, setTargetToken] = useState<DesignToken | null>(null);
   const [replacementType, setReplacementType] = useState<'style' | 'token' | null>(null);
   const [affectedLayerIds, setAffectedLayerIds] = useState<string[]>([]);
+
+  // New slide-over panel state for style replacement
+  const [showReplacementPanel, setShowReplacementPanel] = useState(false);
+  const [replacementPanelError, setReplacementPanelError] = useState<string | undefined>();
+  const [replacedStyleIds, setReplacedStyleIds] = useState<Set<string>>(new Set());
+
+  // Toast notification state
+  const [toast, setToast] = useState<{
+    message: string;
+    type: 'success' | 'error' | 'loading';
+  } | null>(null);
 
   // Get message handlers for communication with main context
   const { runStyleAudit, navigateToLayer, replaceStyle, replaceToken } = useMessageHandler();
@@ -93,10 +106,9 @@ export default function App() {
   // Replacement workflow handlers
   const handleReplaceStyle = (style: TextStyle, layerIds: string[]) => {
     setSourceStyle(style);
-    setSourceToken(null);
-    setReplacementType('style');
     setAffectedLayerIds(layerIds);
-    setReplacementState('picking-style');
+    setReplacementPanelError(undefined);
+    setShowReplacementPanel(true);
   };
 
   const handleReplaceToken = (token: DesignToken, layerIds: string[]) => {
@@ -173,6 +185,48 @@ export default function App() {
     setTargetToken(null);
     setReplacementType(null);
     setAffectedLayerIds([]);
+  };
+
+  // New slide-over panel handlers
+  const handleReplacementPanelClose = () => {
+    setShowReplacementPanel(false);
+    setReplacementPanelError(undefined);
+  };
+
+  const handleReplacementPanelReplace = async (source: TextStyle, target: TextStyle) => {
+    console.log('[UI] Slide-over replacement:', {
+      sourceStyleId: source.id,
+      targetStyleId: target.id,
+      affectedLayerCount: affectedLayerIds.length,
+    });
+
+    // Show loading toast
+    setToast({ message: 'Replacing style...', type: 'loading' });
+
+    try {
+      await replaceStyle(source.id, target.id, affectedLayerIds);
+
+      // Mark style as replaced (show green circle)
+      setReplacedStyleIds((prev) => new Set(prev).add(source.id));
+
+      // Show success toast
+      setToast({
+        message: `Successfully replaced "${source.name}" with "${target.name}"`,
+        type: 'success',
+      });
+
+      // Reset state
+      setSourceStyle(null);
+      setAffectedLayerIds([]);
+
+      // TODO: Auto-refresh audit results
+    } catch (error) {
+      // Show error and re-open panel
+      const errorMessage = error instanceof Error ? error.message : 'Replacement failed';
+      setReplacementPanelError(errorMessage);
+      setShowReplacementPanel(true);
+      setToast(null);
+    }
   };
 
   // ============================================================================
@@ -296,6 +350,7 @@ export default function App() {
                         unstyledLayers={styleGovernanceResult.unstyledLayers}
                         onStyleSelect={setSelectedStyle}
                         selectedStyleId={selectedStyle?.id}
+                        replacedStyleIds={replacedStyleIds}
                       />
                     </div>
 
@@ -410,6 +465,30 @@ export default function App() {
             onCancel={handleCancelReplacement}
           />
         )}
+
+      {/* Style Replacement Slide-Over Panel */}
+      {showReplacementPanel && styleGovernanceResult && sourceStyle && (
+        <StyleReplacementPanel
+          sourceStyle={sourceStyle}
+          availableStyles={styleGovernanceResult.styles}
+          libraries={styleGovernanceResult.libraries}
+          allLayers={styleGovernanceResult.layers}
+          onClose={handleReplacementPanelClose}
+          onReplace={handleReplacementPanelReplace}
+          error={replacementPanelError}
+          replacedStyleIds={replacedStyleIds}
+        />
+      )}
+
+      {/* Toast Notifications */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+          duration={toast.type === 'loading' ? 0 : 3000}
+        />
+      )}
     </div>
   );
 }
