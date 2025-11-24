@@ -111,48 +111,52 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
     const tokenMap = new Map<string, DesignToken>();
     console.log('[TokenDetection] Starting token detection...');
 
-    // Step 1: Get all LOCAL variable collections
+    // Step 1: Get all LOCAL variables
     try {
+      console.log('[TokenDetection] Fetching all local variables...');
+      const localVariables = await figma.variables.getLocalVariablesAsync();
+      console.log(`[TokenDetection] Found ${localVariables.length} local variables`);
+
+      // Get local collections for metadata
       const localCollections = await figma.variables.getLocalVariableCollectionsAsync();
-      console.log(`[TokenDetection] Found ${localCollections.length} local collections`);
-
+      const collectionMap = new Map<string, string>();
       for (const collection of localCollections) {
-        // Get all variables in this collection
-        const variables = await figma.variables.getVariablesInCollectionAsync(collection.id);
+        collectionMap.set(collection.id, collection.name);
+      }
 
-        for (const variable of variables) {
-          if (!tokenMap.has(variable.id)) {
-            const firstModeId = Object.keys(variable.valuesByMode)[0];
-            const firstValue = variable.valuesByMode[firstModeId];
-            const tokenType = getTokenType(variable);
+      for (const variable of localVariables) {
+        if (!tokenMap.has(variable.id)) {
+          const firstModeId = Object.keys(variable.valuesByMode)[0];
+          const firstValue = variable.valuesByMode[firstModeId];
+          const tokenType = getTokenType(variable);
+          const collectionName = collectionMap.get(variable.variableCollectionId) || 'Unknown';
 
-            const token: DesignToken = {
-              id: variable.id,
-              name: variable.name,
-              key: `${collection.id}/${variable.id}`,
-              type: tokenType,
-              resolvedType: tokenType,
-              currentValue: firstValue,
-              value: firstValue,
-              collectionId: collection.id,
-              collectionName: collection.name,
-              collections: [collection.name],
-              modeId: firstModeId,
-              modeName: 'Default',
-              valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
-              modes: extractTokenModes(variable),
-              isAlias: false,
-              usageCount: 0,
-              layerIds: [],
-              propertyTypes: [],
-            };
-            tokenMap.set(variable.id, token);
-          }
+          const token: DesignToken = {
+            id: variable.id,
+            name: variable.name,
+            key: `local/${variable.id}`,
+            type: tokenType,
+            resolvedType: tokenType,
+            currentValue: firstValue,
+            value: firstValue,
+            collectionId: variable.variableCollectionId,
+            collectionName: collectionName,
+            collections: [collectionName],
+            modeId: firstModeId,
+            modeName: 'Default',
+            valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
+            modes: extractTokenModes(variable),
+            isAlias: false,
+            usageCount: 0,
+            layerIds: [],
+            propertyTypes: [],
+          };
+          tokenMap.set(variable.id, token);
         }
       }
-      console.log(`[TokenDetection] Processed local collections, tokenMap size: ${tokenMap.size}`);
+      console.log(`[TokenDetection] Processed local variables, tokenMap size: ${tokenMap.size}`);
     } catch (error) {
-      console.warn('Error getting local variable collections:', error);
+      console.warn('Error getting local variables:', error);
     }
 
     // Step 2: Get all LIBRARY variable collections (from linked libraries)
