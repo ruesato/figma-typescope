@@ -35,7 +35,9 @@ export default function App() {
     'idle' | 'picking-style' | 'picking-token' | 'confirming'
   >('idle');
   const [sourceStyle, setSourceStyle] = useState<TextStyle | null>(null);
+  const [targetStyle, setTargetStyle] = useState<TextStyle | null>(null);
   const [sourceToken, setSourceToken] = useState<DesignToken | null>(null);
+  const [targetToken, setTargetToken] = useState<DesignToken | null>(null);
   const [replacementType, setReplacementType] = useState<'style' | 'token' | null>(null);
   const [affectedLayerIds, setAffectedLayerIds] = useState<string[]>([]);
 
@@ -85,14 +87,16 @@ export default function App() {
     setReplacementState('picking-token');
   };
 
-  const handleStylePickerSelect = (targetStyle: TextStyle) => {
+  const handleStylePickerSelect = (target: TextStyle) => {
     if (sourceStyle && replacementType === 'style') {
+      setTargetStyle(target);
       setReplacementState('confirming');
     }
   };
 
-  const handleTokenPickerSelect = (targetToken: DesignToken) => {
+  const handleTokenPickerSelect = (target: DesignToken) => {
     if (sourceToken && replacementType === 'token') {
+      setTargetToken(target);
       setReplacementState('confirming');
     }
   };
@@ -100,44 +104,54 @@ export default function App() {
   const handleConfirmReplacement = async () => {
     if (affectedLayerIds.length === 0) return;
 
-    if (replacementType === 'style' && sourceStyle) {
-      // Find target style from the picker state
-      const targetStyle = styleGovernanceResult?.styles.find(
-        (s) =>
-          s.id === (document.querySelector('[data-style-picker]') as any)?.dataset.selectedTargetId
-      );
+    if (replacementType === 'style' && sourceStyle && targetStyle) {
+      console.log('[UI] Confirming style replacement:', {
+        sourceStyleId: sourceStyle.id,
+        targetStyleId: targetStyle.id,
+        affectedLayerCount: affectedLayerIds.length,
+      });
 
-      if (targetStyle) {
-        await replaceStyle(sourceStyle.id, targetStyle.id, affectedLayerIds);
+      await replaceStyle(sourceStyle.id, targetStyle.id, affectedLayerIds);
 
-        // Reset replacement state
-        setReplacementState('idle');
-        setSourceStyle(null);
-        setReplacementType(null);
-        setAffectedLayerIds([]);
-      }
-    } else if (replacementType === 'token' && sourceToken) {
-      // Find target token from the picker state
-      const targetToken = styleGovernanceResult?.tokens.find(
-        (t) =>
-          t.id === (document.querySelector('[data-token-picker]') as any)?.dataset.selectedTargetId
-      );
+      // Reset replacement state
+      setReplacementState('idle');
+      setSourceStyle(null);
+      setTargetStyle(null);
+      setReplacementType(null);
+      setAffectedLayerIds([]);
+    } else if (replacementType === 'token' && sourceToken && targetToken) {
+      console.log('[UI] Confirming token replacement:', {
+        sourceTokenId: sourceToken.id,
+        targetTokenId: targetToken.id,
+        affectedLayerCount: affectedLayerIds.length,
+      });
 
-      if (targetToken) {
-        await replaceToken(sourceToken.id, targetToken.id, affectedLayerIds);
+      await replaceToken(sourceToken.id, targetToken.id, affectedLayerIds);
 
-        // Reset replacement state
-        setReplacementState('idle');
-        setSourceToken(null);
-        setReplacementType(null);
-        setAffectedLayerIds([]);
-      }
+      // Reset replacement state
+      setReplacementState('idle');
+      setSourceToken(null);
+      setTargetToken(null);
+      setReplacementType(null);
+      setAffectedLayerIds([]);
+    } else {
+      console.warn('[UI] Cannot confirm replacement - missing required state', {
+        replacementType,
+        hasSourceStyle: !!sourceStyle,
+        hasTargetStyle: !!targetStyle,
+        hasSourceToken: !!sourceToken,
+        hasTargetToken: !!targetToken,
+      });
     }
   };
 
   const handleCancelReplacement = () => {
     setReplacementState('idle');
     setSourceStyle(null);
+    setTargetStyle(null);
+    setSourceToken(null);
+    setTargetToken(null);
+    setReplacementType(null);
     setAffectedLayerIds([]);
   };
 
