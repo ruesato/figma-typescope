@@ -184,7 +184,11 @@ export type UIToMainMessage =
           delimiter?: string;
         };
       };
-    };
+    }
+
+  // UI preference messages
+  | { type: 'GET_GROUP_BY_LIBRARY' }
+  | { type: 'SAVE_GROUP_BY_LIBRARY'; payload: { enabled: boolean } };
 
 /**
  * Messages sent from main context to UI context (audit status updates and results)
@@ -325,7 +329,11 @@ export type MainToUIMessage =
         error: string;
         details?: string;
       };
-    };
+    }
+
+  // UI preference messages
+  | { type: 'GROUP_BY_LIBRARY_LOADED'; payload: { enabled: boolean } }
+  | { type: 'GROUP_BY_LIBRARY_SAVED'; payload: { success: boolean } };
 
 // ============================================================================
 // Export Format Types

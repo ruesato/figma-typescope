@@ -113,6 +113,17 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
         await handleNavigateToLayer(msg.layerId);
         break;
 
+      // ==================================================================
+      // UI Preferences
+      // ==================================================================
+      case 'GET_GROUP_BY_LIBRARY':
+        handleGetGroupByLibrary();
+        break;
+
+      case 'SAVE_GROUP_BY_LIBRARY':
+        await handleSaveGroupByLibrary(msg.payload.enabled);
+        break;
+
       default:
         console.warn('Unknown message type:', (msg as { type: string }).type);
     }
@@ -486,4 +497,51 @@ async function handleExportPDF(_auditResult: any): Promise<void> {
       error: 'PDF export not yet implemented (Phase 4)',
     },
   });
+}
+
+// ============================================================================
+// UI Preference Handlers
+// ============================================================================
+
+/**
+ * Handle GET_GROUP_BY_LIBRARY message - load groupByLibrary preference
+ */
+function handleGetGroupByLibrary(): void {
+  figma.clientStorage
+    .getAsync('groupByLibrary')
+    .then((value: boolean | undefined) => {
+      // Default to true if not set
+      const groupByLibrary = value !== undefined ? value : true;
+      sendMessage({
+        type: 'GROUP_BY_LIBRARY_LOADED',
+        payload: { enabled: groupByLibrary },
+      });
+    })
+    .catch((error: unknown) => {
+      console.error('[Preferences] Failed to load groupByLibrary:', error);
+      // Send default value on error
+      sendMessage({
+        type: 'GROUP_BY_LIBRARY_LOADED',
+        payload: { enabled: true },
+      });
+    });
+}
+
+/**
+ * Handle SAVE_GROUP_BY_LIBRARY message - save groupByLibrary preference
+ */
+async function handleSaveGroupByLibrary(enabled: boolean): Promise<void> {
+  try {
+    await figma.clientStorage.setAsync('groupByLibrary', enabled);
+    sendMessage({
+      type: 'GROUP_BY_LIBRARY_SAVED',
+      payload: { success: true },
+    });
+  } catch (error: unknown) {
+    console.error('[Preferences] Failed to save groupByLibrary:', error);
+    sendMessage({
+      type: 'GROUP_BY_LIBRARY_SAVED',
+      payload: { success: false },
+    });
+  }
 }

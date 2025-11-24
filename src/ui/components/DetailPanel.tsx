@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { ChevronRight } from 'lucide-react';
 import type { TextLayer, TextStyle, DesignToken } from '@/shared/types';
 
 // ============================================================================
@@ -50,16 +51,16 @@ interface FlattenedItem {
 // ============================================================================
 
 /**
- * Get color for assignment status badge
+ * Get color class for assignment status badge
  */
 const getStatusColor = (status: 'fully-styled' | 'partially-styled' | 'unstyled'): string => {
   switch (status) {
     case 'fully-styled':
       return 'bg-green-100 text-green-800';
     case 'partially-styled':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-red-100 text-red-800'; // Red badge for partial (has overrides)
     case 'unstyled':
-      return 'bg-red-100 text-red-800';
+      return 'bg-gray-100 text-gray-800'; // Gray for unstyled
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -227,6 +228,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ item, onLayerSelect, onNavigateTo
       <div
         className="px-4 py-3 border-b border-figma-border hover:bg-figma-bg-secondary cursor-pointer transition-colors"
         style={{ paddingLeft: `${20 + 20 + 20}px` }}
+        onClick={() => onNavigateToLayer(layer.id)}
       >
         <div className="flex items-start justify-between gap-3">
           {/* Layer Info */}
@@ -284,14 +286,10 @@ const DetailRow: React.FC<DetailRowProps> = ({ item, onLayerSelect, onNavigateTo
             )}
           </div>
 
-          {/* Action Button */}
-          <button
-            onClick={() => onNavigateToLayer(layer.id)}
-            className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded bg-figma-bg-brand text-figma-color-text-onbrand hover:opacity-80 transition-opacity whitespace-nowrap"
-            title="Navigate to layer in canvas"
-          >
-            Go to
-          </button>
+          {/* Arrow Icon */}
+          <div className="flex-shrink-0 text-figma-text-tertiary">
+            <ChevronRight size={16} />
+          </div>
         </div>
       </div>
     );
@@ -437,123 +435,161 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
     );
   }
 
+  // Calculate override count
+  const partiallyStyledCount = relevantLayers.filter(
+    (l) => l.assignmentStatus === 'partially-styled'
+  ).length;
+
   // Render full detail panel with virtualized list
   return (
-    <div className="flex flex-col h-full bg-figma-bg">
-      {/* Header */}
-      <div className="p-4 border-b border-figma-border flex-shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-figma-text">
-            {selectedStyle ? selectedStyle.name : selectedToken?.name || 'Details'}
-          </h2>
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-figma-text-secondary hover:text-figma-text transition-colors"
-          >
-            {isExpanded ? '−' : '+'}
-          </button>
-        </div>
+    <div
+      style={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: 'var(--figma-color-bg)',
+      }}
+    >
+      {/* Header - Fixed at top */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--figma-space-sm)',
+          padding: 'var(--figma-space-md)',
+          borderBottom: '1px solid var(--figma-color-border)',
+        }}
+      >
+        {/* Title and Replace button */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 'var(--figma-space-md)',
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2
+              style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                lineHeight: '28px',
+                color: 'var(--figma-color-text)',
+                margin: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {selectedStyle ? selectedStyle.name : selectedToken?.name || 'Details'}
+            </h2>
+            <p
+              style={{
+                fontSize: '12px',
+                color: 'var(--figma-color-text-secondary)',
+                margin: '4px 0 0 0',
+              }}
+            >
+              Used in {relevantLayers.length} layer{relevantLayers.length !== 1 ? 's' : ''}
+              {partiallyStyledCount > 0 &&
+                ` (${partiallyStyledCount} override${partiallyStyledCount !== 1 ? 's' : ''})`}
+            </p>
+          </div>
 
-        {/* Usage Count */}
-        <p className="text-xs text-figma-text-secondary">
-          Used by {relevantLayers.length} layer{relevantLayers.length !== 1 ? 's' : ''}
-        </p>
-
-        {/* Actions */}
-        {selectedStyle && onReplaceStyle && relevantLayers.length > 0 && (
-          <div className="mt-3">
+          {/* Replace button */}
+          {selectedStyle && onReplaceStyle && relevantLayers.length > 0 && (
             <button
               onClick={() => {
                 const affectedLayerIds = relevantLayers.map((l) => l.id);
                 onReplaceStyle(selectedStyle, affectedLayerIds);
               }}
-              className="
-                px-3 py-1.5 text-xs rounded font-medium
-                bg-figma-color-bg-brand hover:bg-figma-color-bg-brand-hover
-                text-figma-color-text-onbrand
-                transition-colors
-              "
+              style={{
+                height: '32px',
+                padding: '0 16px',
+                border: '1px solid var(--figma-color-border)',
+                borderRadius: '8px',
+                backgroundColor: 'transparent',
+                color: 'var(--figma-color-text)',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
             >
-              Replace Style ({relevantLayers.length} layers)
+              Replace style
             </button>
-          </div>
-        )}
+          )}
 
-        {selectedToken && onReplaceToken && relevantLayers.length > 0 && (
-          <div className="mt-3">
+          {selectedToken && onReplaceToken && relevantLayers.length > 0 && (
             <button
               onClick={() => {
                 const affectedLayerIds = relevantLayers.map((l) => l.id);
                 onReplaceToken(selectedToken, affectedLayerIds);
               }}
-              className="
-                px-3 py-1.5 text-xs rounded font-medium
-                bg-figma-color-bg-brand hover:bg-figma-color-bg-brand-hover
-                text-figma-color-text-onbrand
-                transition-colors
-              "
+              style={{
+                height: '32px',
+                padding: '0 16px',
+                border: '1px solid var(--figma-color-border)',
+                borderRadius: '8px',
+                backgroundColor: 'transparent',
+                color: 'var(--figma-color-text)',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
             >
-              Replace Token ({relevantLayers.length} layers)
+              Replace token
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Status Summary */}
-        <div className="flex flex-wrap gap-2 mt-2">
-          {(() => {
-            const fullyStyled = relevantLayers.filter(
-              (l) => l.assignmentStatus === 'fully-styled'
-            ).length;
-            const partiallyStyled = relevantLayers.filter(
-              (l) => l.assignmentStatus === 'partially-styled'
-            ).length;
-            const unstyled = relevantLayers.filter((l) => l.assignmentStatus === 'unstyled').length;
-
-            return (
-              <>
-                {fullyStyled > 0 && (
-                  <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800">
-                    ✓ {fullyStyled} Fully styled
-                  </span>
-                )}
-                {partiallyStyled > 0 && (
-                  <span className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800">
-                    ~ {partiallyStyled} Partial
-                  </span>
-                )}
-                {unstyled > 0 && (
-                  <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-800">
-                    ✗ {unstyled} Unstyled
-                  </span>
-                )}
-              </>
-            );
-          })()}
+        {/* Layers Section Header */}
+        <div style={{ marginTop: 'var(--figma-space-md)' }}>
+          <h3
+            style={{
+              fontSize: '12px',
+              fontWeight: 500,
+              color: 'var(--figma-color-text)',
+              margin: 0,
+            }}
+          >
+            Layers
+          </h3>
         </div>
       </div>
 
-      {/* Virtualized List */}
+      {/* Scrollable layers list */}
       {isExpanded && (
         <div
           ref={parentRef}
-          className="flex-1 overflow-auto"
           style={{
-            height: 'calc(100% - 120px)',
+            flex: 1,
+            overflow: 'auto',
+            position: 'relative',
           }}
         >
-          <div
-            style={{
-              height: `${totalSize}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
+          <div style={{ height: `${totalSize}px`, width: '100%', position: 'relative' }}>
             {virtualItems.map((virtualItem) => {
               const item = flattenedItems[virtualItem.index];
               return (
                 <div
                   key={virtualItem.key}
-                  data-index={virtualItem.index}
                   style={{
                     position: 'absolute',
                     top: 0,

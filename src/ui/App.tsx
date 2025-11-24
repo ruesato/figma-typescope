@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './styles/globals.css';
 import { useMessageHandler } from './hooks/useMessageHandler';
 import { useAuditState } from './hooks/useAuditState';
@@ -49,6 +49,18 @@ export default function App() {
 
   // Calculate which tabs should be disabled
   const disabledTabs: TabType[] = !styleGovernanceResult ? ['styles', 'tokens'] : [];
+
+  // Auto-select first style when Styles tab is activated
+  useEffect(() => {
+    if (
+      activeTab === 'styles' &&
+      styleGovernanceResult &&
+      styleGovernanceResult.styles.length > 0 &&
+      !selectedStyle
+    ) {
+      setSelectedStyle(styleGovernanceResult.styles[0]);
+    }
+  }, [activeTab, styleGovernanceResult, selectedStyle]);
 
   // ============================================================================
   // Event Handlers
@@ -267,27 +279,66 @@ export default function App() {
                   <AnalyticsDashboard auditResult={styleGovernanceResult} />
                 )}
 
-                {/* Styles Tab */}
+                {/* Styles Tab - 50/50 Split Layout */}
                 {activeTab === 'styles' && (
-                  <div style={{ display: 'flex', gap: 'var(--figma-space-md)' }}>
-                    <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      height: '100%',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* Left Panel - Style Tree (50%) */}
+                    <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
                       <StyleTreeView
                         styles={styleGovernanceResult.styles}
                         libraries={styleGovernanceResult.libraries}
                         unstyledLayers={styleGovernanceResult.unstyledLayers}
                         onStyleSelect={setSelectedStyle}
+                        selectedStyleId={selectedStyle?.id}
                       />
                     </div>
-                    {selectedStyle && (
-                      <div style={{ width: '400px', flexShrink: 0 }}>
+
+                    {/* Visible Divider */}
+                    <div
+                      style={{
+                        width: '1px',
+                        backgroundColor: 'var(--figma-color-border)',
+                        flexShrink: 0,
+                      }}
+                    />
+
+                    {/* Right Panel - Detail Panel (50%) */}
+                    <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+                      {selectedStyle ? (
                         <DetailPanel
                           selectedStyle={selectedStyle}
                           allLayers={styleGovernanceResult.layers}
                           onNavigateToLayer={handleNavigateToLayer}
                           onReplaceStyle={handleReplaceStyle}
                         />
-                      </div>
-                    )}
+                      ) : (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '100%',
+                            padding: 'var(--figma-space-lg)',
+                          }}
+                        >
+                          <p
+                            style={{
+                              fontSize: '12px',
+                              color: 'var(--figma-color-text-secondary)',
+                              textAlign: 'center',
+                            }}
+                          >
+                            Select a style to view its details
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

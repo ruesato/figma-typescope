@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Search } from 'lucide-react';
 import type { TextStyle, TextLayer, LibrarySource } from '@/shared/types';
 
 /**
@@ -46,10 +47,60 @@ export default function StyleTreeView({
   selectedStyleId,
   className = '',
 }: StyleTreeViewProps) {
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  // Initialize expanded nodes with all library nodes expanded by default
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
+    const initialExpanded = new Set<string>();
+    libraries.forEach((lib) => {
+      initialExpanded.add(`library-${lib.id}`);
+    });
+    return initialExpanded;
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [groupByLibrary, setGroupByLibrary] = useState(true);
-  const [usageFilter, setUsageFilter] = useState<'all' | 'used' | 'unused'>('all');
+  const [groupByLibrary, setGroupByLibrary] = useState(() => {
+    // Load from Figma client storage if available
+    if (typeof window !== 'undefined' && (window as any).parent) {
+      // Will be loaded via useEffect
+      return true;
+    }
+    return true;
+  });
+  const [usageFilter, setUsageFilter] = useState<'all' | 'local' | 'library' | 'unused'>('all');
+
+  // Load groupByLibrary preference from Figma client storage
+  useEffect(() => {
+    const loadPreference = async () => {
+      try {
+        parent.postMessage({ pluginMessage: { type: 'GET_GROUP_BY_LIBRARY' } }, '*');
+      } catch (error) {
+        console.warn('Failed to load groupByLibrary preference:', error);
+      }
+    };
+    loadPreference();
+  }, []);
+
+  // Listen for groupByLibrary preference response
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.pluginMessage?.type === 'GROUP_BY_LIBRARY_LOADED') {
+        setGroupByLibrary(event.data.pluginMessage.value ?? true);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Save groupByLibrary preference when it changes
+  useEffect(() => {
+    try {
+      parent.postMessage(
+        { pluginMessage: { type: 'SAVE_GROUP_BY_LIBRARY', value: groupByLibrary } },
+        '*'
+      );
+    } catch (error) {
+      console.warn('Failed to save groupByLibrary preference:', error);
+    }
+  }, [groupByLibrary]);
 
   // Build tree structure from styles and libraries
   const treeData = useMemo(() => {
@@ -100,14 +151,31 @@ export default function StyleTreeView({
 
     // Apply usage filter
     if (usageFilter !== 'all') {
-      result = result.map((node) => ({
-        ...node,
-        children: node.children.filter((child) => {
-          if (usageFilter === 'used') return child.usageCount > 0;
-          if (usageFilter === 'unused') return child.usageCount === 0;
+      if (usageFilter === 'local') {
+        // Show only local styles (libraryName === 'Local' or no libraryName)
+        result = result.filter((node) => {
+          if (node.type === 'library') {
+            return node.name === 'Local' || node.name.includes('Local');
+          }
           return true;
-        }),
-      }));
+        });
+      } else if (usageFilter === 'library') {
+        // Show only library styles (libraryName !== 'Local')
+        result = result.filter((node) => {
+          if (node.type === 'library') {
+            return node.name !== 'Local' && !node.name.includes('Local');
+          }
+          return true;
+        });
+      } else if (usageFilter === 'unused') {
+        // Show only unused styles
+        result = result
+          .map((node) => ({
+            ...node,
+            children: node.children.filter((child) => child.usageCount === 0),
+          }))
+          .filter((node) => node.children.length > 0 || node.usageCount === 0);
+      }
     }
 
     // Apply search filter
@@ -138,6 +206,61 @@ export default function StyleTreeView({
     }
   };
 
+  // Keyboard navigation
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+
+  // Get all selectable style nodes in display order
+  const getSelectableStyles = (): TextStyle[] => {
+    const selectableStyles: TextStyle[] = [];
+    const traverse = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+        if (node.type === 'style' && node.style) {
+          selectableStyles.push(node.style);
+        }
+        if (node.type === 'library' && expandedNodes.has(node.id)) {
+          traverse(node.children);
+        }
+      }
+    };
+    traverse(filteredTree);
+    return selectableStyles;
+  };
+
+  // Handle keyboard navigation (arrow keys)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+
+      const selectableStyles = getSelectableStyles();
+      if (selectableStyles.length === 0) return;
+
+      const currentIndex = selectableStyles.findIndex((s) => s.id === selectedStyleId);
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (currentIndex < selectableStyles.length - 1) {
+          const nextStyle = selectableStyles[currentIndex + 1];
+          if (onStyleSelect) onStyleSelect(nextStyle);
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          const prevStyle = selectableStyles[currentIndex - 1];
+          if (onStyleSelect) onStyleSelect(prevStyle);
+        } else if (currentIndex === -1 && selectableStyles.length > 0) {
+          // No selection, select first
+          if (onStyleSelect) onStyleSelect(selectableStyles[0]);
+        }
+      }
+    };
+
+    const container = treeContainerRef.current;
+    if (container) {
+      container.addEventListener('keydown', handleKeyDown);
+      return () => container.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [selectedStyleId, filteredTree, expandedNodes, onStyleSelect]);
+
   // Render tree node
   const renderNode = (node: TreeNode, level: number = 0): JSX.Element => {
     const isExpanded = expandedNodes.has(node.id);
@@ -146,9 +269,8 @@ export default function StyleTreeView({
     const isExpandable = hasChildren || node.type === 'library';
 
     return (
-      <div key={node.id} className={`tree-node level-${level} ${isSelected ? 'selected' : ''}`}>
+      <div key={node.id}>
         <div
-          className="tree-node-content"
           onClick={() => {
             if (isExpandable) {
               toggleExpansion(node.id);
@@ -156,132 +278,173 @@ export default function StyleTreeView({
               handleNodeClick(node);
             }
           }}
-          onKeyDown={(e) => {
-            // Space: expand/collapse
-            if (e.code === 'Space' && isExpandable) {
-              e.preventDefault();
-              toggleExpansion(node.id);
-            }
-            // Enter: select node
-            if (e.code === 'Enter' && !isExpandable) {
-              e.preventDefault();
-              handleNodeClick(node);
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 8px',
+            paddingLeft: `${level * 20 + 8}px`,
+            cursor: 'pointer',
+            backgroundColor: isSelected ? 'var(--figma-color-bg-brand)' : 'transparent',
+            color: isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text)',
+            borderRadius: '4px',
+            fontSize: '12px',
+            transition: 'background-color 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (!isSelected) {
+              e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
             }
           }}
-          tabIndex={0}
-          role="treeitem"
-          aria-expanded={isExpanded}
-          style={{ paddingLeft: `${level * 20 + 12}px` }}
+          onMouseLeave={(e) => {
+            if (!isSelected) {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }
+          }}
         >
           {/* Expand/Collapse Icon */}
-          {isExpandable && <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>}
-
-          {/* Node Icon */}
-          <span className="node-icon">
-            {node.type === 'library' && '📚'}
-            {node.type === 'style' && '📝'}
-            {node.type === 'unstyled' && '⚠️'}
-          </span>
-
-          {/* Node Name */}
-          <span className="node-name">{node.name}</span>
-
-          {/* Usage Count Badge */}
-          {node.usageCount > 0 && (
-            <span className="usage-badge">{node.usageCount.toLocaleString()}</span>
+          {isExpandable && (
+            <span style={{ fontSize: '10px', color: 'var(--figma-color-icon-secondary)' }}>
+              {isExpanded ? '▼' : '▶'}
+            </span>
           )}
+
+          {/* Node Name with count */}
+          <span
+            style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {node.name} {node.type === 'library' && `(${node.usageCount})`}
+            {node.type === 'style' && node.usageCount > 0 && ` (${node.usageCount})`}
+          </span>
         </div>
 
         {/* Children */}
         {isExpanded && hasChildren && (
-          <div className="tree-children">
-            {node.children.map((child) => renderNode(child, level + 1))}
-          </div>
+          <div>{node.children.map((child) => renderNode(child, level + 1))}</div>
         )}
       </div>
     );
   };
 
   return (
-    <div className={`style-tree-view ${className}`}>
-      {/* Controls */}
-      <div className="tree-controls">
-        <div className="search-container">
+    <div
+      className={`style-tree-view ${className}`}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
+      {/* Controls - Horizontal layout matching mockup */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--figma-space-sm)',
+          padding: 'var(--figma-space-md)',
+          borderBottom: '1px solid var(--figma-color-border)',
+        }}
+      >
+        {/* Search bar - Left */}
+        <div style={{ position: 'relative', flex: 1, maxWidth: '200px' }}>
+          <Search
+            size={14}
+            style={{
+              position: 'absolute',
+              left: '8px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--figma-color-icon-secondary)',
+              pointerEvents: 'none',
+            }}
+          />
           <input
             type="text"
-            placeholder="Search styles..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="search-input"
+            style={{
+              width: '100%',
+              height: '32px',
+              paddingLeft: '28px',
+              paddingRight: '8px',
+              border: '1px solid var(--figma-color-border)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--figma-color-bg)',
+              color: 'var(--figma-color-text)',
+              fontSize: '12px',
+            }}
           />
         </div>
 
-        <div className="view-options">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={groupByLibrary}
-              onChange={(e) => setGroupByLibrary(e.target.checked)}
-            />
-            Group by Library
-          </label>
+        {/* Dropdown filter - Middle */}
+        <select
+          value={usageFilter}
+          onChange={(e) => setUsageFilter(e.target.value as 'all' | 'local' | 'library' | 'unused')}
+          style={{
+            height: '32px',
+            padding: '0 24px 0 8px',
+            border: '1px solid var(--figma-color-border)',
+            borderRadius: '4px',
+            backgroundColor: 'var(--figma-color-bg)',
+            color: 'var(--figma-color-text)',
+            fontSize: '12px',
+            cursor: 'pointer',
+          }}
+        >
+          <option value="all">All styles</option>
+          <option value="local">Local only</option>
+          <option value="library">Library only</option>
+          <option value="unused">Unused styles</option>
+        </select>
 
-          <select
-            value={usageFilter}
-            onChange={(e) => setUsageFilter(e.target.value as 'all' | 'used' | 'unused')}
-            className="filter-select"
-            title="Filter styles by usage count"
-          >
-            <option value="all">All Styles</option>
-            <option value="used">Used Only</option>
-            <option value="unused">Unused Only</option>
-          </select>
-        </div>
+        {/* Toggle - Right */}
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            color: 'var(--figma-color-text)',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={groupByLibrary}
+            onChange={(e) => setGroupByLibrary(e.target.checked)}
+            style={{
+              width: '32px',
+              height: '16px',
+              cursor: 'pointer',
+            }}
+          />
+          <span>Group by library</span>
+        </label>
       </div>
 
-      {/* Tree */}
-      <div className="tree-container">
+      {/* Tree - Scrollable */}
+      <div
+        ref={treeContainerRef}
+        tabIndex={0}
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: 'var(--figma-space-sm)',
+          outline: 'none',
+        }}
+      >
         {filteredTree.length === 0 ? (
-          <div className="empty-state">
+          <div
+            style={{
+              padding: 'var(--figma-space-md)',
+              textAlign: 'center',
+              color: 'var(--figma-color-text-secondary)',
+              fontSize: '12px',
+            }}
+          >
             {searchQuery ? 'No styles found matching your search.' : 'No styles found.'}
           </div>
         ) : (
           filteredTree.map((node) => renderNode(node))
         )}
-      </div>
-
-      {/* Summary */}
-      <div className="tree-summary">
-        <div className="summary-item">
-          <span className="summary-label">Total Styles:</span>
-          <span className="summary-value">{styles.length.toLocaleString()}</span>
-        </div>
-        <div className="summary-item">
-          <span className="summary-label">Libraries:</span>
-          <span className="summary-value">{libraries.length.toLocaleString()}</span>
-        </div>
-        {unstyledLayers.length > 0 && (
-          <div className="summary-item warning">
-            <span className="summary-label">Needs Styling:</span>
-            <span className="summary-value">{unstyledLayers.length.toLocaleString()}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Keyboard Shortcuts Help */}
-      <div className="keyboard-shortcuts-help" title="Keyboard shortcuts for tree navigation">
-        <p className="shortcuts-title">Shortcuts:</p>
-        <ul className="shortcuts-list">
-          <li>
-            <kbd>Space</kbd> - Expand/collapse group
-          </li>
-          <li>
-            <kbd>Enter</kbd> - Select style
-          </li>
-          <li>
-            <kbd>Tab</kbd> - Navigate focus
-          </li>
-        </ul>
       </div>
     </div>
   );
