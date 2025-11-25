@@ -43,6 +43,7 @@ coverage/
 *.swo
 *~
 .cache
+SECURITY_AUDIT.md
 
 # OS files
 Thumbs.db
