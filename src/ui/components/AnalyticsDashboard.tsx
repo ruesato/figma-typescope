@@ -385,6 +385,7 @@ export default function AnalyticsDashboard({
     if (!auditResult) {
       return {
         styleAdoptionRate: 0,
+        tokenAdoptionRate: 0,
         tokenCoverageRate: 0,
         libraryDistribution: {},
         topStyles: [],
@@ -399,6 +400,7 @@ export default function AnalyticsDashboard({
       // StyleGovernanceAuditResult format
       const result = auditResult as StyleGovernanceAuditResult;
       const styleAdoptionRate = result.metrics.styleAdoptionRate || 0;
+      const tokenAdoptionRate = result.metrics.tokenAdoptionRate || 0;
       const tokenCoverageRate = result.metrics.tokenCoverageRate || 0;
 
       // Build library distribution from libraries array
@@ -420,6 +422,7 @@ export default function AnalyticsDashboard({
 
       return {
         styleAdoptionRate,
+        tokenAdoptionRate,
         tokenCoverageRate,
         libraryDistribution,
         topStyles,
@@ -436,7 +439,9 @@ export default function AnalyticsDashboard({
       const styleAdoptionRate =
         textLayers.length > 0 ? (styledLayers.length / textLayers.length) * 100 : 0;
 
-      const tokenCoverageRate = result.tokenAdoptionRate || 0;
+      const tokenAdoptionRate = result.tokenAdoptionRate || 0;
+      // Note: Legacy format doesn't have tokenCoverageRate, use 0 as default
+      const tokenCoverageRate = 0;
 
       const libraryDistribution: Record<string, number> = {};
       textLayers.forEach((layer: any) => {
@@ -475,6 +480,7 @@ export default function AnalyticsDashboard({
 
       return {
         styleAdoptionRate,
+        tokenAdoptionRate,
         tokenCoverageRate,
         libraryDistribution,
         topStyles,
@@ -595,6 +601,37 @@ export default function AnalyticsDashboard({
                 }
               />
 
+              {/* Token Adoption Rate
+               * Definition: Percentage of text layers in the document that use design tokens
+               * Formula: (Number of layers using tokens / Total text layers) × 100%
+               * Example: If 40 of 100 text layers use tokens, Token Adoption = 40%
+               *
+               * NOTE: This is different from "Token Coverage" which measures which tokens are used
+               * - Token Adoption (layer-centric): "Of the layers we have, how many use tokens?"
+               * - Token Coverage (token-centric): "Of the tokens we have, how many are used?"
+               *
+               * Health indicators:
+               * - 80%+ (success): Excellent token integration across document
+               * - 40-80% (warning): Moderate adoption, opportunity for more token usage
+               * - <40% (danger): Low adoption, token system under-utilized
+               *
+               * See spec.md "Metrics Definitions" section for full documentation
+               */}
+              <MetricCard
+                label="Token Adoption Rate"
+                value={metrics.tokenAdoptionRate}
+                suffix="%"
+                decimals={1}
+                icon="🏷️"
+                variant={
+                  metrics.tokenAdoptionRate >= 80
+                    ? 'success'
+                    : metrics.tokenAdoptionRate >= 40
+                      ? 'warning'
+                      : 'danger'
+                }
+              />
+
               {/* Token Coverage
                * Definition: Percentage of available design tokens that are actively used in at least one text layer
                * Formula: (Number of unique tokens used / Total number of tokens) × 100%
@@ -616,7 +653,7 @@ export default function AnalyticsDashboard({
                 value={metrics.tokenCoverageRate}
                 suffix="%"
                 decimals={1}
-                icon="🏷️"
+                icon="🎯"
                 variant={
                   metrics.tokenCoverageRate >= 60
                     ? 'success'

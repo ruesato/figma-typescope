@@ -362,8 +362,22 @@ function calculateAuditMetrics(
     (l) => l.assignmentStatus !== 'unstyled' && l.tokens && l.tokens.length > 0
   ).length;
   const totalTokenUsages = layers.reduce((sum, l) => sum + (l.tokens?.length || 0), 0);
-  const tokenCoverageRate =
+
+  // Token Adoption Rate: % of layers using tokens
+  const tokenAdoptionRate =
     layers.length > 0 ? Math.round((layersUsingTokens / layers.length) * 100) : 0;
+
+  // Token Coverage Rate: % of tokens that are actually used
+  const usedTokenIds = new Set<string>();
+  for (const layer of layers) {
+    if (layer.tokens) {
+      for (const binding of layer.tokens) {
+        usedTokenIds.add(binding.tokenId);
+      }
+    }
+  }
+  const tokenCoverageRate =
+    _tokens.length > 0 ? Math.round((usedTokenIds.size / _tokens.length) * 100) : 0;
 
   // Calculate top styles by usage (from layer assignments)
   const styleUsageMap = new Map<string, number>();
@@ -391,6 +405,7 @@ function calculateAuditMetrics(
     partiallyStyledCount,
     unstyledCount,
     libraryDistribution: { Local: styledCount }, // Simplified
+    tokenAdoptionRate,
     tokenCoverageRate,
     tokenUsageCount: totalTokenUsages,
     mixedUsageCount: layersWithBothStylesAndTokens,
