@@ -185,15 +185,22 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
             for (const variable of libraryVariables) {
               try {
                 // LibraryVariable has a 'key' property, not 'id'
-                // Use the variable key as the unique identifier
+                // The key format is: "libraryId/collectionId/variableId"
+                // When bound to layers, boundVariables uses the actual variableId
                 const variableKey = variable.key;
 
-                if (!tokenMap.has(variableKey)) {
+                // Extract the actual variable ID from the key (last segment)
+                const keyParts = variableKey.split('/');
+                const actualVariableId = keyParts[keyParts.length - 1]; // e.g., "VariableID:123:456"
+
+                // Check if we've already processed this variable (by either key or ID)
+                if (!tokenMap.has(variableKey) && !tokenMap.has(actualVariableId)) {
                   // Debug logging for first few tokens to see structure
                   if (tokenMap.size < 10) {
                     console.log(`[TokenDetection] Processing library variable:`, {
                       name: variable.name,
                       key: variable.key,
+                      actualVariableId: actualVariableId,
                       resolvedType: variable.resolvedType,
                     });
                   }
@@ -209,9 +216,9 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                   // LibraryVariable has limited data - we only have name, key, and resolvedType
                   // We don't have access to the actual value without importing it
                   const token: DesignToken = {
-                    id: variableKey, // Use key as ID for library variables
+                    id: actualVariableId, // Use the actual variable ID (for binding lookups)
                     name: variable.name,
-                    key: variableKey,
+                    key: variableKey, // Keep the full key for reference
                     type: tokenType,
                     resolvedType: tokenType,
                     currentValue: '', // Placeholder - library variables don't expose values directly
@@ -228,7 +235,10 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                     layerIds: [],
                     propertyTypes: [],
                   };
-                  // Store by variable key for lookups
+
+                  // Store by BOTH the variable ID (for binding lookups) AND the key (for reference)
+                  tokenMap.set(actualVariableId, token);
+                  // Also store by key for backwards compatibility
                   tokenMap.set(variableKey, token);
                 }
               } catch (error) {
