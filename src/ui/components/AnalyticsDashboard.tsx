@@ -595,7 +595,22 @@ export default function AnalyticsDashboard({
                 }
               />
 
-              {/* Token Coverage */}
+              {/* Token Coverage
+               * Definition: Percentage of available design tokens that are actively used in at least one text layer
+               * Formula: (Number of unique tokens used / Total number of tokens) × 100%
+               * Example: If 30 of your 50 design tokens are used, Token Coverage = 60%
+               *
+               * NOTE: This is different from "Token Adoption" which measures % of layers using tokens
+               * - Token Coverage (token-centric): "Of the tokens we have, how many are used?"
+               * - Token Adoption (layer-centric): "Of the layers we have, how many use tokens?"
+               *
+               * Health indicators:
+               * - 60%+ (success): Good token utilization, system is well-integrated
+               * - 30-60% (warning): Moderate coverage, consider consolidating unused tokens
+               * - <30% (danger): Low coverage, token system may need review
+               *
+               * See spec.md "Metrics Definitions" section for full documentation
+               */}
               <MetricCard
                 label="Token Coverage"
                 value={metrics.tokenCoverageRate}
