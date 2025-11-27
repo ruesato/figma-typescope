@@ -621,10 +621,24 @@ export interface AuditMetrics {
   // Library Distribution
   libraryDistribution: Record<string, number>; // Library name → layer count
 
-  // Token Metrics
+  // Token Metrics - Rates
   tokenAdoptionRate: number; // % of layers using tokens (0-100)
   tokenCoverageRate: number; // % of design tokens that are actively used (0-100)
-  tokenUsageCount: number; // Total token usages across all layers
+
+  // Token Metrics - Counts
+  totalTokenCount: number; // Total available tokens from all sources
+  uniqueTokensUsed: number; // Unique tokens actually referenced in layers
+  unusedTokenCount: number; // Tokens available but not used
+  totalTokenBindings: number; // Total token applications across all layers
+  tokensByCollection: Record<string, number>; // Count of tokens per collection/library
+
+  // Element Metrics
+  elementCount: number; // Total text layers in document
+  elementsWithTokens: number; // Text layers using at least one token
+  elementsWithoutTokens: number; // Text layers without any tokens
+
+  // Additional
+  tokenUsageCount: number; // Total token usages across all layers (deprecated, use totalTokenBindings)
   mixedUsageCount: number; // Layers with both style and tokens
 
   // Top Styles

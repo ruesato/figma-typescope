@@ -375,6 +375,237 @@ function UsageComparisonCard({
  * />
  * ```
  */
+
+/**
+ * Token Inventory Section Component
+ * Displays total token count and breakdown by collection
+ */
+function TokenInventorySection({
+  totalTokenCount,
+  tokensByCollection,
+  isLoading = false,
+}: {
+  totalTokenCount: number;
+  tokensByCollection: Record<string, number>;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
+        <div className="h-6 bg-figma-border rounded w-32 mb-4"></div>
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-4 bg-figma-border rounded w-40"></div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const collections = Object.entries(tokensByCollection).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div
+      className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
+      style={{
+        animation: 'fadeInScale 0.4s ease-out 0.2s forwards',
+        opacity: 0,
+      }}
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xl">🎨</span>
+        <h3 className="text-sm font-semibold text-figma-text">Token Inventory</h3>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
+          <span className="text-xs text-figma-text-secondary">Total Tokens:</span>
+          <span className="text-sm font-semibold text-figma-text">{totalTokenCount}</span>
+        </div>
+
+        {collections.length > 0 && (
+          <>
+            <div className="text-xs text-figma-text-secondary font-medium mt-3 mb-2">
+              By Collection:
+            </div>
+            <div className="space-y-2">
+              {collections.map(([collectionName, count]) => (
+                <div
+                  key={collectionName}
+                  className="flex justify-between items-center p-2 bg-figma-bg rounded text-xs"
+                >
+                  <span className="text-figma-text-secondary">{collectionName}</span>
+                  <span className="text-figma-text font-medium">{count}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Element Coverage Section Component
+ * Displays breakdown of layers with/without tokens
+ */
+function ElementCoverageSection({
+  elementCount,
+  elementsWithTokens,
+  elementsWithoutTokens,
+  isLoading = false,
+}: {
+  elementCount: number;
+  elementsWithTokens: number;
+  elementsWithoutTokens: number;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
+        <div className="h-6 bg-figma-border rounded w-32 mb-4"></div>
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-4 bg-figma-border rounded w-40"></div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const withPercent =
+    elementCount > 0 ? ((elementsWithTokens / elementCount) * 100).toFixed(1) : '0';
+
+  return (
+    <div
+      className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
+      style={{
+        animation: 'fadeInScale 0.4s ease-out 0.3s forwards',
+        opacity: 0,
+      }}
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xl">📑</span>
+        <h3 className="text-sm font-semibold text-figma-text">Text Layer Coverage</h3>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
+          <span className="text-xs text-figma-text-secondary">Total Elements:</span>
+          <span className="text-sm font-semibold text-figma-text">
+            {elementCount.toLocaleString()}
+          </span>
+        </div>
+
+        <div className="flex justify-between items-center p-2 bg-green-500/10 rounded border border-green-500/20">
+          <span className="text-xs text-figma-text-secondary">With Tokens:</span>
+          <span className="text-sm font-semibold text-green-600">
+            {elementsWithTokens.toLocaleString()} ({withPercent}%)
+          </span>
+        </div>
+
+        <div className="flex justify-between items-center p-2 bg-red-500/10 rounded border border-red-500/20">
+          <span className="text-xs text-figma-text-secondary">Without Tokens:</span>
+          <span className="text-sm font-semibold text-red-600">
+            {elementsWithoutTokens.toLocaleString()} ({(100 - parseFloat(withPercent)).toFixed(1)}%)
+          </span>
+        </div>
+
+        {/* Simple bar visualization */}
+        <div className="mt-3 pt-3 border-t border-figma-border">
+          <div className="flex h-2 rounded overflow-hidden gap-0.5 bg-figma-bg">
+            <div className="bg-green-500" style={{ width: `${withPercent}%` }}></div>
+            <div
+              className="bg-red-500"
+              style={{ width: `${100 - parseFloat(withPercent)}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Token Usage Depth Section Component
+ * Displays token binding counts and unused tokens
+ */
+function TokenUsageDepthSection({
+  totalTokenBindings,
+  elementsWithTokens,
+  uniqueTokensUsed,
+  totalTokenCount,
+  unusedTokenCount,
+  isLoading = false,
+}: {
+  totalTokenBindings: number;
+  elementsWithTokens: number;
+  uniqueTokensUsed: number;
+  totalTokenCount: number;
+  unusedTokenCount: number;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
+        <div className="h-6 bg-figma-border rounded w-32 mb-4"></div>
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-4 bg-figma-border rounded w-40"></div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const avgBindingsPerLayer =
+    elementsWithTokens > 0 ? (totalTokenBindings / elementsWithTokens).toFixed(1) : '0';
+  const coveragePercent =
+    totalTokenCount > 0 ? ((uniqueTokensUsed / totalTokenCount) * 100).toFixed(1) : '0';
+
+  return (
+    <div
+      className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
+      style={{
+        animation: 'fadeInScale 0.4s ease-out 0.4s forwards',
+        opacity: 0,
+      }}
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xl">🔗</span>
+        <h3 className="text-sm font-semibold text-figma-text">Token Usage Depth</h3>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
+          <span className="text-xs text-figma-text-secondary">Total Bindings:</span>
+          <span className="text-sm font-semibold text-figma-text">
+            {totalTokenBindings.toLocaleString()}
+            <span className="text-xs text-figma-text-tertiary ml-1">
+              ({avgBindingsPerLayer} per layer w/ tokens)
+            </span>
+          </span>
+        </div>
+
+        <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
+          <span className="text-xs text-figma-text-secondary">Unique Tokens Used:</span>
+          <span className="text-sm font-semibold text-figma-text">
+            {uniqueTokensUsed} of {totalTokenCount} ({coveragePercent}%)
+          </span>
+        </div>
+
+        {unusedTokenCount > 0 && (
+          <div className="flex justify-between items-center p-2 bg-yellow-500/10 rounded border border-yellow-500/20">
+            <span className="text-xs text-figma-text-secondary">Unused Tokens:</span>
+            <span className="text-sm font-semibold text-yellow-700">{unusedTokenCount}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsDashboard({
   auditResult,
   isLoading = false,
@@ -390,6 +621,14 @@ export default function AnalyticsDashboard({
         libraryDistribution: {},
         topStyles: [],
         mixedUsageCount: 0,
+        totalTokenCount: 0,
+        uniqueTokensUsed: 0,
+        unusedTokenCount: 0,
+        totalTokenBindings: 0,
+        tokensByCollection: {},
+        elementCount: 0,
+        elementsWithTokens: 0,
+        elementsWithoutTokens: 0,
       };
     }
 
@@ -399,9 +638,18 @@ export default function AnalyticsDashboard({
     if (isStyleGovernanceResult) {
       // StyleGovernanceAuditResult format
       const result = auditResult as StyleGovernanceAuditResult;
-      const styleAdoptionRate = result.metrics.styleAdoptionRate || 0;
-      const tokenAdoptionRate = result.metrics.tokenAdoptionRate || 0;
-      const tokenCoverageRate = result.metrics.tokenCoverageRate || 0;
+      const metrics = result.metrics as any;
+      const styleAdoptionRate = metrics.styleAdoptionRate || 0;
+      const tokenAdoptionRate = metrics.tokenAdoptionRate || 0;
+      const tokenCoverageRate = metrics.tokenCoverageRate || 0;
+      const totalTokenCount = metrics.totalTokenCount || 0;
+      const uniqueTokensUsed = metrics.uniqueTokensUsed || 0;
+      const unusedTokenCount = metrics.unusedTokenCount || 0;
+      const totalTokenBindings = metrics.totalTokenBindings || 0;
+      const tokensByCollection = metrics.tokensByCollection || {};
+      const elementCount = metrics.elementCount || 0;
+      const elementsWithTokens = metrics.elementsWithTokens || 0;
+      const elementsWithoutTokens = metrics.elementsWithoutTokens || 0;
 
       // Build library distribution from libraries array
       const libraryDistribution: Record<string, number> = {};
@@ -427,6 +675,14 @@ export default function AnalyticsDashboard({
         libraryDistribution,
         topStyles,
         mixedUsageCount,
+        totalTokenCount,
+        uniqueTokensUsed,
+        unusedTokenCount,
+        totalTokenBindings,
+        tokensByCollection,
+        elementCount,
+        elementsWithTokens,
+        elementsWithoutTokens,
       };
     } else {
       // Legacy AuditResult format
@@ -485,6 +741,18 @@ export default function AnalyticsDashboard({
         libraryDistribution,
         topStyles,
         mixedUsageCount,
+        totalTokenCount: 0,
+        uniqueTokensUsed: 0,
+        unusedTokenCount: 0,
+        totalTokenBindings: 0,
+        tokensByCollection: {},
+        elementCount: textLayers.length,
+        elementsWithTokens: textLayers.filter(
+          (layer: any) => layer.tokens && layer.tokens.length > 0
+        ).length,
+        elementsWithoutTokens: textLayers.filter(
+          (layer: any) => !layer.tokens || layer.tokens.length === 0
+        ).length,
       };
     }
   }, [auditResult]);
@@ -735,6 +1003,34 @@ export default function AnalyticsDashboard({
               />
             </div>
           </div>
+        </div>
+
+        {/* Token Metrics Details - New Sections */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Token Inventory */}
+          <TokenInventorySection
+            totalTokenCount={metrics.totalTokenCount}
+            tokensByCollection={metrics.tokensByCollection}
+            isLoading={isLoading}
+          />
+
+          {/* Element Coverage */}
+          <ElementCoverageSection
+            elementCount={metrics.elementCount}
+            elementsWithTokens={metrics.elementsWithTokens}
+            elementsWithoutTokens={metrics.elementsWithoutTokens}
+            isLoading={isLoading}
+          />
+
+          {/* Token Usage Depth */}
+          <TokenUsageDepthSection
+            totalTokenBindings={metrics.totalTokenBindings}
+            elementsWithTokens={metrics.elementsWithTokens}
+            uniqueTokensUsed={metrics.uniqueTokensUsed}
+            totalTokenCount={metrics.totalTokenCount}
+            unusedTokenCount={metrics.unusedTokenCount}
+            isLoading={isLoading}
+          />
         </div>
 
         {/* Footer Info */}
