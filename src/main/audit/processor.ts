@@ -356,19 +356,75 @@ function calculateAuditMetrics(
   const fullyStyledCount = styledCount - partiallyStyledCount;
   const styleAdoptionRate = layers.length > 0 ? Math.round((styledCount / layers.length) * 100) : 0;
 
-  // Token metrics
-  const layersUsingTokens = layers.filter((l) => l.tokens && l.tokens.length > 0).length;
+  // Token properties that can be bound
+  const TOKEN_PROPERTIES = ['fills', 'fontFamily', 'fontSize', 'lineHeight', 'letterSpacing'];
+  const TOTAL_TOKEN_PROPERTIES = TOKEN_PROPERTIES.length; // 5
+
+  // Categorize layers by token coverage level
+  const fullTokenCoverageLayers: TextLayer[] = [];
+  const partialTokenCoverageLayers: TextLayer[] = [];
+  const noTokenCoverageLayers: TextLayer[] = [];
+
+  for (const layer of layers) {
+    // Count unique properties that have tokens (not total bindings)
+    const uniqueProperties = new Set(layer.tokens?.map((t) => t.property) || []);
+    const propertyCount = uniqueProperties.size;
+
+    // Debug first 3 layers
+    if (layers.indexOf(layer) < 3) {
+      console.log(`[TokenCoverage] Layer "${layer.name}":`, {
+        tokenBindings: layer.tokens?.length || 0,
+        properties: Array.from(uniqueProperties),
+        propertyCount,
+      });
+    }
+
+    if (propertyCount === 0) {
+      noTokenCoverageLayers.push(layer);
+    } else if (propertyCount >= TOTAL_TOKEN_PROPERTIES) {
+      // Has all 5 properties using tokens = full coverage
+      fullTokenCoverageLayers.push(layer);
+    } else {
+      // Has 1-4 properties using tokens = partial coverage
+      partialTokenCoverageLayers.push(layer);
+    }
+  }
+
+  // Coverage counts and rates
+  const fullTokenCoverageCount = fullTokenCoverageLayers.length;
+  const fullTokenCoverageRate =
+    layers.length > 0 ? Math.round((fullTokenCoverageCount / layers.length) * 100) : 0;
+
+  const partialTokenCoverageCount = partialTokenCoverageLayers.length;
+  const partialTokenCoverageRate =
+    layers.length > 0 ? Math.round((partialTokenCoverageCount / layers.length) * 100) : 0;
+
+  const noTokenCoverageCount = noTokenCoverageLayers.length;
+  const noTokenCoverageRate =
+    layers.length > 0 ? Math.round((noTokenCoverageCount / layers.length) * 100) : 0;
+
+  // Debug logging
+  console.log('[TokenCoverage] Breakdown:', {
+    total: layers.length,
+    full: fullTokenCoverageCount,
+    partial: partialTokenCoverageCount,
+    none: noTokenCoverageCount,
+    sum: fullTokenCoverageCount + partialTokenCoverageCount + noTokenCoverageCount,
+  });
+
+  // Legacy token metrics (kept for backward compatibility)
+  const layersUsingTokens = fullTokenCoverageCount + partialTokenCoverageCount;
   const layersWithBothStylesAndTokens = layers.filter(
     (l) => l.assignmentStatus !== 'unstyled' && l.tokens && l.tokens.length > 0
   ).length;
   const totalTokenUsages = layers.reduce((sum, l) => sum + (l.tokens?.length || 0), 0);
 
-  // Element counts
+  // Element counts (legacy)
   const elementCount = layers.length;
   const elementsWithTokens = layersUsingTokens;
   const elementsWithoutTokens = elementCount - elementsWithTokens;
 
-  // Token Adoption Rate: % of layers using tokens
+  // Token Adoption Rate: % of layers using tokens (at least 1)
   const tokenAdoptionRate =
     layers.length > 0 ? Math.round((layersUsingTokens / layers.length) * 100) : 0;
 
@@ -433,6 +489,12 @@ function calculateAuditMetrics(
     elementCount,
     elementsWithTokens,
     elementsWithoutTokens,
+    fullTokenCoverageCount,
+    fullTokenCoverageRate,
+    partialTokenCoverageCount,
+    partialTokenCoverageRate,
+    noTokenCoverageCount,
+    noTokenCoverageRate,
     tokenUsageCount: totalTokenUsages,
     mixedUsageCount: layersWithBothStylesAndTokens,
     topStyles,

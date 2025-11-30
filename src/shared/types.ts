@@ -632,10 +632,18 @@ export interface AuditMetrics {
   totalTokenBindings: number; // Total token applications across all layers
   tokensByCollection: Record<string, number>; // Count of tokens per collection/library
 
-  // Element Metrics
+  // Element Metrics (Legacy - kept for backward compatibility)
   elementCount: number; // Total text layers in document
   elementsWithTokens: number; // Text layers using at least one token
   elementsWithoutTokens: number; // Text layers without any tokens
+
+  // Token Coverage Breakdown (by property coverage level)
+  fullTokenCoverageCount: number; // Layers with all 5 properties using tokens
+  fullTokenCoverageRate: number; // % of layers with full coverage (0-100)
+  partialTokenCoverageCount: number; // Layers with 1-4 properties using tokens
+  partialTokenCoverageRate: number; // % of layers with partial coverage (0-100)
+  noTokenCoverageCount: number; // Layers with 0 properties using tokens
+  noTokenCoverageRate: number; // % of layers with no tokens (0-100)
 
   // Additional
   tokenUsageCount: number; // Total token usages across all layers (deprecated, use totalTokenBindings)

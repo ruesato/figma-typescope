@@ -447,18 +447,26 @@ function TokenInventorySection({
 }
 
 /**
- * Element Coverage Section Component
- * Displays breakdown of layers with/without tokens
+ * Token Coverage Breakdown Section Component
+ * Shows layers categorized by token property coverage (full, partial, none)
  */
-function ElementCoverageSection({
+function TokenCoverageBreakdownSection({
   elementCount,
-  elementsWithTokens,
-  elementsWithoutTokens,
+  fullTokenCoverageCount,
+  fullTokenCoverageRate,
+  partialTokenCoverageCount,
+  partialTokenCoverageRate,
+  noTokenCoverageCount,
+  noTokenCoverageRate,
   isLoading = false,
 }: {
   elementCount: number;
-  elementsWithTokens: number;
-  elementsWithoutTokens: number;
+  fullTokenCoverageCount: number;
+  fullTokenCoverageRate: number;
+  partialTokenCoverageCount: number;
+  partialTokenCoverageRate: number;
+  noTokenCoverageCount: number;
+  noTokenCoverageRate: number;
   isLoading?: boolean;
 }) {
   if (isLoading) {
@@ -466,16 +474,13 @@ function ElementCoverageSection({
       <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
         <div className="h-6 bg-figma-border rounded w-32 mb-4"></div>
         <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-4 bg-figma-border rounded w-40"></div>
           ))}
         </div>
       </div>
     );
   }
-
-  const withPercent =
-    elementCount > 0 ? ((elementsWithTokens / elementCount) * 100).toFixed(1) : '0';
 
   return (
     <div
@@ -486,40 +491,71 @@ function ElementCoverageSection({
       }}
     >
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-xl">📑</span>
-        <h3 className="text-sm font-semibold text-figma-text">Text Layer Coverage</h3>
+        <span className="text-xl">📊</span>
+        <h3 className="text-sm font-semibold text-figma-text">Token Coverage by Layer</h3>
       </div>
 
       <div className="space-y-3">
         <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
-          <span className="text-xs text-figma-text-secondary">Total Elements:</span>
+          <span className="text-xs text-figma-text-secondary">Total Text Layers:</span>
           <span className="text-sm font-semibold text-figma-text">
             {elementCount.toLocaleString()}
           </span>
         </div>
 
         <div className="flex justify-between items-center p-2 bg-green-500/10 rounded border border-green-500/20">
-          <span className="text-xs text-figma-text-secondary">With Tokens:</span>
+          <div className="flex flex-col">
+            <span className="text-xs text-figma-text-secondary">Full Coverage</span>
+            <span className="text-[10px] text-figma-text-tertiary">All 5 properties</span>
+          </div>
           <span className="text-sm font-semibold text-green-600">
-            {elementsWithTokens.toLocaleString()} ({withPercent}%)
+            {fullTokenCoverageCount.toLocaleString()} ({fullTokenCoverageRate}%)
+          </span>
+        </div>
+
+        <div className="flex justify-between items-center p-2 bg-yellow-500/10 rounded border border-yellow-500/20">
+          <div className="flex flex-col">
+            <span className="text-xs text-figma-text-secondary">Partial Coverage</span>
+            <span className="text-[10px] text-figma-text-tertiary">1-4 properties</span>
+          </div>
+          <span className="text-sm font-semibold text-yellow-600">
+            {partialTokenCoverageCount.toLocaleString()} ({partialTokenCoverageRate}%)
           </span>
         </div>
 
         <div className="flex justify-between items-center p-2 bg-red-500/10 rounded border border-red-500/20">
-          <span className="text-xs text-figma-text-secondary">Without Tokens:</span>
+          <div className="flex flex-col">
+            <span className="text-xs text-figma-text-secondary">No Coverage</span>
+            <span className="text-[10px] text-figma-text-tertiary">0 properties</span>
+          </div>
           <span className="text-sm font-semibold text-red-600">
-            {elementsWithoutTokens.toLocaleString()} ({(100 - parseFloat(withPercent)).toFixed(1)}%)
+            {noTokenCoverageCount.toLocaleString()} ({noTokenCoverageRate}%)
           </span>
         </div>
 
-        {/* Simple bar visualization */}
+        {/* Stacked bar visualization */}
         <div className="mt-3 pt-3 border-t border-figma-border">
           <div className="flex h-2 rounded overflow-hidden gap-0.5 bg-figma-bg">
-            <div className="bg-green-500" style={{ width: `${withPercent}%` }}></div>
             <div
-              className="bg-red-500"
-              style={{ width: `${100 - parseFloat(withPercent)}%` }}
+              className="bg-green-500 transition-all duration-300"
+              style={{ width: `${fullTokenCoverageRate}%` }}
+              title={`Full coverage: ${fullTokenCoverageRate}%`}
             ></div>
+            <div
+              className="bg-yellow-500 transition-all duration-300"
+              style={{ width: `${partialTokenCoverageRate}%` }}
+              title={`Partial coverage: ${partialTokenCoverageRate}%`}
+            ></div>
+            <div
+              className="bg-red-500 transition-all duration-300"
+              style={{ width: `${noTokenCoverageRate}%` }}
+              title={`No coverage: ${noTokenCoverageRate}%`}
+            ></div>
+          </div>
+          <div className="flex justify-between mt-2 text-[10px] text-figma-text-tertiary">
+            <span>Full</span>
+            <span>Partial</span>
+            <span>None</span>
           </div>
         </div>
       </div>
@@ -683,6 +719,12 @@ export default function AnalyticsDashboard({
         elementCount,
         elementsWithTokens,
         elementsWithoutTokens,
+        fullTokenCoverageCount: metrics.fullTokenCoverageCount || 0,
+        fullTokenCoverageRate: metrics.fullTokenCoverageRate || 0,
+        partialTokenCoverageCount: metrics.partialTokenCoverageCount || 0,
+        partialTokenCoverageRate: metrics.partialTokenCoverageRate || 0,
+        noTokenCoverageCount: metrics.noTokenCoverageCount || 0,
+        noTokenCoverageRate: metrics.noTokenCoverageRate || 0,
       };
     } else {
       // Legacy AuditResult format
@@ -1014,11 +1056,17 @@ export default function AnalyticsDashboard({
             isLoading={isLoading}
           />
 
-          {/* Element Coverage */}
-          <ElementCoverageSection
+          {/* Token Coverage Breakdown */}
+          <TokenCoverageBreakdownSection
             elementCount={metrics.elementCount}
-            elementsWithTokens={metrics.elementsWithTokens}
-            elementsWithoutTokens={metrics.elementsWithoutTokens}
+            fullTokenCoverageCount={(metrics as any).fullTokenCoverageCount || 0}
+            fullTokenCoverageRate={(metrics as any).fullTokenCoverageRate || 0}
+            partialTokenCoverageCount={(metrics as any).partialTokenCoverageCount || 0}
+            partialTokenCoverageRate={(metrics as any).partialTokenCoverageRate || 0}
+            noTokenCoverageCount={
+              (metrics as any).noTokenCoverageCount || metrics.elementsWithoutTokens || 0
+            }
+            noTokenCoverageRate={(metrics as any).noTokenCoverageRate || 0}
             isLoading={isLoading}
           />
 
