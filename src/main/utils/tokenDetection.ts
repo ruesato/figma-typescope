@@ -170,6 +170,17 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
           await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
         console.log(`[TokenDetection] Found ${libraryCollections.length} library collections`);
 
+        // Log collection details
+        if (libraryCollections.length > 0) {
+          console.log(
+            '[TokenDetection] Library collections:',
+            libraryCollections.map((c: any) => ({
+              name: c.name,
+              key: c.key,
+            }))
+          );
+        }
+
         for (const libraryCollection of libraryCollections) {
           try {
             console.log(
@@ -182,29 +193,33 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
               `[TokenDetection] Found ${libraryVariables.length} variables in collection "${libraryCollection.name}"`
             );
 
+            // Log first variable structure to understand the key format
+            if (libraryVariables.length > 0) {
+              console.log('[TokenDetection] First library variable structure:', {
+                name: libraryVariables[0].name,
+                key: libraryVariables[0].key,
+                resolvedType: libraryVariables[0].resolvedType,
+              });
+            }
+
             for (const variable of libraryVariables) {
               try {
-                // LibraryVariable has a 'key' property, not 'id'
-                // The key format is: "libraryId/collectionId/variableId"
-                // When bound to layers, boundVariables uses the actual variableId
+                // LibraryVariable has a 'key' property in format: "S:libraryId,collectionId:variableId"
+                // But boundVariables binding.id uses format: "VariableID:hash/collectionId:varId"
+                // We need to use variable.key as the primary ID since that's what we have access to
                 const variableKey = variable.key;
 
-                // Extract the actual variable ID from the key (last segment)
-                const keyParts = variableKey.split('/');
-                const actualVariableId = keyParts[keyParts.length - 1]; // e.g., "VariableID:123:456"
+                // Debug logging for first 5 library tokens to understand key structure
+                if (tokenMap.size < 5) {
+                  console.log(`[TokenDetection] Library variable key structure:`, {
+                    name: variable.name,
+                    key: variable.key,
+                    resolvedType: variable.resolvedType,
+                  });
+                }
 
-                // Check if we've already processed this variable (by either key or ID)
-                if (!tokenMap.has(variableKey) && !tokenMap.has(actualVariableId)) {
-                  // Debug logging for first few tokens to see structure
-                  if (tokenMap.size < 10) {
-                    console.log(`[TokenDetection] Processing library variable:`, {
-                      name: variable.name,
-                      key: variable.key,
-                      actualVariableId: actualVariableId,
-                      resolvedType: variable.resolvedType,
-                    });
-                  }
-
+                // Check if we've already processed this variable
+                if (!tokenMap.has(variableKey)) {
                   const tokenType = variable.resolvedType
                     ? (variable.resolvedType.toLowerCase() as
                         | 'color'
@@ -216,9 +231,9 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                   // LibraryVariable has limited data - we only have name, key, and resolvedType
                   // We don't have access to the actual value without importing it
                   const token: DesignToken = {
-                    id: actualVariableId, // Use the actual variable ID (for binding lookups)
+                    id: variableKey, // Use the library key as the ID
                     name: variable.name,
-                    key: variableKey, // Keep the full key for reference
+                    key: variableKey,
                     type: tokenType,
                     resolvedType: tokenType,
                     currentValue: '', // Placeholder - library variables don't expose values directly
@@ -236,10 +251,23 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                     propertyTypes: [],
                   };
 
-                  // Store by BOTH the variable ID (for binding lookups) AND the key (for reference)
-                  tokenMap.set(actualVariableId, token);
-                  // Also store by key for backwards compatibility
+                  // Store by the library key
                   tokenMap.set(variableKey, token);
+
+                  // ALSO store by the potential binding ID format
+                  // Binding format observed: VariableID:hash/collectionId:varId
+                  // Try using the collection key as the hash part
+                  const bindingIdFormat = `VariableID:${libraryCollection.key}/${variableKey}`;
+                  tokenMap.set(bindingIdFormat, token);
+
+                  if (tokenMap.size <= 6) {
+                    console.log('[TokenDetection] Stored library token with keys:', {
+                      tokenName: token.name,
+                      variableKey,
+                      bindingIdFormat,
+                      collectionKey: libraryCollection.key,
+                    });
+                  }
                 }
               } catch (error) {
                 console.warn(`Error processing library variable ${variable?.name}:`, error);
@@ -275,7 +303,10 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
  * @param tokenMap - Map of token IDs to tokens for quick lookup
  * @returns Array of token bindings
  */
-export function detectTokenBindings(node: any, tokenMap: Map<string, DesignToken>): TokenBinding[] {
+export async function detectTokenBindings(
+  node: any,
+  tokenMap: Map<string, DesignToken>
+): Promise<TokenBinding[]> {
   const bindings: TokenBinding[] = [];
 
   try {
@@ -289,7 +320,62 @@ export function detectTokenBindings(node: any, tokenMap: Map<string, DesignToken
 
       for (const binding of bindingsArray) {
         if (binding && typeof binding === 'object' && 'id' in binding) {
-          const token = tokenMap.get(binding.id);
+          const bindingId = binding.id;
+          let token = tokenMap.get(bindingId);
+
+          // If not found in the map, try to fetch it directly from Figma API
+          if (!token) {
+            try {
+              const variable = await figma.variables.getVariableByIdAsync(bindingId);
+              if (variable) {
+                // Successfully fetched the variable - create a token object for it
+                const tokenType = variable.resolvedType
+                  ? (variable.resolvedType.toLowerCase() as
+                      | 'color'
+                      | 'number'
+                      | 'string'
+                      | 'boolean')
+                  : 'string';
+
+                const firstModeId = Object.keys(variable.valuesByMode)[0];
+                const firstValue = variable.valuesByMode[firstModeId];
+
+                token = {
+                  id: bindingId,
+                  name: variable.name,
+                  key: bindingId,
+                  type: tokenType,
+                  resolvedType: tokenType,
+                  currentValue: firstValue,
+                  value: firstValue,
+                  collectionId: variable.variableCollectionId,
+                  collectionName: 'Library', // Placeholder
+                  collections: ['Library'],
+                  modeId: firstModeId,
+                  modeName: 'Default',
+                  valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
+                  modes: {},
+                  isAlias: false,
+                  usageCount: 0,
+                  layerIds: [],
+                  propertyTypes: [],
+                };
+
+                // Cache it for future lookups
+                tokenMap.set(bindingId, token);
+
+                if (tokenMap.size % 50 === 0) {
+                  console.log(
+                    `[TokenDetection] Fetched library variable on-demand: ${variable.name}`
+                  );
+                }
+              }
+            } catch (error) {
+              // Variable not found - might be deleted
+              console.warn(`[TokenDetection] Could not fetch variable ${bindingId}:`, error);
+            }
+          }
+
           if (token) {
             bindings.push({
               property: propertyName as
@@ -370,6 +456,21 @@ export async function integrateTokenUsageIntoLayers(
   // Create a map of token IDs to tokens for quick lookup
   const tokenMap = new Map(tokens.map((t) => [t.id, t]));
 
+  // Debug: Log token count and sample IDs
+  console.log(
+    `[integrateTokenUsageIntoLayers] Total tokens: ${tokens.length}, tokenMap size: ${tokenMap.size}`
+  );
+  const libraryTokens = tokens.filter((t) => !t.id.startsWith('VariableID:') || t.id.includes('/'));
+  console.log(
+    `[integrateTokenUsageIntoLayers] Library tokens (estimated): ${libraryTokens.length}`
+  );
+  if (libraryTokens.length > 0) {
+    console.log(
+      `[integrateTokenUsageIntoLayers] Sample library token IDs:`,
+      libraryTokens.slice(0, 3).map((t) => t.id)
+    );
+  }
+
   // For each layer, detect which tokens it uses
   for (const layer of layers) {
     try {
@@ -377,7 +478,7 @@ export async function integrateTokenUsageIntoLayers(
       const node = await figma.getNodeByIdAsync(layer.id);
       if (node && 'boundVariables' in node) {
         // Detect token bindings on this node
-        layer.tokens = detectTokenBindings(node, tokenMap);
+        layer.tokens = await detectTokenBindings(node, tokenMap);
 
         // Update token usage counts
         for (const binding of layer.tokens) {
