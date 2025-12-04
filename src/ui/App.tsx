@@ -62,8 +62,17 @@ export default function App() {
   const { runStyleAudit, navigateToLayer, replaceStyle, replaceToken } = useMessageHandler();
 
   // Get audit state
-  const { styleGovernanceResult, isAuditing, progress, error, reset, setStyleGovernanceResult } =
-    useAuditState();
+  const {
+    styleGovernanceResult,
+    isAuditing,
+    progress,
+    error,
+    reset,
+    setStyleGovernanceResult,
+    transitionTo,
+    auditState,
+    currentStep,
+  } = useAuditState();
 
   // Calculate badge counts from audit results
   const styleBadgeCount = styleGovernanceResult?.styles.length ?? 0;
@@ -90,11 +99,15 @@ export default function App() {
 
   const handleRunAuditPage = () => {
     reset();
+    // Immediately transition to validating state for instant visual feedback
+    transitionTo('validating');
     runStyleAudit({ includeHiddenLayers: false, includeTokens: true });
   };
 
   const handleRunAuditSelection = () => {
     reset();
+    // Immediately transition to validating state for instant visual feedback
+    transitionTo('validating');
     runStyleAudit({ includeHiddenLayers: false, includeTokens: true });
   };
 
@@ -388,7 +401,11 @@ export default function App() {
           {/* Auditing State */}
           {isAuditing && (
             <div style={{ padding: 'var(--figma-space-md)' }}>
-              <ProgressIndicator progress={progress} message="Analyzing text layers..." />
+              <ProgressIndicator
+                progress={progress}
+                message={currentStep}
+                state={auditState}
+              />
             </div>
           )}
 

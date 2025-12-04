@@ -44,11 +44,13 @@ export interface ProcessorOutput {
  *
  * @param input - Raw scan data and processing options
  * @param isCancelled - Callback to check if processing should be cancelled
+ * @param onProgress - Optional callback to report progress
  * @returns Complete processed data for audit result
  */
 export async function processAuditData(
   input: ProcessorInput,
-  isCancelled?: () => boolean
+  isCancelled?: () => boolean,
+  onProgress?: (progress: number, message: string) => void
 ): Promise<ProcessorOutput> {
   const { textLayers, options } = input;
 
@@ -66,8 +68,11 @@ export async function processAuditData(
   try {
     console.log(`Processing ${textLayers.length} text layers...`);
 
-    // Step 1: Collect all unique style IDs used in the document
-    // This includes both local AND remote (library) styles
+    // Progress: 40-95% (Processing phase)
+
+    // Step 1: Collect all unique style IDs used in the document (40-45%)
+    if (onProgress) onProgress(42, 'Collecting style IDs...');
+
     const usedStyleIds = new Set<string>();
     for (const layer of textLayers) {
       // Scanner stores style ID as 'textStyleId'
@@ -80,7 +85,9 @@ export async function processAuditData(
       `Found ${usedStyleIds.size} unique styles in use (from ${textLayers.length} layers)`
     );
 
-    // Step 2: Fetch metadata for all used styles (local + remote)
+    // Step 2: Fetch metadata for all used styles (45-55%)
+    if (onProgress) onProgress(45, 'Extracting text styles...');
+
     const styles: TextStyle[] = [];
     const libraryMap = await buildLibraryMap(); // Map library keys to names
     console.log(`Library map has ${libraryMap.size} entries`);
@@ -88,6 +95,8 @@ export async function processAuditData(
     let localCount = 0;
     let remoteCount = 0;
     let failedCount = 0;
+    const totalStyles = usedStyleIds.size;
+    let processedStyles = 0;
 
     for (const styleId of usedStyleIds) {
       try {
@@ -107,30 +116,47 @@ export async function processAuditData(
         failedCount++;
         console.warn(`Could not load style ${styleId}:`, error);
       }
+
+      // Update progress every 5 styles or on last style
+      processedStyles++;
+      if (onProgress && (processedStyles % 5 === 0 || processedStyles === totalStyles)) {
+        const progress = 45 + Math.round((processedStyles / totalStyles) * 10);
+        onProgress(progress, `Loading style ${processedStyles} of ${totalStyles}...`);
+      }
     }
     console.log(
       `Loaded ${styles.length} styles: ${localCount} local, ${remoteCount} remote, ${failedCount} failed`
     );
     output.styles = styles;
 
-    // Step 3: Build library sources from all detected styles
+    // Step 3: Build library sources (55-60%)
+    if (onProgress) onProgress(57, 'Resolving library sources...');
     output.libraries = buildLibrarySources(styles);
 
-    // Step 3: Get all available tokens (if enabled)
+    // Step 4: Get all available tokens (60-65%)
     if (options.includeTokens) {
+      if (onProgress) onProgress(62, 'Detecting design tokens...');
       console.log('Detecting design tokens...');
       try {
         const allTokens = await getAllDocumentTokens();
         output.tokens = allTokens;
         console.log(`Found ${allTokens.length} design tokens`);
+        if (onProgress) onProgress(65, `Found ${allTokens.length} design token${allTokens.length !== 1 ? 's' : ''}`);
       } catch (error) {
         console.warn('Error detecting tokens:', error);
         output.tokens = [];
       }
+    } else {
+      if (onProgress) onProgress(65, 'Skipping token detection...');
     }
 
-    // Step 4: Process each text layer in batches to avoid blocking main thread
+    // Step 5: Process each text layer in batches (65-85%)
+    if (onProgress) onProgress(67, 'Processing text layers...');
+
     const BATCH_SIZE = 100; // Process 100 layers at a time
+    let processedLayers = 0;
+    const totalLayers = textLayers.length;
+
     for (let i = 0; i < textLayers.length; i += BATCH_SIZE) {
       // Check for cancellation
       if (isCancelled && isCancelled()) {
@@ -143,26 +169,39 @@ export async function processAuditData(
       const batchResults = await Promise.all(batch.map((layer) => processTextLayer(layer, styles)));
 
       output.layers.push(...batchResults);
+      processedLayers += batchResults.length;
+
+      // Update progress
+      if (onProgress) {
+        const progress = 67 + Math.round((processedLayers / totalLayers) * 18); // 67-85%
+        onProgress(progress, `Processed ${processedLayers} of ${totalLayers} layer${totalLayers !== 1 ? 's' : ''}...`);
+      }
 
       // Yield to the event loop to prevent blocking
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    // Step 5: Integrate token usage into layers
+    // Step 6: Integrate token usage (85-88%)
     if (options.includeTokens && output.tokens.length > 0) {
+      if (onProgress) onProgress(85, 'Integrating token usage...');
       await integrateTokenUsageIntoLayers(output.layers, output.tokens);
     }
 
-    // Step 6: Categorize layers
+    // Step 7: Categorize layers (88-90%)
+    if (onProgress) onProgress(88, 'Categorizing layers...');
     const { styled, unstyled } = categorizeLayers(output.layers);
     output.styledLayers = styled;
     output.unstyledLayers = unstyled;
 
-    // Step 7: Build simple hierarchy
+    // Step 8: Build hierarchy (90-93%)
+    if (onProgress) onProgress(90, 'Building style hierarchy...');
     output.styleHierarchy = buildSimpleHierarchy(output.styles);
 
-    // Step 8: Calculate metrics
+    // Step 9: Calculate metrics (93-95%)
+    if (onProgress) onProgress(93, 'Calculating metrics...');
     output.metrics = calculateAuditMetrics(output.layers, output.styles, output.tokens);
+
+    if (onProgress) onProgress(95, 'Finalizing audit results...');
 
     console.log(
       `Processing complete: ${output.layers.length} layers, ${output.styles.length} styles`

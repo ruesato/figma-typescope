@@ -305,18 +305,48 @@ export class AuditEngine {
     includeTokens?: boolean;
   }): Promise<void> {
     try {
+      // Progress: 0-10% (Validation phase)
+      this.sendMessage({
+        type: 'STYLE_AUDIT_PROGRESS',
+        payload: {
+          state: 'validating',
+          progress: 2,
+          currentStep: 'Checking document structure...',
+        },
+      });
+
       // Check if we can access the document
       if (!figma.currentPage) {
         throw new Error('Cannot access current page');
       }
 
+      this.sendMessage({
+        type: 'STYLE_AUDIT_PROGRESS',
+        payload: {
+          state: 'validating',
+          progress: 5,
+          currentStep: 'Validating page access...',
+        },
+      });
+
       // Count total text layers
       // We'll count from the current page first, then all pages if needed
       let totalTextLayers = 0;
+      let totalPages = 0;
+
+      this.sendMessage({
+        type: 'STYLE_AUDIT_PROGRESS',
+        payload: {
+          state: 'validating',
+          progress: 7,
+          currentStep: 'Counting text layers...',
+        },
+      });
 
       try {
         // Try to access all pages via figma.root
         if (figma.root && figma.root.children) {
+          totalPages = figma.root.children.length;
           for (const page of figma.root.children) {
             // Find all text nodes in this page directly
             // Note: We don't use figma.loadPageAsync as it doesn't exist
@@ -325,11 +355,13 @@ export class AuditEngine {
           }
         } else {
           // Fallback: just use current page
+          totalPages = 1;
           const textNodes = this.findTextNodesInPage(figma.currentPage);
           totalTextLayers = textNodes.length;
         }
       } catch (error) {
         // If we can't access multiple pages, just use current page
+        totalPages = 1;
         const textNodes = this.findTextNodesInPage(figma.currentPage);
         totalTextLayers = textNodes.length;
       }
@@ -348,6 +380,15 @@ export class AuditEngine {
           `Large document detected: ${totalTextLayers.toLocaleString()} text layers. Performance may be impacted.`
         );
       }
+
+      this.sendMessage({
+        type: 'STYLE_AUDIT_PROGRESS',
+        payload: {
+          state: 'validating',
+          progress: 10,
+          currentStep: `Found ${totalTextLayers.toLocaleString()} text layers across ${totalPages} page${totalPages !== 1 ? 's' : ''}`,
+        },
+      });
 
       console.log(
         `Document validation complete: ${totalTextLayers.toLocaleString()} text layers found`
@@ -405,9 +446,28 @@ export class AuditEngine {
       const allTextLayers: any[] = [];
       let totalPages = 0;
 
+      // Progress: 10-40% (Scanning phase)
+      this.sendMessage({
+        type: 'STYLE_AUDIT_PROGRESS',
+        payload: {
+          state: 'scanning',
+          progress: 12,
+          currentStep: 'Discovering pages...',
+        },
+      });
+
       // Scan all pages
       if (figma.root && figma.root.children) {
         totalPages = figma.root.children.length;
+
+        this.sendMessage({
+          type: 'STYLE_AUDIT_PROGRESS',
+          payload: {
+            state: 'scanning',
+            progress: 15,
+            currentStep: `Found ${totalPages} page${totalPages !== 1 ? 's' : ''} to scan`,
+          },
+        });
 
         for (let i = 0; i < figma.root.children.length; i++) {
           const page = figma.root.children[i];
@@ -416,6 +476,18 @@ export class AuditEngine {
           if (this.cancelled) {
             throw new Error('Audit cancelled during scanning');
           }
+
+          // Progress message before scanning page
+          const preProgress = 15 + Math.round((i / totalPages) * 20); // 15-35%
+          this.sendMessage({
+            type: 'STYLE_AUDIT_PROGRESS',
+            payload: {
+              state: 'scanning',
+              progress: preProgress,
+              currentStep: `Scanning page ${i + 1} of ${totalPages}: "${page.name}"`,
+              pagesScanned: i,
+            },
+          });
 
           // Find all text nodes in this page
           const textNodes = this.findTextNodesInPage(page);
@@ -446,20 +518,40 @@ export class AuditEngine {
             }
           }
 
-          // Emit progress update
-          const progress = Math.round(((i + 1) / totalPages) * 50); // Scanning is 50% of total
+          // Progress message after scanning page
+          const postProgress = 15 + Math.round(((i + 1) / totalPages) * 20); // 15-35%
           this.sendMessage({
             type: 'STYLE_AUDIT_PROGRESS',
             payload: {
               state: 'scanning',
-              progress,
-              currentStep: `Scanned page ${i + 1} of ${totalPages} (${textNodes.length} text layers)`,
+              progress: postProgress,
+              currentStep: `Found ${textNodes.length} text layer${textNodes.length !== 1 ? 's' : ''} on "${page.name}"`,
               pagesScanned: i + 1,
             },
           });
         }
+
+        // Building metadata step
+        this.sendMessage({
+          type: 'STYLE_AUDIT_PROGRESS',
+          payload: {
+            state: 'scanning',
+            progress: 37,
+            currentStep: 'Building component hierarchy...',
+          },
+        });
+
       } else {
         // Fallback: just scan current page
+        this.sendMessage({
+          type: 'STYLE_AUDIT_PROGRESS',
+          payload: {
+            state: 'scanning',
+            progress: 20,
+            currentStep: 'Scanning current page...',
+          },
+        });
+
         const textNodes = this.findTextNodesInPage(figma.currentPage);
 
         for (const node of textNodes) {
@@ -487,6 +579,15 @@ export class AuditEngine {
 
         totalPages = 1;
       }
+
+      this.sendMessage({
+        type: 'STYLE_AUDIT_PROGRESS',
+        payload: {
+          state: 'scanning',
+          progress: 40,
+          currentStep: `Scan complete: ${allTextLayers.length} text layer${allTextLayers.length !== 1 ? 's' : ''} collected`,
+        },
+      });
 
       console.log(`Document scanning complete: ${allTextLayers.length} text layers found`);
 
@@ -520,14 +621,25 @@ export class AuditEngine {
 
     try {
       // Process audit data using the processor
-      // Pass a callback that checks if the audit has been cancelled
+      // Pass callbacks for cancellation and progress reporting
       const processed = await processAuditData(
         {
           textLayers,
           totalPages,
           options,
         },
-        () => this.cancelled
+        () => this.cancelled,
+        (progress: number, message: string) => {
+          // Forward progress updates to UI
+          this.sendMessage({
+            type: 'STYLE_AUDIT_PROGRESS',
+            payload: {
+              state: 'processing',
+              progress,
+              currentStep: message,
+            },
+          });
+        }
       );
 
       // Emit final progress update
