@@ -1,10 +1,10 @@
-# Figma Font Audit Pro
+# Typescope
 
 Comprehensive Figma plugin for analyzing font usage, text styles, and typography consistency across your designs.
 
 ## Overview
 
-Figma Font Audit Pro helps design teams maintain typography consistency by providing deep insights into:
+Typescope helps design teams maintain typography consistency by providing deep insights into:
 
 - Font usage across pages and components
 - Text style application and coverage
@@ -97,12 +97,12 @@ pnpm dev
 3. Run **Plugins** → **Development** → **Import plugin from manifest...**
 4. Navigate to this project directory
 5. Select `manifest.json`
-6. Plugin will appear as "Figma Font Audit Pro" in your development plugins
+6. Plugin will appear as "Typescope" in your development plugins
 
 ### 4. Run the Plugin
 
-- Right-click in Figma → **Plugins** → **Development** → **Figma Font Audit Pro**
-- Or use Quick Actions (⌘/) and search for "Figma Font Audit Pro"
+- Right-click in Figma → **Plugins** → **Development** → **Typescope**
+- Or use Quick Actions (⌘/) and search for "Typescope"
 
 ## Usage
 
@@ -141,7 +141,7 @@ pnpm dev
 ## Project Structure
 
 ````
-figma-fontscope/
+figma-typescope/
 ├── src/
 │   ├── main/                   # Figma sandbox context (plugin main code)
 │   │   ├── code.ts            # Main entry point, message handling

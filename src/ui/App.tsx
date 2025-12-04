@@ -508,17 +508,37 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Tokens Tab */}
+                {/* Tokens Tab - 50/50 Split Layout */}
                 {activeTab === 'tokens' && (
-                  <div style={{ display: 'flex', gap: 'var(--figma-space-md)' }}>
-                    <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      height: '100%',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* Left Panel - Token View (50%) */}
+                    <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
                       <TokenView
                         tokens={styleGovernanceResult.tokens}
+                        allLayers={styleGovernanceResult.layers}
                         onTokenSelect={setSelectedToken}
+                        selectedTokenId={selectedToken?.id}
                       />
                     </div>
-                    {selectedToken && (
-                      <div style={{ width: '400px', flexShrink: 0 }}>
+
+                    {/* Visible Divider */}
+                    <div
+                      style={{
+                        width: '1px',
+                        backgroundColor: 'var(--figma-color-border)',
+                        flexShrink: 0,
+                      }}
+                    />
+
+                    {/* Right Panel - Detail Panel (50%) */}
+                    <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+                      {selectedToken ? (
                         <DetailPanel
                           selectedToken={selectedToken}
                           allLayers={styleGovernanceResult.layers}
@@ -527,8 +547,28 @@ export default function App() {
                           replacementHistory={replacementHistory}
                           allStyles={styleGovernanceResult.styles}
                         />
-                      </div>
-                    )}
+                      ) : (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '100%',
+                            padding: 'var(--figma-space-lg)',
+                          }}
+                        >
+                          <p
+                            style={{
+                              fontSize: '12px',
+                              color: 'var(--figma-color-text-secondary)',
+                              textAlign: 'center',
+                            }}
+                          >
+                            Select a token to view its details
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

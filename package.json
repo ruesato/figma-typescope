@@ -1,7 +1,7 @@
 {
-  "name": "figma-font-audit-pro",
+  "name": "typescope",
   "version": "1.0.0",
-  "description": "Comprehensive Figma plugin for font and text style auditing",
+  "description": "Comprehensive Figma plugin for typography and text style auditing",
   "license": "MIT",
   "scripts": {
     "build": "vite build",
