@@ -13,8 +13,8 @@ import DetailPanel from './components/DetailPanel';
 import StyleTreeView from './components/StyleTreeView';
 import StylePicker from './components/StylePicker';
 import StyleReplacementPanel from './components/StyleReplacementPanel';
+import TokenReplacementPanel from './components/TokenReplacementPanel';
 import Toast from './components/Toast';
-import { TokenPicker } from './components/TokenPicker';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import type { TextStyle, DesignToken } from '@/shared/types';
 
@@ -144,13 +144,6 @@ export default function App() {
   const handleStylePickerSelect = (target: TextStyle) => {
     if (sourceStyle && replacementType === 'style') {
       setTargetStyle(target);
-      setReplacementState('confirming');
-    }
-  };
-
-  const handleTokenPickerSelect = (target: DesignToken) => {
-    if (sourceToken && replacementType === 'token') {
-      setTargetToken(target);
       setReplacementState('confirming');
     }
   };
@@ -606,14 +599,18 @@ export default function App() {
         />
       )}
 
-      {/* Token Picker Modal */}
+      {/* Token Replacement Panel */}
       {styleGovernanceResult && replacementState === 'picking-token' && sourceToken && (
-        <TokenPicker
+        <TokenReplacementPanel
           isOpen={replacementState === 'picking-token'}
-          tokens={styleGovernanceResult.tokens}
-          currentTokenId={sourceToken.id}
-          onSelect={handleTokenPickerSelect}
-          onCancel={() => setReplacementState('idle')}
+          sourceToken={sourceToken}
+          availableTokens={styleGovernanceResult.tokens}
+          allLayers={styleGovernanceResult.layers}
+          onClose={() => setReplacementState('idle')}
+          onReplace={(source, target) => {
+            setTargetToken(target);
+            setReplacementState('confirming');
+          }}
         />
       )}
 
