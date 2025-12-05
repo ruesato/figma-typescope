@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight } from 'lucide-react';
+import TokenMetadataCard from './TokenMetadataCard';
 import type { TextLayer, TextStyle, DesignToken } from '@/shared/types';
 
 // ============================================================================
@@ -588,6 +589,13 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
             </button>
           )}
         </div>
+
+        {/* Token Metadata Card */}
+        {selectedToken && (
+          <div style={{ marginTop: 'var(--figma-space-md)' }}>
+            <TokenMetadataCard token={selectedToken} />
+          </div>
+        )}
 
         {/* Layers Section Header */}
         <div style={{ marginTop: 'var(--figma-space-md)' }}>
