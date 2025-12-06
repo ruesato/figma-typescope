@@ -438,6 +438,13 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
               {isExpanded ? '−' : '+'}
             </button>
           </div>
+
+          {/* Token Metadata Card - show even when no layers use it */}
+          {selectedToken && (
+            <div style={{ marginTop: 'var(--figma-space-md)' }}>
+              <TokenMetadataCard token={selectedToken} />
+            </div>
+          )}
         </div>
 
         {isExpanded && (
@@ -456,7 +463,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
                 </>
               ) : (
                 <p className="text-sm text-figma-text-secondary">
-                  No layers using this{selectedStyle ? 'style' : 'token'}
+                  No layers using this {selectedStyle ? 'style' : 'token'}
                 </p>
               )}
             </div>
