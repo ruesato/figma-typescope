@@ -228,23 +228,59 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                         | 'boolean')
                     : 'string';
 
-                  // LibraryVariable has limited data - we only have name, key, and resolvedType
-                  // We don't have access to the actual value without importing it
+                  // Try to fetch the actual variable to get its values
+                  let currentValue: any = '';
+                  let valuesByMode: Record<string, any> = {};
+                  let modes: Record<string, any> = {};
+                  let modeId = 'default';
+                  let modeName = 'Default';
+
+                  try {
+                    // Attempt to fetch the variable by its key to get actual values
+                    const fullVariable = await figma.variables.getVariableByIdAsync(variableKey);
+                    if (fullVariable && fullVariable.valuesByMode) {
+                      const firstModeId = Object.keys(fullVariable.valuesByMode)[0];
+                      currentValue = fullVariable.valuesByMode[firstModeId];
+                      valuesByMode = fullVariable.valuesByMode;
+                      modeId = firstModeId;
+
+                      // Convert valuesByMode to modes with mode names
+                      const collection = await figma.variables.getVariableCollectionByIdAsync(
+                        fullVariable.variableCollectionId
+                      );
+                      if (collection) {
+                        for (const [mId, value] of Object.entries(fullVariable.valuesByMode)) {
+                          const mode = collection.modes.find((m) => m.modeId === mId);
+                          modes[mode?.name || mId] = value;
+                        }
+                        // Get current mode name
+                        const currentMode = collection.modes.find((m) => m.modeId === firstModeId);
+                        modeName = currentMode?.name || 'Default';
+                      }
+                    }
+                  } catch (fetchError) {
+                    // If we can't fetch the variable, fall back to empty values
+                    console.warn(
+                      `[TokenDetection] Could not fetch values for library variable ${variable.name}:`,
+                      fetchError
+                    );
+                  }
+
                   const token: DesignToken = {
                     id: variableKey, // Use the library key as the ID
                     name: variable.name,
                     key: variableKey,
                     type: tokenType,
                     resolvedType: tokenType,
-                    currentValue: '', // Placeholder - library variables don't expose values directly
-                    value: '', // Placeholder value
+                    currentValue,
+                    value: currentValue,
                     collectionId: libraryCollection.key,
                     collectionName: libraryCollection.name,
                     collections: [libraryCollection.name],
-                    modeId: 'default',
-                    modeName: 'Default',
-                    valuesByMode: {}, // Empty for library variables
-                    modes: {},
+                    modeId,
+                    modeName,
+                    valuesByMode,
+                    modes,
                     isAlias: false,
                     usageCount: 0,
                     layerIds: [],
@@ -266,6 +302,7 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                       variableKey,
                       bindingIdFormat,
                       collectionKey: libraryCollection.key,
+                      hasValue: !!currentValue,
                     });
                   }
                 }
