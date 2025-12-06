@@ -279,13 +279,29 @@ export function DefaultNodeRow({
   return (
     <div
       onClick={onClick}
-      className={`
-        flex items-center px-4 py-3 border-b border-figma-border
-        ${!isDisabled ? 'cursor-pointer hover:bg-figma-bg-secondary' : 'cursor-not-allowed opacity-60'}
-        ${isSelected ? 'bg-figma-bg-brand-secondary' : ''}
-        transition-colors
-        ${className}
-      `}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '6px 8px',
+        cursor: isDisabled ? 'not-allowed' : 'pointer',
+        backgroundColor: isSelected ? 'var(--figma-color-bg-brand)' : 'transparent',
+        color: isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text)',
+        borderRadius: '4px',
+        opacity: isDisabled ? 0.6 : 1,
+        transition: 'background-color 0.15s ease',
+      }}
+      onMouseEnter={(e) => {
+        if (!isSelected && !isDisabled) {
+          e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isSelected && !isDisabled) {
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }
+      }}
+      className={className}
     >
       {leftContent && <div className="flex-shrink-0">{leftContent}</div>}
       <div className="flex-1 min-w-0">{children}</div>

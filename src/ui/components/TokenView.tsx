@@ -219,7 +219,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
                 </span>
               }
             >
-              <span className="text-sm font-semibold text-figma-text">{node.name}</span>
+              <span className="text-sm font-semibold" style={{ color: 'inherit' }}>{node.name}</span>
             </DefaultNodeRow>
           );
         }
@@ -250,21 +250,49 @@ export const TokenView: React.FC<TokenViewProps> = ({
               rightContent={
                 <div className="flex items-center gap-2">
                   <span
-                    className="text-sm font-mono truncate max-w-xs text-figma-text-secondary"
+                    className="text-sm font-mono truncate max-w-xs"
+                    style={{
+                      color: options.isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text-secondary)',
+                      opacity: options.isSelected ? 0.9 : 1
+                    }}
                     title={displayValue}
                   >
                     {displayValue}
                   </span>
-                  <UsageBadge count={token.usageCount} variant="brand" />
+                  {token.usageCount > 0 && (
+                    <span
+                      className="text-xs px-2 py-1 rounded-full font-medium"
+                      style={{
+                        backgroundColor: options.isSelected ? 'rgba(255,255,255,0.2)' : 'var(--figma-color-bg-brand)',
+                        color: options.isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text-onbrand)'
+                      }}
+                    >
+                      {token.usageCount}
+                    </span>
+                  )}
                 </div>
               }
             >
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate text-figma-text">{token.name}</div>
+                <div className="text-sm font-medium truncate" style={{ color: 'inherit' }}>{token.name}</div>
                 <div className="flex gap-2 mt-1">
-                  <span className="text-xs text-figma-text-tertiary">{token.resolvedType}</span>
+                  <span
+                    className="text-xs"
+                    style={{
+                      color: options.isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text-tertiary)',
+                      opacity: options.isSelected ? 0.8 : 1
+                    }}
+                  >
+                    {token.resolvedType}
+                  </span>
                   {token.isAlias && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-figma-bg-tertiary text-figma-text">
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded"
+                      style={{
+                        backgroundColor: options.isSelected ? 'rgba(255,255,255,0.2)' : 'var(--figma-color-bg-tertiary)',
+                        color: 'inherit'
+                      }}
+                    >
                       alias
                     </span>
                   )}
