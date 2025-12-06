@@ -236,20 +236,23 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                   let modeName = 'Default';
 
                   try {
-                    // Attempt to fetch the variable by its key to get actual values
-                    const fullVariable = await figma.variables.getVariableByIdAsync(variableKey);
-                    if (fullVariable && fullVariable.valuesByMode) {
-                      const firstModeId = Object.keys(fullVariable.valuesByMode)[0];
-                      currentValue = fullVariable.valuesByMode[firstModeId];
-                      valuesByMode = fullVariable.valuesByMode;
+                    // For library variables, we need to import them to access their values
+                    // The key format is "S:libraryId,collectionId:variableId"
+                    const importedVariable = await figma.variables.importVariableByKeyAsync(
+                      variableKey
+                    );
+                    if (importedVariable && importedVariable.valuesByMode) {
+                      const firstModeId = Object.keys(importedVariable.valuesByMode)[0];
+                      currentValue = importedVariable.valuesByMode[firstModeId];
+                      valuesByMode = importedVariable.valuesByMode;
                       modeId = firstModeId;
 
                       // Convert valuesByMode to modes with mode names
                       const collection = await figma.variables.getVariableCollectionByIdAsync(
-                        fullVariable.variableCollectionId
+                        importedVariable.variableCollectionId
                       );
                       if (collection) {
-                        for (const [mId, value] of Object.entries(fullVariable.valuesByMode)) {
+                        for (const [mId, value] of Object.entries(importedVariable.valuesByMode)) {
                           const mode = collection.modes.find((m) => m.modeId === mId);
                           modes[mode?.name || mId] = value;
                         }
@@ -257,11 +260,18 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                         const currentMode = collection.modes.find((m) => m.modeId === firstModeId);
                         modeName = currentMode?.name || 'Default';
                       }
+
+                      if (tokenMap.size <= 6) {
+                        console.log(
+                          `[TokenDetection] Successfully imported library variable ${variable.name} with value:`,
+                          currentValue
+                        );
+                      }
                     }
                   } catch (fetchError) {
-                    // If we can't fetch the variable, fall back to empty values
+                    // If we can't import the variable, fall back to empty values
                     console.warn(
-                      `[TokenDetection] Could not fetch values for library variable ${variable.name}:`,
+                      `[TokenDetection] Could not import library variable ${variable.name} (key: ${variableKey}):`,
                       fetchError
                     );
                   }
