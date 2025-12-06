@@ -33,7 +33,8 @@ export interface ReplacementPanelProps {
  *
  * Features:
  * - Slide-in from right with scrim overlay (200ms ease-out animation)
- * - 440px min width, 50% max width
+ * - 880px width, 85vw max width
+ * - 2-column layout: selection list (left) and preview (right)
  * - ESC key, scrim click, Cancel button, or X button closes panel
  * - Flexible content area via children prop
  * - Optional source vs target preview section
@@ -133,15 +134,16 @@ export default function ReplacementPanel({
           top: 0,
           right: 0,
           bottom: 0,
-          width: '440px',
-          minWidth: '440px',
-          maxWidth: '50%',
+          width: '880px',
+          minWidth: '880px',
+          maxWidth: '85vw',
           backgroundColor: 'var(--figma-color-bg)',
           boxShadow: '-2px 0 8px rgba(0, 0, 0, 0.1)',
           zIndex: 9999,
           display: 'flex',
           flexDirection: 'column',
           animation: isAnimatingOut ? 'slideOut 200ms ease-out' : 'slideIn 200ms ease-out',
+          overflowX: 'auto',
         }}
       >
         {/* Error banner (if present) */}
@@ -228,30 +230,50 @@ export default function ReplacementPanel({
           </button>
         </div>
 
-        {/* Preview Section (Source vs Target) - Optional */}
-        {previewSection && (
-          <div
-            style={{
-              padding: 'var(--figma-space-md)',
-              borderBottom: '1px solid var(--figma-color-border)',
-              backgroundColor: 'var(--figma-color-bg-secondary)',
-              flexShrink: 0,
-            }}
-          >
-            {previewSection}
-          </div>
-        )}
-
-        {/* Content Area - Scrollable */}
+        {/* 2-Column Layout: Selection List (Left) | Preview (Right) */}
         <div
           style={{
             flex: 1,
-            overflow: 'hidden',
             display: 'flex',
-            flexDirection: 'column',
+            overflow: 'hidden',
+            minHeight: 0,
           }}
         >
-          {children}
+          {/* Left Column - Selection List */}
+          <div
+            style={{
+              flex: 1,
+              minWidth: '50%',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              borderRight: '1px solid var(--figma-color-border)',
+            }}
+          >
+            {children}
+          </div>
+
+          {/* Right Column - Preview Section */}
+          {previewSection && (
+            <div
+              style={{
+                flex: 1,
+                minWidth: '50%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'auto',
+                backgroundColor: 'var(--figma-color-bg-secondary)',
+              }}
+            >
+              <div
+                style={{
+                  padding: 'var(--figma-space-md)',
+                }}
+              >
+                {previewSection}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
