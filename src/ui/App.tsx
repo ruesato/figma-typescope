@@ -325,11 +325,13 @@ export default function App() {
         type: 'success',
       });
 
-      // Reset state
+      // Close panel and reset state
+      setShowReplacementPanel(false);
+      setReplacementPanelError(undefined);
       setSourceStyle(null);
       setAffectedLayerIds([]);
     } catch (error) {
-      // Show error and re-open panel
+      // Show error and keep panel open
       const errorMessage = error instanceof Error ? error.message : 'Replacement failed';
       setReplacementPanelError(errorMessage);
       setShowReplacementPanel(true);
@@ -634,8 +636,9 @@ export default function App() {
         )}
 
       {/* Style Replacement Slide-Over Panel */}
-      {showReplacementPanel && styleGovernanceResult && sourceStyle && (
+      {styleGovernanceResult && sourceStyle && (
         <StyleReplacementPanel
+          isOpen={showReplacementPanel}
           sourceStyle={sourceStyle}
           availableStyles={styleGovernanceResult.styles}
           libraries={styleGovernanceResult.libraries}
