@@ -465,69 +465,87 @@ export default function App() {
                   <AnalyticsDashboard auditResult={styleGovernanceResult} />
                 )}
 
-                {/* Styles Tab - 50/50 Split Layout */}
+                {/* Styles Tab - Filter Toolbar + 50/50 Split Layout */}
                 {activeTab === 'styles' && (
                   <div
                     style={{
                       display: 'flex',
+                      flexDirection: 'column',
                       height: '100%',
                       overflow: 'hidden',
                     }}
                   >
-                    {/* Left Panel - Style Tree (50%) */}
-                    <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
-                      <StyleTreeView
-                        styles={styleGovernanceResult.styles}
-                        libraries={styleGovernanceResult.libraries}
-                        unstyledLayers={styleGovernanceResult.unstyledLayers}
-                        onStyleSelect={setSelectedStyle}
-                        selectedStyleId={selectedStyle?.id}
-                        replacedStyleIds={replacedStyleIds}
-                        replacementHistory={replacementHistory}
-                      />
-                    </div>
-
-                    {/* Visible Divider */}
-                    <div
-                      style={{
-                        width: '1px',
-                        backgroundColor: 'var(--figma-color-border)',
-                        flexShrink: 0,
-                      }}
+                    {/* Filter Toolbar */}
+                    <FilterToolbar
+                      type="styles"
+                      searchQuery={stylesSearchQuery}
+                      onSearchChange={setStylesSearchQuery}
+                      sourceFilter={stylesSourceFilter}
+                      onSourceFilterChange={setStylesSourceFilter}
+                      groupByLibrary={stylesGroupByLibrary}
+                      onGroupByLibraryChange={setStylesGroupByLibrary}
                     />
 
-                    {/* Right Panel - Detail Panel (50%) */}
-                    <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
-                      {selectedStyle ? (
-                        <DetailPanel
-                          selectedStyle={selectedStyle}
-                          allLayers={styleGovernanceResult.layers}
-                          onNavigateToLayer={handleNavigateToLayer}
-                          onReplaceStyle={handleReplaceStyle}
+                    {/* 2-Column Layout */}
+                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                      {/* Left Panel - Style Tree (50%) */}
+                      <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+                        <StyleTreeView
+                          styles={styleGovernanceResult.styles}
+                          libraries={styleGovernanceResult.libraries}
+                          unstyledLayers={styleGovernanceResult.unstyledLayers}
+                          onStyleSelect={setSelectedStyle}
+                          selectedStyleId={selectedStyle?.id}
+                          replacedStyleIds={replacedStyleIds}
                           replacementHistory={replacementHistory}
-                          allStyles={styleGovernanceResult.styles}
+                          searchQuery={stylesSearchQuery}
+                          sourceFilter={stylesSourceFilter}
+                          groupByLibrary={stylesGroupByLibrary}
                         />
-                      ) : (
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            height: '100%',
-                            padding: 'var(--figma-space-lg)',
-                          }}
-                        >
-                          <p
+                      </div>
+
+                      {/* Visible Divider */}
+                      <div
+                        style={{
+                          width: '1px',
+                          backgroundColor: 'var(--figma-color-border)',
+                          flexShrink: 0,
+                        }}
+                      />
+
+                      {/* Right Panel - Detail Panel (50%) */}
+                      <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+                        {selectedStyle ? (
+                          <DetailPanel
+                            selectedStyle={selectedStyle}
+                            allLayers={styleGovernanceResult.layers}
+                            onNavigateToLayer={handleNavigateToLayer}
+                            onReplaceStyle={handleReplaceStyle}
+                            replacementHistory={replacementHistory}
+                            allStyles={styleGovernanceResult.styles}
+                          />
+                        ) : (
+                          <div
                             style={{
-                              fontSize: '12px',
-                              color: 'var(--figma-color-text-secondary)',
-                              textAlign: 'center',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              height: '100%',
+                              padding: 'var(--figma-space-lg)',
                             }}
                           >
-                            Select a style to view its details
-                          </p>
-                        </div>
-                      )}
+                            <p
+                              style={{
+                                fontSize: '12px',
+                                color: 'var(--figma-color-text-secondary)',
+                                textAlign: 'center',
+                              }}
+                            >
+                              Select a style to view its details
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
