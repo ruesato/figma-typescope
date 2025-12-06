@@ -64,7 +64,7 @@ function getTokenType(variable: any): 'color' | 'number' | 'string' | 'boolean' 
   }
   const type = variable.resolvedType.toLowerCase();
   if (type === 'color') return 'color';
-  if (type === 'number') return 'number';
+  if (type === 'float' || type === 'number') return 'number';
   if (type === 'boolean') return 'boolean';
   return 'string';
 }

@@ -175,14 +175,12 @@ export const TokenView: React.FC<TokenViewProps> = ({
 
       // Source filter
       if (sourceFilter === 'local') {
-        // Local tokens typically don't have a libraryName or it's 'Local'
-        const isLocal = !token.collectionName || token.collectionName === 'Local collection' ||
-                       !token.collectionName.includes('Library');
+        // Local tokens have key starting with 'local/'
+        const isLocal = token.key.startsWith('local/');
         if (!isLocal) return false;
       } else if (sourceFilter === 'library') {
-        // Library tokens have a collectionName that indicates they're from a library
-        const isLibrary = token.collectionName && token.collectionName !== 'Local collection' &&
-                         token.collectionName.includes('Library') || token.collectionName.includes('TailwindCSS');
+        // Library tokens don't have key starting with 'local/'
+        const isLibrary = !token.key.startsWith('local/');
         if (!isLibrary) return false;
       }
 
