@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import type { DesignToken } from '@/shared/types';
+import React, { useMemo } from 'react';
+import TreeView, { TreeNode, DefaultNodeRow, ExpandIcon, UsageBadge } from './TreeView';
+import type { DesignToken, TextLayer } from '@/shared/types';
 
 // ============================================================================
 // Types
@@ -8,16 +8,11 @@ import type { DesignToken } from '@/shared/types';
 
 export interface TokenViewProps {
   tokens: DesignToken[];
+  allLayers?: TextLayer[];
   onTokenSelect?: (token: DesignToken) => void;
+  selectedTokenId?: string;
   isLoading?: boolean;
   error?: string;
-}
-
-interface FlattenedItem {
-  type: 'group-header' | 'token';
-  groupName?: string;
-  token?: DesignToken;
-  indentLevel: number;
 }
 
 // ============================================================================
@@ -98,148 +93,41 @@ const groupTokensByCollection = (tokens: DesignToken[]): Map<string, DesignToken
 };
 
 /**
- * Filter tokens and groups based on search query
+ * Build tree structure from tokens
  */
-const filterTokens = (tokens: DesignToken[], query: string): DesignToken[] => {
-  if (!query.trim()) return tokens;
+const buildTokenTree = (tokens: DesignToken[]): TreeNode<DesignToken>[] => {
+  const groupedTokens = groupTokensByCollection(tokens);
+  const tree: TreeNode<DesignToken>[] = [];
 
-  const lowerQuery = query.toLowerCase();
-  return tokens.filter(
-    (token) =>
-      token.name.toLowerCase().includes(lowerQuery) ||
-      token.collectionName.toLowerCase().includes(lowerQuery)
-  );
-};
+  for (const [collectionName, collectionTokens] of groupedTokens.entries()) {
+    // Create collection group node
+    const groupNode: TreeNode<DesignToken> = {
+      id: `collection-${collectionName}`,
+      name: collectionName,
+      type: 'collection',
+      children: [],
+      level: 0,
+      metadata: {
+        tokenCount: collectionTokens.length,
+      },
+    };
 
-// ============================================================================
-// TokenRow Component (virtualized row)
-// ============================================================================
+    // Add tokens as children
+    for (const token of collectionTokens) {
+      groupNode.children.push({
+        id: token.id,
+        name: token.name,
+        type: 'token',
+        data: token,
+        children: [],
+        level: 1,
+      });
+    }
 
-interface TokenRowProps {
-  item: FlattenedItem;
-  groupExpandState: Map<string, boolean>;
-  onGroupToggle: (groupName: string) => void;
-  onTokenSelect: (token: DesignToken) => void;
-}
-
-const TokenRow: React.FC<TokenRowProps> = ({
-  item,
-  groupExpandState,
-  onGroupToggle,
-  onTokenSelect,
-}) => {
-  if (item.type === 'group-header') {
-    const groupName = item.groupName!;
-    const isExpanded = groupExpandState.get(groupName) ?? true;
-
-    return (
-      <div
-        className="flex items-center px-4 py-3 cursor-pointer select-none hover:bg-figma-color-bg-secondary border-b border-figma-color-border focus:outline-none focus:ring-1 focus:ring-figma-color-bg-brand"
-        onClick={() => onGroupToggle(groupName)}
-        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-          // Space: toggle expand/collapse
-          if (e.code === 'Space') {
-            e.preventDefault();
-            onGroupToggle(groupName);
-          }
-        }}
-        tabIndex={0}
-        role="treeitem"
-        aria-expanded={isExpanded}
-      >
-        <div
-          className="mr-2 flex-shrink-0 transition-transform duration-200"
-          style={{
-            transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-          }}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M5 6L8 9L11 6"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-        <span className="text-sm font-semibold text-figma-color-text">{groupName}</span>
-      </div>
-    );
+    tree.push(groupNode);
   }
 
-  if (item.type === 'token' && item.token) {
-    const token = item.token;
-    const colorValue = getColorValue(token);
-    const displayValue = formatTokenValue(token);
-
-    return (
-      <div
-        className="flex items-center px-4 py-3 cursor-pointer select-none hover:bg-figma-color-bg-secondary border-b border-figma-color-border focus:outline-none focus:ring-1 focus:ring-figma-color-bg-brand animate-in fade-in slide-in-from-left-4 duration-150"
-        onClick={() => onTokenSelect(token)}
-        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-          // Enter: select token
-          if (e.code === 'Enter') {
-            e.preventDefault();
-            onTokenSelect(token);
-          }
-        }}
-        tabIndex={0}
-        role="treeitem"
-      >
-        <div style={{ marginLeft: `${(item.indentLevel + 1) * 20}px` }} className="flex-1">
-          <div className="flex items-center gap-3">
-            {/* Color Preview (if color token) */}
-            {colorValue && (
-              <div
-                className="w-5 h-5 rounded border border-figma-color-border flex-shrink-0"
-                style={{ backgroundColor: colorValue }}
-                title={colorValue}
-              />
-            )}
-
-            {/* Token Info */}
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate text-figma-color-text">{token.name}</div>
-              <div className="flex gap-2 mt-1">
-                <span className="text-xs text-figma-color-text-tertiary">{token.resolvedType}</span>
-                {token.isAlias && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-figma-color-bg-tertiary text-figma-color-text">
-                    alias
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Token Value */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span
-                className="text-sm font-mono truncate max-w-xs text-figma-color-text-secondary"
-                title={displayValue}
-              >
-                {displayValue}
-              </span>
-
-              {/* Usage Count Badge */}
-              {token.usageCount > 0 && (
-                <span className="text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 bg-figma-color-bg-brand text-figma-color-text-onbrand">
-                  {token.usageCount}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+  return tree;
 };
 
 // ============================================================================
@@ -248,99 +136,35 @@ const TokenRow: React.FC<TokenRowProps> = ({
 
 export const TokenView: React.FC<TokenViewProps> = ({
   tokens = [],
+  allLayers = [],
   onTokenSelect,
+  selectedTokenId,
   isLoading = false,
   error,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [groupExpandState, setGroupExpandState] = useState<Map<string, boolean>>(new Map());
-  const parentRef = useRef<HTMLDivElement>(null);
+  // Build tree structure
+  const treeNodes = useMemo(() => buildTokenTree(tokens), [tokens]);
 
-  // Filter tokens based on search
-  const filteredTokens = useMemo(() => filterTokens(tokens, searchQuery), [tokens, searchQuery]);
+  // Initialize all collection nodes as expanded
+  const defaultExpandedIds = useMemo(() => {
+    const expanded = new Set<string>();
+    treeNodes.forEach((node) => expanded.add(node.id));
+    return expanded;
+  }, [treeNodes]);
 
-  // Group filtered tokens by collection
-  const groupedTokens = useMemo(() => {
-    const groups = groupTokensByCollection(filteredTokens);
-    const groupMap = new Map<string, boolean>();
-
-    groups.forEach((_, name) => {
-      // Initialize expansion state if not exists
-      if (!groupExpandState.has(name)) {
-        groupMap.set(name, true);
-      } else {
-        groupMap.set(name, groupExpandState.get(name)!);
-      }
-    });
-
-    return { groups, expandState: groupMap };
-  }, [filteredTokens, groupExpandState]);
-
-  // Flatten grouped tokens for virtualization
-  const flattenedItems = useMemo((): FlattenedItem[] => {
-    const items: FlattenedItem[] = [];
-
-    Array.from(groupedTokens.groups.entries()).forEach(([groupName, groupTokens]) => {
-      items.push({
-        type: 'group-header',
-        groupName,
-        indentLevel: 0,
-      });
-
-      if (groupExpandState.get(groupName) ?? true) {
-        groupTokens.forEach((token) => {
-          items.push({
-            type: 'token',
-            token,
-            indentLevel: 0,
-          });
-        });
-      }
-    });
-
-    return items;
-  }, [groupedTokens, groupExpandState]);
-
-  // Virtualizer setup
-  const virtualizer = useVirtualizer({
-    count: flattenedItems.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: (index) => {
-      const item = flattenedItems[index];
-      return item?.type === 'group-header' ? 44 : 72;
-    },
-    overscan: 10,
-  });
-
-  const virtualItems = virtualizer.getVirtualItems();
-  const totalSize = virtualizer.getTotalSize();
-
-  // Callbacks
-  const handleGroupToggle = useCallback((groupName: string) => {
-    setGroupExpandState((prev) => {
-      const newState = new Map(prev);
-      newState.set(groupName, !newState.get(groupName));
-      return newState;
-    });
-  }, []);
-
-  const handleTokenSelect = useCallback(
-    (token: DesignToken) => {
-      onTokenSelect?.(token);
-    },
-    [onTokenSelect]
-  );
-
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-  }, []);
+  // Handle node selection
+  const handleNodeSelect = (node: TreeNode<DesignToken>) => {
+    if (node.type === 'token' && node.data && onTokenSelect) {
+      onTokenSelect(node.data);
+    }
+  };
 
   // Render loading state
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 bg-figma-color-bg">
-        <div className="w-8 h-8 border-4 rounded-full animate-spin border-figma-color-border border-t-figma-color-bg-brand" />
-        <p className="mt-4 text-figma-color-text-secondary">Loading tokens...</p>
+      <div className="flex flex-col items-center justify-center h-full p-8 bg-figma-bg">
+        <div className="w-8 h-8 border-4 rounded-full animate-spin border-figma-border border-t-figma-bg-brand" />
+        <p className="mt-4 text-figma-text-secondary">Loading tokens...</p>
       </div>
     );
   }
@@ -348,10 +172,10 @@ export const TokenView: React.FC<TokenViewProps> = ({
   // Render error state
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 bg-figma-color-bg">
+      <div className="flex flex-col items-center justify-center h-full p-8 bg-figma-bg">
         <div className="text-3xl mb-4">⚠️</div>
-        <h3 className="text-lg font-semibold text-figma-color-text">Error Loading Tokens</h3>
-        <p className="mt-2 text-center text-figma-color-text-secondary">{error}</p>
+        <h3 className="text-lg font-semibold text-figma-text">Error Loading Tokens</h3>
+        <p className="mt-2 text-center text-figma-text-secondary">{error}</p>
       </div>
     );
   }
@@ -359,10 +183,10 @@ export const TokenView: React.FC<TokenViewProps> = ({
   // Render empty state
   if (tokens.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 bg-figma-color-bg">
+      <div className="flex flex-col items-center justify-center h-full p-8 bg-figma-bg">
         <div className="text-5xl mb-4">✨</div>
-        <h3 className="text-lg font-semibold text-figma-color-text">No Tokens Found</h3>
-        <p className="mt-2 text-center text-figma-color-text-secondary">
+        <h3 className="text-lg font-semibold text-figma-text">No Tokens Found</h3>
+        <p className="mt-2 text-center text-figma-text-secondary">
           Design tokens from your file will appear here. Make sure your document has design
           variables configured.
         </p>
@@ -370,160 +194,107 @@ export const TokenView: React.FC<TokenViewProps> = ({
     );
   }
 
-  // Render empty search results
-  if (searchQuery && filteredTokens.length === 0) {
-    return (
-      <div className="flex flex-col h-full bg-figma-color-bg">
-        {/* Search Input */}
-        <div className="p-4 border-b border-figma-color-border">
-          <div className="relative">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 18 18"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-figma-color-text-tertiary"
-            >
-              <path
-                d="M8 15C11.866 15 15 11.866 15 8C15 4.13401 11.866 1 8 1C4.13401 1 1 4.13401 1 8C1 11.866 4.13401 15 8 15Z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M17 17L12.5 12.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search tokens..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              className="w-full pl-10 pr-4 py-2 bg-figma-color-bg-secondary border border-figma-color-border rounded text-figma-color-text placeholder-figma-color-text-tertiary"
-            />
-          </div>
-        </div>
-
-        {/* Empty Search Results */}
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <div className="text-5xl mb-4">🔍</div>
-          <h3 className="text-lg font-semibold text-figma-color-text">No Matching Tokens</h3>
-          <p className="mt-2 text-center text-figma-color-text-secondary">
-            Try adjusting your search query.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-figma-color-bg">
-      {/* Search Input */}
-      <div className="p-4 border-b border-figma-color-border flex-shrink-0">
-        <div className="relative">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 18 18"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-figma-color-text-tertiary"
-          >
-            <path
-              d="M8 15C11.866 15 15 11.866 15 8C15 4.13401 11.866 1 8 1C4.13401 1 1 4.13401 1 8C1 11.866 4.13401 15 8 15Z"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M17 17L12.5 12.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search tokens..."
-            value={searchQuery}
-            onChange={handleSearchChange}
-            className="w-full pl-10 pr-4 py-2 bg-figma-color-bg-secondary border border-figma-color-border rounded text-figma-color-text placeholder-figma-color-text-tertiary"
-          />
-        </div>
-      </div>
+    <TreeView
+      nodes={treeNodes}
+      searchEnabled={true}
+      searchPlaceholder="Search tokens..."
+      selectedId={selectedTokenId}
+      onNodeSelect={handleNodeSelect}
+      defaultExpandedIds={defaultExpandedIds}
+      renderNode={(node, options) => {
+        // Render collection group header
+        if (node.type === 'collection') {
+          return (
+            <DefaultNodeRow
+              onClick={options.toggleExpansion}
+              leftContent={
+                <div className="flex items-center gap-2">
+                  <ExpandIcon isExpanded={options.isExpanded} />
+                </div>
+              }
+              rightContent={
+                <span className="text-xs text-figma-text-tertiary">
+                  {node.metadata?.tokenCount || 0}
+                </span>
+              }
+            >
+              <span className="text-sm font-semibold text-figma-text">{node.name}</span>
+            </DefaultNodeRow>
+          );
+        }
 
-      {/* Token List (Virtualized) */}
-      <div
-        ref={parentRef}
-        className="flex-1 overflow-auto"
-        style={{
-          height: 'calc(100% - 60px)',
-        }}
-      >
-        <div
-          style={{
-            height: `${totalSize}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {virtualItems.map((virtualItem) => {
-            const item = flattenedItems[virtualItem.index];
-            return (
-              <div
-                key={virtualItem.key}
-                data-index={virtualItem.index}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                <TokenRow
-                  item={item}
-                  groupExpandState={groupExpandState}
-                  onGroupToggle={handleGroupToggle}
-                  onTokenSelect={handleTokenSelect}
-                />
+        // Render token row
+        if (node.type === 'token' && node.data) {
+          const token = node.data;
+          const colorValue = getColorValue(token);
+          const displayValue = formatTokenValue(token);
+
+          return (
+            <DefaultNodeRow
+              onClick={options.handleSelect}
+              isSelected={options.isSelected}
+              className="animate-in fade-in slide-in-from-left-4 duration-150"
+              leftContent={
+                <div style={{ marginLeft: `${(node.level) * 20}px` }} className="flex items-center gap-3">
+                  {/* Color Preview (if color token) */}
+                  {colorValue && (
+                    <div
+                      className="w-5 h-5 rounded border border-figma-border flex-shrink-0"
+                      style={{ backgroundColor: colorValue }}
+                      title={colorValue}
+                    />
+                  )}
+                </div>
+              }
+              rightContent={
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-sm font-mono truncate max-w-xs text-figma-text-secondary"
+                    title={displayValue}
+                  >
+                    {displayValue}
+                  </span>
+                  <UsageBadge count={token.usageCount} variant="brand" />
+                </div>
+              }
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate text-figma-text">{token.name}</div>
+                <div className="flex gap-2 mt-1">
+                  <span className="text-xs text-figma-text-tertiary">{token.resolvedType}</span>
+                  {token.isAlias && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-figma-bg-tertiary text-figma-text">
+                      alias
+                    </span>
+                  )}
+                </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </DefaultNodeRow>
+          );
+        }
 
-      {/* Summary Footer */}
-      {filteredTokens.length > 0 && (
-        <div className="p-3 text-xs bg-figma-color-bg-secondary text-figma-color-text-tertiary border-t border-figma-color-border flex-shrink-0">
+        return null;
+      }}
+      renderFooter={() => (
+        <div className="p-3 text-xs bg-figma-bg-secondary text-figma-text-tertiary">
           <div className="flex flex-col gap-2">
             <div className="text-center">
-              Showing {filteredTokens.length} token{filteredTokens.length !== 1 ? 's' : ''}
-              {searchQuery && ` (filtered from ${tokens.length})`}
+              Showing {tokens.length} token{tokens.length !== 1 ? 's' : ''}
             </div>
-            <div className="flex flex-wrap gap-2 justify-center text-figma-color-text-secondary text-xs">
+            <div className="flex flex-wrap gap-2 justify-center text-figma-text-secondary text-xs">
               <span title="Expand or collapse token group">
-                <kbd className="px-2 py-0.5 rounded bg-figma-color-bg-tertiary">Space</kbd> to
-                expand
+                <kbd className="px-2 py-0.5 rounded bg-figma-bg-tertiary">Space</kbd> to expand
               </span>
               <span>•</span>
               <span title="Select token to view details">
-                <kbd className="px-2 py-0.5 rounded bg-figma-color-bg-tertiary">Enter</kbd> to
-                select
+                <kbd className="px-2 py-0.5 rounded bg-figma-bg-tertiary">Enter</kbd> to select
               </span>
             </div>
           </div>
         </div>
       )}
-    </div>
+    />
   );
 };
 
