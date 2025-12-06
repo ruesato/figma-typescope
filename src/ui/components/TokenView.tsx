@@ -199,8 +199,8 @@ export const TokenView: React.FC<TokenViewProps> = ({
   // Build tree structure from filtered tokens
   const treeNodes = useMemo(() => buildTokenTree(filteredTokens), [filteredTokens]);
 
-  // Initialize all collection nodes as expanded
-  const defaultExpandedIds = useMemo(() => {
+  // Initialize all collection nodes as expanded (recalculate when tree changes)
+  const expandedIds = useMemo(() => {
     const expanded = new Set<string>();
     treeNodes.forEach((node) => expanded.add(node.id));
     return expanded;
@@ -254,7 +254,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
       searchEnabled={false}
       selectedId={selectedTokenId}
       onNodeSelect={handleNodeSelect}
-      defaultExpandedIds={defaultExpandedIds}
+      expandedIds={expandedIds}
       renderNode={(node, options) => {
         // Render collection group header
         if (node.type === 'collection') {
