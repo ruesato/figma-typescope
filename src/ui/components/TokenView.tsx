@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import TreeView, { TreeNode, DefaultNodeRow, ExpandIcon, UsageBadge } from './TreeView';
 import type { DesignToken, TextLayer } from '@/shared/types';
 
@@ -142,8 +142,49 @@ export const TokenView: React.FC<TokenViewProps> = ({
   isLoading = false,
   error,
 }) => {
-  // Build tree structure
-  const treeNodes = useMemo(() => buildTokenTree(tokens), [tokens]);
+  // Filter state
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'local' | 'library'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'color' | 'number' | 'string' | 'boolean'>('all');
+  const [groupByLibrary, setGroupByLibrary] = useState(true);
+
+  // Get unique token types from the dataset
+  const availableTypes = useMemo(() => {
+    const types = new Set<string>();
+    tokens.forEach((token) => {
+      const type = (token.type as string).toLowerCase();
+      types.add(type);
+    });
+    return Array.from(types).sort();
+  }, [tokens]);
+
+  // Filter tokens based on selected filters
+  const filteredTokens = useMemo(() => {
+    return tokens.filter((token) => {
+      // Source filter
+      if (sourceFilter === 'local') {
+        // Local tokens typically don't have a libraryName or it's 'Local'
+        const isLocal = !token.collectionName || token.collectionName === 'Local collection' ||
+                       !token.collectionName.includes('Library');
+        if (!isLocal) return false;
+      } else if (sourceFilter === 'library') {
+        // Library tokens have a collectionName that indicates they're from a library
+        const isLibrary = token.collectionName && token.collectionName !== 'Local collection' &&
+                         token.collectionName.includes('Library') || token.collectionName.includes('TailwindCSS');
+        if (!isLibrary) return false;
+      }
+
+      // Type filter
+      if (typeFilter !== 'all') {
+        const tokenType = (token.type as string).toLowerCase();
+        if (tokenType !== typeFilter) return false;
+      }
+
+      return true;
+    });
+  }, [tokens, sourceFilter, typeFilter]);
+
+  // Build tree structure from filtered tokens
+  const treeNodes = useMemo(() => buildTokenTree(filteredTokens), [filteredTokens]);
 
   // Initialize all collection nodes as expanded
   const defaultExpandedIds = useMemo(() => {
@@ -202,6 +243,47 @@ export const TokenView: React.FC<TokenViewProps> = ({
       selectedId={selectedTokenId}
       onNodeSelect={handleNodeSelect}
       defaultExpandedIds={defaultExpandedIds}
+      renderToolbar={() => (
+        <div className="p-4 flex items-center gap-3">
+          {/* Source Filter Dropdown */}
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value as 'all' | 'local' | 'library')}
+            className="px-3 py-1.5 text-xs border border-figma-border rounded bg-figma-bg text-figma-text focus:outline-none focus:ring-1 focus:ring-figma-bg-brand"
+            style={{ minWidth: '120px' }}
+          >
+            <option value="all">All tokens</option>
+            <option value="local">Local tokens</option>
+            <option value="library">Library tokens</option>
+          </select>
+
+          {/* Type Filter Dropdown */}
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
+            className="px-3 py-1.5 text-xs border border-figma-border rounded bg-figma-bg text-figma-text focus:outline-none focus:ring-1 focus:ring-figma-bg-brand"
+            style={{ minWidth: '100px' }}
+          >
+            <option value="all">All types</option>
+            {availableTypes.map((type) => (
+              <option key={type} value={type}>
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </option>
+            ))}
+          </select>
+
+          {/* Group by Library Toggle */}
+          <label className="flex items-center gap-2 text-xs text-figma-text cursor-pointer ml-auto">
+            <input
+              type="checkbox"
+              checked={groupByLibrary}
+              onChange={(e) => setGroupByLibrary(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span>Group by library</span>
+          </label>
+        </div>
+      )}
       renderNode={(node, options) => {
         // Render collection group header
         if (node.type === 'collection') {
@@ -308,7 +390,8 @@ export const TokenView: React.FC<TokenViewProps> = ({
         <div className="p-3 text-xs bg-figma-bg-secondary text-figma-text-tertiary">
           <div className="flex flex-col gap-2">
             <div className="text-center">
-              Showing {tokens.length} token{tokens.length !== 1 ? 's' : ''}
+              Showing {filteredTokens.length} token{filteredTokens.length !== 1 ? 's' : ''}
+              {filteredTokens.length !== tokens.length && ` (filtered from ${tokens.length})`}
             </div>
             <div className="flex flex-wrap gap-2 justify-center text-figma-text-secondary text-xs">
               <span title="Expand or collapse token group">
