@@ -13,6 +13,11 @@ export interface TokenViewProps {
   selectedTokenId?: string;
   isLoading?: boolean;
   error?: string;
+  // Filter props (controlled from parent)
+  searchQuery?: string;
+  sourceFilter?: 'all' | 'local' | 'library';
+  typeFilter?: 'all' | 'color' | 'number' | 'string' | 'boolean';
+  groupByLibrary?: boolean;
 }
 
 // ============================================================================
@@ -141,11 +146,11 @@ export const TokenView: React.FC<TokenViewProps> = ({
   selectedTokenId,
   isLoading = false,
   error,
+  searchQuery = '',
+  sourceFilter = 'all',
+  typeFilter = 'all',
+  groupByLibrary = true,
 }) => {
-  // Filter state
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'local' | 'library'>('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'color' | 'number' | 'string' | 'boolean'>('all');
-  const [groupByLibrary, setGroupByLibrary] = useState(true);
 
   // Get unique token types from the dataset
   const availableTypes = useMemo(() => {
@@ -157,9 +162,17 @@ export const TokenView: React.FC<TokenViewProps> = ({
     return Array.from(types).sort();
   }, [tokens]);
 
-  // Filter tokens based on selected filters
+  // Filter tokens based on selected filters and search
   const filteredTokens = useMemo(() => {
     return tokens.filter((token) => {
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const nameMatch = token.name.toLowerCase().includes(query);
+        const collectionMatch = token.collectionName.toLowerCase().includes(query);
+        if (!nameMatch && !collectionMatch) return false;
+      }
+
       // Source filter
       if (sourceFilter === 'local') {
         // Local tokens typically don't have a libraryName or it's 'Local'
@@ -181,7 +194,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
 
       return true;
     });
-  }, [tokens, sourceFilter, typeFilter]);
+  }, [tokens, searchQuery, sourceFilter, typeFilter]);
 
   // Build tree structure from filtered tokens
   const treeNodes = useMemo(() => buildTokenTree(filteredTokens), [filteredTokens]);
@@ -238,52 +251,10 @@ export const TokenView: React.FC<TokenViewProps> = ({
   return (
     <TreeView
       nodes={treeNodes}
-      searchEnabled={true}
-      searchPlaceholder="Search tokens..."
+      searchEnabled={false}
       selectedId={selectedTokenId}
       onNodeSelect={handleNodeSelect}
       defaultExpandedIds={defaultExpandedIds}
-      renderToolbar={() => (
-        <div className="p-4 flex items-center gap-3">
-          {/* Source Filter Dropdown */}
-          <select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value as 'all' | 'local' | 'library')}
-            className="px-3 py-1.5 text-xs border border-figma-border rounded bg-figma-bg text-figma-text focus:outline-none focus:ring-1 focus:ring-figma-bg-brand"
-            style={{ minWidth: '120px' }}
-          >
-            <option value="all">All tokens</option>
-            <option value="local">Local tokens</option>
-            <option value="library">Library tokens</option>
-          </select>
-
-          {/* Type Filter Dropdown */}
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-            className="px-3 py-1.5 text-xs border border-figma-border rounded bg-figma-bg text-figma-text focus:outline-none focus:ring-1 focus:ring-figma-bg-brand"
-            style={{ minWidth: '100px' }}
-          >
-            <option value="all">All types</option>
-            {availableTypes.map((type) => (
-              <option key={type} value={type}>
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </option>
-            ))}
-          </select>
-
-          {/* Group by Library Toggle */}
-          <label className="flex items-center gap-2 text-xs text-figma-text cursor-pointer ml-auto">
-            <input
-              type="checkbox"
-              checked={groupByLibrary}
-              onChange={(e) => setGroupByLibrary(e.target.checked)}
-              className="w-4 h-4"
-            />
-            <span>Group by library</span>
-          </label>
-        </div>
-      )}
       renderNode={(node, options) => {
         // Render collection group header
         if (node.type === 'collection') {
