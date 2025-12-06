@@ -14,6 +14,7 @@ import StyleTreeView from './components/StyleTreeView';
 import StylePicker from './components/StylePicker';
 import StyleReplacementPanel from './components/StyleReplacementPanel';
 import TokenReplacementPanel from './components/TokenReplacementPanel';
+import FilterToolbar from './components/FilterToolbar';
 import Toast from './components/Toast';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import type { TextStyle, DesignToken } from '@/shared/types';
@@ -31,6 +32,17 @@ export default function App() {
   // Detail panel selection state
   const [selectedStyle, setSelectedStyle] = useState<TextStyle | null>(null);
   const [selectedToken, setSelectedToken] = useState<DesignToken | null>(null);
+
+  // Filter state for Styles tab
+  const [stylesSearchQuery, setStylesSearchQuery] = useState('');
+  const [stylesSourceFilter, setStylesSourceFilter] = useState<'all' | 'local' | 'library' | 'unused'>('all');
+  const [stylesGroupByLibrary, setStylesGroupByLibrary] = useState(true);
+
+  // Filter state for Tokens tab
+  const [tokensSearchQuery, setTokensSearchQuery] = useState('');
+  const [tokensSourceFilter, setTokensSourceFilter] = useState<'all' | 'local' | 'library'>('all');
+  const [tokensTypeFilter, setTokensTypeFilter] = useState<'all' | 'color' | 'number' | 'string' | 'boolean'>('all');
+  const [tokensGroupByLibrary, setTokensGroupByLibrary] = useState(true);
 
   // Replacement workflow state (old modal-based - keeping for token replacement)
   const [replacementState, setReplacementState] = useState<
@@ -520,24 +532,54 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Tokens Tab - 50/50 Split Layout */}
+                {/* Tokens Tab - Filter Toolbar + 50/50 Split Layout */}
                 {activeTab === 'tokens' && (
                   <div
                     style={{
                       display: 'flex',
+                      flexDirection: 'column',
                       height: '100%',
                       overflow: 'hidden',
                     }}
                   >
-                    {/* Left Panel - Token View (50%) */}
-                    <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
-                      <TokenView
-                        tokens={styleGovernanceResult.tokens}
-                        allLayers={styleGovernanceResult.layers}
-                        onTokenSelect={setSelectedToken}
-                        selectedTokenId={selectedToken?.id}
-                      />
-                    </div>
+                    {/* Filter Toolbar */}
+                    <FilterToolbar
+                      type="tokens"
+                      searchQuery={tokensSearchQuery}
+                      onSearchChange={setTokensSearchQuery}
+                      searchPlaceholder="Search tokens..."
+                      sourceFilter={tokensSourceFilter}
+                      onSourceFilterChange={setTokensSourceFilter}
+                      typeFilter={tokensTypeFilter}
+                      onTypeFilterChange={setTokensTypeFilter}
+                      availableTypes={Array.from(
+                        new Set(styleGovernanceResult.tokens.map((t) => (t.type as string).toLowerCase()))
+                      ).sort()}
+                      groupByLibrary={tokensGroupByLibrary}
+                      onGroupByLibraryChange={setTokensGroupByLibrary}
+                    />
+
+                    {/* 2-Column Layout */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flex: 1,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {/* Left Panel - Token View (50%) */}
+                      <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+                        <TokenView
+                          tokens={styleGovernanceResult.tokens}
+                          allLayers={styleGovernanceResult.layers}
+                          onTokenSelect={setSelectedToken}
+                          selectedTokenId={selectedToken?.id}
+                          searchQuery={tokensSearchQuery}
+                          sourceFilter={tokensSourceFilter}
+                          typeFilter={tokensTypeFilter}
+                          groupByLibrary={tokensGroupByLibrary}
+                        />
+                      </div>
 
                     {/* Visible Divider */}
                     <div
@@ -580,6 +622,7 @@ export default function App() {
                           </p>
                         </div>
                       )}
+                    </div>
                     </div>
                   </div>
                 )}
