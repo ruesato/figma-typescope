@@ -301,16 +301,25 @@ export const TokenView: React.FC<TokenViewProps> = ({
               }
               rightContent={
                 <div className="flex items-center gap-2">
-                  <span
-                    className="text-sm font-mono truncate max-w-xs"
-                    style={{
-                      color: options.isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text-secondary)',
-                      opacity: options.isSelected ? 0.9 : 1
-                    }}
-                    title={displayValue}
-                  >
-                    {displayValue}
-                  </span>
+                  {/* Show color swatch for color tokens instead of hex value */}
+                  {colorValue ? (
+                    <div
+                      className="w-6 h-6 rounded border border-figma-border flex-shrink-0"
+                      style={{ backgroundColor: colorValue }}
+                      title={colorValue}
+                    />
+                  ) : (
+                    <span
+                      className="text-sm font-mono truncate max-w-xs"
+                      style={{
+                        color: options.isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text-secondary)',
+                        opacity: options.isSelected ? 0.9 : 1
+                      }}
+                      title={displayValue}
+                    >
+                      {displayValue}
+                    </span>
+                  )}
                   {token.usageCount > 0 && (
                     <span
                       className="text-xs px-2 py-1 rounded-full font-medium"
