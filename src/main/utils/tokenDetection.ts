@@ -55,6 +55,7 @@ function formatTokenValue(value: any, tokenType?: string): string {
 
 /**
  * Get token type from Figma variable
+ * Figma uses 'FLOAT' for number types, so we normalize it to 'number'
  * @param variable - Figma variable object
  * @returns Token type (color | number | string | boolean)
  */
@@ -63,10 +64,10 @@ function getTokenType(variable: any): 'color' | 'number' | 'string' | 'boolean' 
     return 'string';
   }
   const type = variable.resolvedType.toLowerCase();
-  if (type === 'color') return 'color';
-  if (type === 'float' || type === 'number') return 'number';
-  if (type === 'boolean') return 'boolean';
-  return 'string';
+  return type === 'color' ? 'color' :
+    type === 'float' || type === 'number' ? 'number' :
+    type === 'boolean' ? 'boolean' :
+    'string';
 }
 
 /**
@@ -220,13 +221,8 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
 
                 // Check if we've already processed this variable
                 if (!tokenMap.has(variableKey)) {
-                  const tokenType = variable.resolvedType
-                    ? (variable.resolvedType.toLowerCase() as
-                        | 'color'
-                        | 'number'
-                        | 'string'
-                        | 'boolean')
-                    : 'string';
+                  // Use getTokenType to properly normalize FLOAT -> number
+                  const tokenType = getTokenType(variable);
 
                   // Try to fetch the actual variable to get its values
                   let currentValue: any = '';
@@ -376,13 +372,8 @@ export async function detectTokenBindings(
               const variable = await figma.variables.getVariableByIdAsync(bindingId);
               if (variable) {
                 // Successfully fetched the variable - create a token object for it
-                const tokenType = variable.resolvedType
-                  ? (variable.resolvedType.toLowerCase() as
-                      | 'color'
-                      | 'number'
-                      | 'string'
-                      | 'boolean')
-                  : 'string';
+                // Use getTokenType to properly normalize FLOAT -> number
+                const tokenType = getTokenType(variable);
 
                 const firstModeId = Object.keys(variable.valuesByMode)[0];
                 const firstValue = variable.valuesByMode[firstModeId];

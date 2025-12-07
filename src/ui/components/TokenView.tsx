@@ -248,6 +248,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
 
   return (
     <TreeView
+      key={`${typeFilter}-${sourceFilter}-${searchQuery}`}
       nodes={treeNodes}
       searchEnabled={false}
       selectedId={selectedTokenId}
