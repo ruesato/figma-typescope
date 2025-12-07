@@ -288,23 +288,14 @@ export const TokenView: React.FC<TokenViewProps> = ({
               isSelected={options.isSelected}
               className="animate-in fade-in slide-in-from-left-4 duration-150"
               leftContent={
-                <div style={{ marginLeft: `${(node.level) * 20}px` }} className="flex items-center gap-3">
-                  {/* Color Preview (if color token) */}
-                  {colorValue && (
-                    <div
-                      className="w-5 h-5 rounded border border-figma-border flex-shrink-0"
-                      style={{ backgroundColor: colorValue }}
-                      title={colorValue}
-                    />
-                  )}
-                </div>
+                <div style={{ marginLeft: `${(node.level) * 20}px` }} />
               }
               rightContent={
                 <div className="flex items-center gap-2">
                   {/* Show color swatch for color tokens instead of hex value */}
                   {colorValue ? (
                     <div
-                      className="w-6 h-6 rounded border border-figma-border flex-shrink-0"
+                      className="w-4 h-4 rounded border border-figma-border flex-shrink-0"
                       style={{ backgroundColor: colorValue }}
                       title={colorValue}
                     />
