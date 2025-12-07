@@ -40,7 +40,7 @@ const rgbaToHex = (rgba: { r: number; g: number; b: number; a: number }): string
  */
 const getColorValue = (token: DesignToken): string | null => {
   const tokenType = token.type as unknown as string;
-  if (tokenType !== 'COLOR') return null;
+  if (tokenType.toLowerCase() !== 'color') return null;
 
   if (typeof token.currentValue === 'string') {
     return token.currentValue;
@@ -60,7 +60,7 @@ const getColorValue = (token: DesignToken): string | null => {
  */
 const formatTokenValue = (token: DesignToken): string => {
   const tokenType = token.type as unknown as string;
-  if (tokenType === 'COLOR') {
+  if (tokenType.toLowerCase() === 'color') {
     const color = getColorValue(token);
     return color || 'N/A';
   }
