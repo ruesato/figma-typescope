@@ -27,15 +27,15 @@ export default function TokenMetadataCard({ token }: TokenMetadataCardProps) {
       return { display: '—' };
     }
 
-    // Handle COLOR type - RGB object
-    if (type === 'COLOR' && typeof value === 'object' && 'r' in value) {
+    // Handle COLOR type - RGB object (case-insensitive)
+    if (type.toLowerCase() === 'color' && typeof value === 'object' && 'r' in value) {
       const r = Math.round(value.r * 255);
       const g = Math.round(value.g * 255);
       const b = Math.round(value.b * 255);
       const a = value.a !== undefined ? value.a : 1;
 
       return {
-        display: a < 1 ? `rgba(${r}, ${g}, ${b}, ${a.toFixed(2)})` : `rgb(${r}, ${g}, ${b})`,
+        display: `RGBA(${r}, ${g}, ${b}, ${a})`,
         color: `rgba(${r}, ${g}, ${b}, ${a})`,
       };
     }
@@ -121,13 +121,13 @@ export default function TokenMetadataCard({ token }: TokenMetadataCardProps) {
         >
           Value
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* Color Swatch for COLOR tokens */}
-          {token.type === 'COLOR' && currentValueFormatted.color && (
+          {token.type.toLowerCase() === 'color' && currentValueFormatted.color && (
             <div
               style={{
-                width: '32px',
-                height: '32px',
+                width: '48px',
+                height: '48px',
                 borderRadius: '6px',
                 backgroundColor: currentValueFormatted.color,
                 border: '1px solid var(--figma-color-border)',
@@ -202,7 +202,7 @@ export default function TokenMetadataCard({ token }: TokenMetadataCardProps) {
                     }}
                   >
                     {/* Mode Color Swatch */}
-                    {token.type === 'COLOR' && formatted.color && (
+                    {token.type.toLowerCase() === 'color' && formatted.color && (
                       <div
                         style={{
                           width: '20px',
