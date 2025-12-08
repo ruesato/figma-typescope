@@ -39,26 +39,26 @@ bash scripts/generate-release-notes.sh
 # Create ZIP archive
 echo "🗜️  Creating ZIP archive..."
 cd dist
-zip -r "../${ZIP_NAME}" . -q
+zip -r "${ZIP_NAME}" . -q
 cd ..
 
 echo "✅ Created ${ZIP_NAME}"
 
 # Verify ZIP was created
-if [ ! -f "${ZIP_NAME}" ]; then
+if [ ! -f "dist/${ZIP_NAME}" ]; then
   echo "❌ Error: ZIP file was not created"
   exit 1
 fi
 
 # Show summary
-ZIP_SIZE=$(du -h "${ZIP_NAME}" | cut -f1)
+ZIP_SIZE=$(du -h "dist/${ZIP_NAME}" | cut -f1)
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✨ Release package ready!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📦 File: ${ZIP_NAME}"
 echo "📊 Size: ${ZIP_SIZE}"
-echo "📍 Location: $(pwd)/${ZIP_NAME}"
+echo "📍 Location: $(pwd)/dist/${ZIP_NAME}"
 echo ""
 echo "Contents:"
 echo "  • manifest.json (Figma plugin config)"
