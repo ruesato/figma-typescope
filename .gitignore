@@ -44,6 +44,8 @@ coverage/
 *~
 .cache
 SECURITY_AUDIT.md
+reference/
+specs/
 
 # OS files
 Thumbs.db
