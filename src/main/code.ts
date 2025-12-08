@@ -253,10 +253,38 @@ async function handleRunAudit(scope: 'page' | 'selection'): Promise<void> {
 // ============================================================================
 
 /**
+ * Validate layer ID format to prevent injection attacks
+ * Figma layer IDs are in format: "123:456" (digits colon digits)
+ *
+ * @param layerId - The layer ID to validate
+ * @returns true if valid, false otherwise
+ */
+function isValidLayerId(layerId: unknown): layerId is string {
+  if (typeof layerId !== 'string') {
+    return false;
+  }
+
+  // Figma layer IDs follow pattern: digits:digits or single number
+  // Examples: "123:456", "789", "1:2:3"
+  // Max length: 256 characters (reasonable limit)
+  if (layerId.length === 0 || layerId.length > 256) {
+    return false;
+  }
+
+  // Only allow digits and colons
+  return /^[\d:]+$/.test(layerId);
+}
+
+/**
  * Handle NAVIGATE_TO_LAYER message - focus a layer in Figma
  */
 async function handleNavigateToLayer(layerId: string): Promise<void> {
   try {
+    // Validate layer ID format to prevent injection attacks
+    if (!isValidLayerId(layerId)) {
+      throw new Error('Invalid layer ID format');
+    }
+
     const node = await figma.getNodeByIdAsync(layerId);
 
     if (!node) {
