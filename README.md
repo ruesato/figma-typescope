@@ -12,57 +12,16 @@ Typescope helps design teams maintain typography consistency by providing deep i
 - Component hierarchy and text overrides
 - Library sources for text styles
 
-## Current Status
+## Features
 
-**Version**: 1.0.0 (MVP)
-**Implementation**: Phase 2 In Progress (50% - 44/96 tasks)
-
-### ✅ Implemented Features (Phases 1-2)
-
-#### Phase 1: Font Audit (Complete)
-
-- **Text Layer Discovery**: Recursively scan entire page or selection for all text layers
-- **Font Metadata Extraction**: Capture font family, size, weight, line height, and color
-- **Style Assignment Detection**: Identify which text has styles applied (fully/partially/unstyled)
-- **Property-Level Comparison**: See exactly which properties match or differ from applied styles
-- **Component Context Tracking**: Build hierarchy paths showing component structure
-- **Override Detection**: Identify text overrides in component instances
-- **Library Source Identification**: Track which libraries text styles come from
-
-#### Phase 2: Style Governance Audit (In Progress)
-
-- **7-State Audit Engine**: Robust state machine (idle → validating → scanning → processing → complete/error/cancelled)
-- **Document Validator**: Size limits (5k warning, 25k max), accessibility checks
-- **Page Scanner**: Multi-page traversal with progress tracking
-- **Metadata Processor**: Style extraction, library resolution, hierarchy building
-- **Style Tree View**: Hierarchical display of styles grouped by library
-- **Progress Reporting**: Real-time updates during validation, scanning, and processing phases
-
-#### User Interface
-
-- **Summary Dashboard**: High-level statistics with visual indicators
-  - Total text layers, unique fonts, style coverage %
-  - Hidden layers count, libraries in use
-- **Filterable Results List**: Filter by assignment status (all/styled/partial/unstyled)
-- **Sortable Results**: Sort by font family, size, or status
-- **Rich Layer Cards**: Display hierarchy, font info, badges, property matches
-- **Real-time Progress**: Animated progress bar during audit (0-100%)
-- **Error Handling**: User-friendly error messages with retry/dismiss actions
-- **Loading States**: Proper loading indicators throughout
-- **Empty States**: Helpful empty state with usage tips
-- **Style Tree View**: Library-grouped style hierarchy (new in Phase 2)
-
-### 🚧 Not Yet Implemented (Phases 4-8)
-
-- **Search functionality** (text content, font names, style names)
-- **Advanced filters** (by font family, component type, library)
-- **Click-to-navigate** (select and zoom to layers in Figma)
-- **Style match suggestions** (80%+ similarity recommendations)
-- **Export capabilities** (PDF reports, CSV data)
-- **Bulk operations** (apply styles to multiple layers)
-- **Performance optimizations** (virtualization for large files)
-- **Keyboard shortcuts**
-- **Plugin settings/preferences**
+- **Text Style Audit**: Comprehensive analysis of text styles across your entire document
+- **Token Detection**: Identify and track design token usage in text layers
+- **Library Tracking**: See which styles and tokens come from which libraries
+- **Style Replacement**: Migrate styles between libraries with safety guarantees
+- **Token Replacement**: Replace tokens across your document with error recovery
+- **Analytics Dashboard**: View style adoption rates and token coverage metrics
+- **Interactive Navigation**: Drill down from styles to individual layers
+- **Export Reports**: Generate PDF and CSV reports for stakeholders
 
 ## Prerequisites
 
@@ -180,9 +139,6 @@ figma-typescope/
 │   └── shared/
 │       └── types.ts            # Shared TypeScript types
 │
-├── specs/                      # Feature specifications
-│   ├── 001-font-audit/        # Phase 1: Font audit
-│   └── 002-style-governance/  # Phase 2: Style governance
 ├── manifest.json               # Figma plugin manifest
 ├── package.json               # Dependencies & scripts
 ├── tsconfig.json              # TypeScript configuration
@@ -296,45 +252,6 @@ Figma plugins run in two separate contexts:
 - **No External Dependencies**: Custom hooks avoid zustand/redux
 - **Reactive Updates**: Automatic re-renders when state changes
 
-## Roadmap
-
-### Phase 4: Search & Filter (T039-T050)
-
-- Text content search
-- Font family/style name search
-- Advanced filtering options
-- Filter persistence
-
-### Phase 5: Click-to-Navigate (T051-T058)
-
-- Click layer cards to select in Figma
-- Zoom to layer viewport
-- Multi-select support
-- Navigation history
-
-### Phase 6: Style Match Suggestions (T059-T068)
-
-- 80%+ similarity scoring
-- Weighted property matching (30/30/20/15/5)
-- Recommended style suggestions
-- Apply suggestions
-
-### Phase 7: Export (T069-T079)
-
-- PDF audit reports
-- CSV data export
-- Custom report templates
-- Scheduled exports
-
-### Phase 8: Polish & Performance (T080-T096)
-
-- Keyboard shortcuts
-- Bulk operations
-- Virtual scrolling (large files)
-- Plugin preferences
-- Accessibility improvements
-- Performance optimizations
-
 ## Contributing
 
 This project follows semantic release conventions for commit messages:
@@ -375,13 +292,6 @@ Quick test:
 
 See [Installation & Testing Guide](#installation--development) above for setup.
 
-## Documentation
-
-- **Specification**: `specs/001-font-audit/spec.md`
-- **Implementation Plan**: `specs/001-font-audit/plan.md`
-- **Task Breakdown**: `specs/001-font-audit/tasks.md`
-- **Research Notes**: `specs/001-font-audit/research.md`
-
 ## Resources
 
 ### Plugin Development
@@ -405,6 +315,6 @@ Built with [Create Figma Plugin](https://yuanqing.github.io/create-figma-plugin/
 
 ---
 
-**Current Version**: 1.0.0-alpha
-**Last Updated**: 2025-11-21
-**Status**: Phase 2 In Progress (Style Governance Audit)
+**Version**: 1.0.0
+**License**: MIT
+**Repository**: https://github.com/ryanuesato/figma-typescope
