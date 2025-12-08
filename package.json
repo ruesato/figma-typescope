@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "package": "bash scripts/package-release.sh",
+    "release:check": "bash scripts/check-release.sh"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.0.0",

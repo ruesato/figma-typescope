@@ -4,9 +4,12 @@ node_modules/
 .pnp.js
 
 # Build output
-dist/
 build/
 *.tsbuildinfo
+
+# Release artifacts (generated at build time)
+dist/
+typescope-*.zip
 
 # Environment variables
 .env
