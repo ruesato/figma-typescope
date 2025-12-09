@@ -97,7 +97,7 @@ export default function StyleTreeView({
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data.pluginMessage?.type === 'GROUP_BY_LIBRARY_LOADED') {
-        setGroupByLibrary(event.data.pluginMessage.value ?? true);
+        setGroupByLibrary(event.data.pluginMessage.payload?.enabled ?? true);
       }
     };
     window.addEventListener('message', handleMessage);
