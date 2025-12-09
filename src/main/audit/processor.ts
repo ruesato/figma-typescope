@@ -959,27 +959,35 @@ async function integrateTokenUsageIntoStyles(
   tokens: DesignToken[]
 ): Promise<void> {
   console.log(`[TokenIntegration] Integrating tokens into ${styles.length} styles...`);
+  console.log(`[TokenIntegration] Available tokens: ${tokens.length}`);
 
   // Build token map for quick lookup
   const tokenMap = new Map<string, DesignToken>();
   for (const token of tokens) {
     tokenMap.set(token.id, token);
   }
+  console.log(`[TokenIntegration] Token IDs in map:`, Array.from(tokenMap.keys()));
 
   // Process each style
   let stylesWithTokens = 0;
+  let stylesWithoutBoundVariables = 0;
   for (const style of styles) {
     try {
       // Fetch the actual Figma style object to access boundVariables
       const figmaStyle = await figma.getStyleByIdAsync(style.id);
       if (!figmaStyle || figmaStyle.type !== 'TEXT') {
+        console.log(`[TokenIntegration] Style "${style.name}": Not a text style or not found`);
         continue;
       }
 
       // Check if style has bound variables
       if (!figmaStyle.boundVariables) {
+        console.log(`[TokenIntegration] Style "${style.name}": No boundVariables`);
+        stylesWithoutBoundVariables++;
         continue;
       }
+
+      console.log(`[TokenIntegration] Style "${style.name}": Has boundVariables`, figmaStyle.boundVariables);
 
       // Extract token bindings from the style
       const bindings: TokenBinding[] = [];
@@ -991,9 +999,64 @@ async function integrateTokenUsageIntoStyles(
         for (const binding of bindingsArray) {
           if (binding && typeof binding === 'object' && 'id' in binding) {
             const bindingId = binding.id;
-            const token = tokenMap.get(bindingId);
+            console.log(`[TokenIntegration] Style "${style.name}": Property "${propertyName}" bound to variable ID: ${bindingId}`);
+            let token = tokenMap.get(bindingId);
+
+            // If not in local token map, try fetching from remote library
+            if (!token) {
+              console.log(`[TokenIntegration] Style "${style.name}": Not in local map, fetching remote variable...`);
+              try {
+                const variable = await figma.variables.getVariableByIdAsync(bindingId);
+                if (variable) {
+                  console.log(`[TokenIntegration] Style "${style.name}": Found remote variable "${variable.name}"`);
+
+                  // Get token type from variable.resolvedType
+                  const getTokenType = (v: any): 'color' | 'number' | 'string' | 'boolean' => {
+                    if (!v.resolvedType) return 'string';
+                    const type = v.resolvedType.toLowerCase();
+                    return type === 'color' ? 'color' :
+                      type === 'float' || type === 'number' ? 'number' :
+                      type === 'boolean' ? 'boolean' : 'string';
+                  };
+
+                  // Get first mode value
+                  const firstModeId = Object.keys(variable.valuesByMode)[0];
+                  const firstValue = variable.valuesByMode[firstModeId];
+                  const tokenType = getTokenType(variable);
+
+                  // Create a token object from the remote variable
+                  const remoteToken: DesignToken = {
+                    id: variable.id,
+                    name: variable.name,
+                    key: `remote/${variable.id}`,
+                    type: tokenType,
+                    resolvedType: tokenType,
+                    currentValue: firstValue,
+                    value: firstValue,
+                    collectionId: variable.variableCollectionId,
+                    collectionName: 'Remote Library',
+                    collections: ['Remote Library'],
+                    modeId: firstModeId,
+                    modeName: 'Default',
+                    valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
+                    modes: {},
+                    isAlias: false,
+                    usageCount: 0,
+                    layerIds: [],
+                    propertyTypes: [],
+                  };
+
+                  // Add to token map for future lookups
+                  tokenMap.set(variable.id, remoteToken);
+                  token = remoteToken;
+                }
+              } catch (error) {
+                console.warn(`[TokenIntegration] Failed to fetch remote variable ${bindingId}:`, error);
+              }
+            }
 
             if (token) {
+              console.log(`[TokenIntegration] Style "${style.name}": Found matching token "${token.name}"`);
               bindings.push({
                 property: propertyName as
                   | 'fills'
@@ -1005,6 +1068,8 @@ async function integrateTokenUsageIntoStyles(
                 tokenName: token.name,
                 tokenValue: token.value,
               });
+            } else {
+              console.log(`[TokenIntegration] Style "${style.name}": No matching token found for variable ID: ${bindingId}`);
             }
           }
         }
@@ -1014,13 +1079,17 @@ async function integrateTokenUsageIntoStyles(
       if (bindings.length > 0) {
         style.tokens = bindings;
         stylesWithTokens++;
+        console.log(`[TokenIntegration] Style "${style.name}": Added ${bindings.length} token bindings`);
       }
     } catch (error) {
       console.warn(`Failed to integrate tokens for style ${style.name}:`, error);
     }
   }
 
-  console.log(`[TokenIntegration] Found tokens in ${stylesWithTokens} styles`);
+  console.log(`[TokenIntegration] Summary:`);
+  console.log(`  - Styles processed: ${styles.length}`);
+  console.log(`  - Styles without boundVariables: ${stylesWithoutBoundVariables}`);
+  console.log(`  - Styles with tokens: ${stylesWithTokens}`);
 }
 
 /**
