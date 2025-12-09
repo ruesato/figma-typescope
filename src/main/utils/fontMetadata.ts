@@ -1,4 +1,4 @@
-import type { TextLayerData, RGBA, LineHeight } from '@/shared/types';
+import type { TextLayerData, RGBA, LineHeight, LetterSpacing } from '@/shared/types';
 import { buildComponentHierarchy } from './hierarchy';
 
 /**
@@ -37,6 +37,7 @@ export async function extractFontMetadata(
   const fontSize = node.getRangeFontSize(0, 1) as number;
   const fontWeight = node.getRangeFontWeight(0, 1) as number;
   const lineHeight = node.getRangeLineHeight(0, 1);
+  const letterSpacing = node.getRangeLetterSpacing(0, 1);
 
   // Get fill color (use first fill, default to black if none)
   const fills = node.getRangeFills(0, 1) as readonly Paint[];
@@ -52,8 +53,9 @@ export async function extractFontMetadata(
       }
     : { r: 0, g: 0, b: 0, a: 1 };
 
-  // Extract line height with proper type handling
+  // Extract line height and letter spacing with proper type handling
   const extractedLineHeight: LineHeight = extractLineHeight(lineHeight);
+  const extractedLetterSpacing: LetterSpacing = extractLetterSpacing(letterSpacing);
 
   // Build component hierarchy path
   const componentContext = buildComponentHierarchy(node);
@@ -65,6 +67,7 @@ export async function extractFontMetadata(
     fontSize,
     fontWeight,
     lineHeight: extractedLineHeight,
+    letterSpacing: extractedLetterSpacing,
     color,
     opacity: node.opacity,
     visible: node.visible,
@@ -110,6 +113,30 @@ function extractLineHeight(lineHeight: LineHeight): LineHeight {
 }
 
 /**
+ * Extract letter spacing value with proper type handling
+ *
+ * Figma's LetterSpacing can be a pixel value or a percentage.
+ * This function normalizes it to our LetterSpacing type.
+ *
+ * @param letterSpacing - The Figma LetterSpacing object
+ * @returns Normalized LetterSpacing object
+ */
+function extractLetterSpacing(letterSpacing: LetterSpacing): LetterSpacing {
+  if ('unit' in letterSpacing && 'value' in letterSpacing) {
+    return {
+      unit: letterSpacing.unit,
+      value: letterSpacing.value,
+    };
+  }
+
+  // Fallback to 0 pixels if we can't determine the type
+  return {
+    unit: 'PIXELS',
+    value: 0,
+  };
+}
+
+/**
  * Check if a text node has mixed styles
  *
  * A text node has mixed styles if different characters have different
@@ -134,11 +161,13 @@ export function hasMixedStyles(node: TextNode): boolean {
     const fontName = node.getRangeFontName(0, length);
     const fontSize = node.getRangeFontSize(0, length);
     const fontWeight = node.getRangeFontWeight(0, length);
+    const letterSpacing = node.getRangeLetterSpacing(0, length);
 
     return (
       fontName === figma.mixed ||
       fontSize === figma.mixed ||
-      fontWeight === figma.mixed
+      fontWeight === figma.mixed ||
+      letterSpacing === figma.mixed
     );
   } catch {
     // If we get an error, assume mixed styles
