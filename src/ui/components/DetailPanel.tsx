@@ -94,6 +94,28 @@ const getStatusLabel = (status: 'fully-styled' | 'partially-styled' | 'unstyled'
 };
 
 /**
+ * Format property name for display (Phase 6)
+ */
+const formatPropertyName = (property: string): string => {
+  switch (property) {
+    case 'fontFamily':
+      return 'Font Family';
+    case 'fontSize':
+      return 'Font Size';
+    case 'fontWeight':
+      return 'Font Weight';
+    case 'lineHeight':
+      return 'Line Height';
+    case 'letterSpacing':
+      return 'Letter Spacing';
+    case 'fills':
+      return 'Color';
+    default:
+      return property;
+  }
+};
+
+/**
  * Get layers that use a specific style
  */
 const getLayersForStyle = (layers: TextLayer[], styleId: string): TextLayer[] => {
@@ -289,11 +311,30 @@ const DetailRow: React.FC<DetailRowProps> = ({ item, onLayerSelect, onNavigateTo
               </div>
             )}
 
-            {/* Overrides Warning */}
-            {layer.hasOverrides && (
-              <p className="text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded mb-2">
-                ⚠️ Has overrides
-              </p>
+            {/* Property Overrides - NEW (Phase 6) */}
+            {layer.propertyOverrides && layer.propertyOverrides.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <div className="text-xs font-medium text-gray-600 mb-1">Overrides:</div>
+                {layer.propertyOverrides.map((override, idx) => (
+                  <div
+                    key={`${override.property}-${idx}`}
+                    className="text-xs bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5"
+                  >
+                    <div className="font-medium text-gray-700 mb-0.5">
+                      {formatPropertyName(override.property)}
+                    </div>
+                    <div className="flex items-center gap-2 font-mono text-[10px]">
+                      <span className="text-red-700 line-through">
+                        {override.displayStyleValue}
+                      </span>
+                      <span className="text-gray-400">→</span>
+                      <span className="text-green-700 font-semibold">
+                        {override.displayOverrideValue}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
