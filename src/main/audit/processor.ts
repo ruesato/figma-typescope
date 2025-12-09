@@ -220,10 +220,10 @@ export async function processAuditData(
  * Process a single text layer with complete metadata extraction
  *
  * @param rawLayer - Raw layer data from scan
- * @param _allStyles - All available styles in document (reserved for future use)
+ * @param allStyles - All available styles in document (for override calculation)
  * @returns Processed TextLayer with full metadata
  */
-async function processTextLayer(rawLayer: any, _allStyles: TextStyle[]): Promise<TextLayer> {
+async function processTextLayer(rawLayer: any, allStyles: TextStyle[]): Promise<TextLayer> {
   // Get the actual Figma node for detailed analysis
   const textNode = await figma.getNodeByIdAsync(rawLayer.id);
   if (!textNode) {
@@ -326,7 +326,7 @@ async function processTextLayer(rawLayer: any, _allStyles: TextStyle[]): Promise
 
     // Override Status
     hasOverrides: styleAssignment.assignmentStatus === 'partially-styled',
-    overriddenProperties: [], // TODO: Implement override detection
+    overriddenProperties: [], // DEPRECATED
 
     // Font Properties (Phase 3: Complete property extraction)
     fontFamily,
@@ -336,6 +336,19 @@ async function processTextLayer(rawLayer: any, _allStyles: TextStyle[]): Promise
     letterSpacing,
     fills,
   };
+
+  // Calculate property overrides (Phase 4)
+  // Compare layer properties vs style base properties
+  if (textLayer.styleId && allStyles.length > 0) {
+    const style = allStyles.find((s) => s.id === textLayer.styleId);
+    if (style) {
+      const overrides = calculatePropertyOverrides(textLayer, style);
+      if (overrides.length > 0) {
+        textLayer.propertyOverrides = overrides;
+        textLayer.hasOverrides = true;
+      }
+    }
+  }
 
   return textLayer;
 }
@@ -672,6 +685,29 @@ async function convertFigmaStyleToTextStyle(
     }
   }
 
+  // Extract base font properties from style (Phase 4)
+  // Note: TextStyle properties are accessed directly, not via range methods
+  const fontFamily = figmaStyle.fontName?.family || 'Unknown';
+  const fontSize = figmaStyle.fontSize || 16;
+  const fontWeight = figmaStyle.fontName?.style ? parseFontWeight(figmaStyle.fontName.style) : 400;
+  const lineHeight = figmaStyle.lineHeight ? extractLineHeight(figmaStyle.lineHeight) : { unit: 'AUTO' as const };
+  const letterSpacing = figmaStyle.letterSpacing ? extractLetterSpacing(figmaStyle.letterSpacing) : { unit: 'PIXELS' as const, value: 0 };
+
+  // Extract fills (text color)
+  const fills: RGBA[] = [];
+  if (figmaStyle.paints && Array.isArray(figmaStyle.paints)) {
+    for (const paint of figmaStyle.paints) {
+      if (paint.type === 'SOLID' && paint.visible !== false) {
+        fills.push({
+          r: paint.color.r,
+          g: paint.color.g,
+          b: paint.color.b,
+          a: paint.opacity ?? 1,
+        });
+      }
+    }
+  }
+
   return {
     id: figmaStyle.id,
     name: figmaStyle.name,
@@ -696,6 +732,17 @@ async function convertFigmaStyleToTextStyle(
 
     isDeprecated: false,
     lastModified: undefined,
+
+    // Base Properties (Phase 4)
+    fontFamily,
+    fontSize,
+    fontWeight,
+    lineHeight,
+    letterSpacing,
+    fills,
+
+    // Token Bindings (will be populated later if token detection is enabled)
+    tokens: [],
   };
 }
 
@@ -869,4 +916,114 @@ function extractFills(fills: readonly Paint[]): any[] {
   }
 
   return colors;
+}
+
+/**
+ * Parse font weight from font style name
+ * Converts font style strings (e.g., "Regular", "Bold", "Light") to numeric weights
+ *
+ * @param style - Font style name from Figma (e.g., "Regular", "Bold", "Semi Bold")
+ * @returns Numeric font weight (100-900)
+ */
+function parseFontWeight(style: string): number {
+  const styleLower = style.toLowerCase();
+
+  // Common mappings
+  if (styleLower.includes('thin')) return 100;
+  if (styleLower.includes('extra light') || styleLower.includes('ultralight')) return 200;
+  if (styleLower.includes('light')) return 300;
+  if (styleLower.includes('regular') || styleLower.includes('normal') || styleLower.includes('book')) return 400;
+  if (styleLower.includes('medium')) return 500;
+  if (styleLower.includes('semi bold') || styleLower.includes('semibold') || styleLower.includes('demi bold')) return 600;
+  if (styleLower.includes('bold')) return 700;
+  if (styleLower.includes('extra bold') || styleLower.includes('ultrabold')) return 800;
+  if (styleLower.includes('black') || styleLower.includes('heavy')) return 900;
+
+  // Default to regular
+  return 400;
+}
+
+/**
+ * Calculate property overrides by comparing layer vs style properties
+ * Returns array of PropertyOverride objects for properties that differ
+ *
+ * @param layer - TextLayer with extracted font properties
+ * @param style - TextStyle with base properties
+ * @returns Array of PropertyOverride objects (empty if no overrides)
+ */
+function calculatePropertyOverrides(layer: any, style: any): any[] {
+  const overrides: any[] = [];
+
+  // Helper to format values for display
+  const formatValue = (property: string, value: any): string => {
+    switch (property) {
+      case 'fontFamily':
+        return value || 'Unknown';
+      case 'fontSize':
+        return `${value}px`;
+      case 'fontWeight':
+        return String(value);
+      case 'lineHeight':
+        if (!value) return 'AUTO';
+        if (value.unit === 'AUTO') return 'AUTO';
+        return value.unit === 'PERCENT' ? `${value.value}%` : `${value.value}px`;
+      case 'letterSpacing':
+        if (!value) return '0px';
+        return value.unit === 'PERCENT' ? `${value.value}%` : `${value.value}px`;
+      case 'fills':
+        if (!value || !Array.isArray(value) || value.length === 0) return 'No fill';
+        const fill = value[0];
+        return `rgba(${Math.round(fill.r * 255)}, ${Math.round(fill.g * 255)}, ${Math.round(fill.b * 255)}, ${fill.a})`;
+      default:
+        return String(value);
+    }
+  };
+
+  // Helper to compare values (handles different types)
+  const valuesEqual = (prop: string, val1: any, val2: any): boolean => {
+    if (val1 === undefined || val2 === undefined) return false;
+
+    switch (prop) {
+      case 'fontFamily':
+      case 'fontSize':
+      case 'fontWeight':
+        return val1 === val2;
+
+      case 'lineHeight':
+      case 'letterSpacing':
+        if (!val1 || !val2) return false;
+        return val1.unit === val2.unit && val1.value === val2.value;
+
+      case 'fills':
+        if (!Array.isArray(val1) || !Array.isArray(val2)) return false;
+        if (val1.length !== val2.length) return false;
+        if (val1.length === 0 && val2.length === 0) return true;
+        const f1 = val1[0];
+        const f2 = val2[0];
+        return f1.r === f2.r && f1.g === f2.g && f1.b === f2.b && f1.a === f2.a;
+
+      default:
+        return val1 === val2;
+    }
+  };
+
+  // Compare each property
+  const properties = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'fills'];
+
+  for (const prop of properties) {
+    const layerValue = layer[prop];
+    const styleValue = style[prop];
+
+    if (layerValue !== undefined && styleValue !== undefined && !valuesEqual(prop, layerValue, styleValue)) {
+      overrides.push({
+        property: prop,
+        styleValue,
+        overrideValue: layerValue,
+        displayStyleValue: formatValue(prop, styleValue),
+        displayOverrideValue: formatValue(prop, layerValue),
+      });
+    }
+  }
+
+  return overrides;
 }
