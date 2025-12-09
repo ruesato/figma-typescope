@@ -353,19 +353,16 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
     const container = parentRef.current;
     if (!container || relevantLayers.length < 5000) return;
 
-    let animationFrameId: number;
     const onScroll = () => {
       const fps = scrollMonitor.current.measureFrame();
       if (!scrollMonitor.current.isOptimal() && fps < 50) {
         console.warn(`DetailPanel scroll performance degraded: ${fps}fps for ${relevantLayers.length} layers`);
       }
-      animationFrameId = requestAnimationFrame(onScroll);
     };
 
     container.addEventListener('scroll', onScroll);
     return () => {
       container.removeEventListener('scroll', onScroll);
-      cancelAnimationFrame(animationFrameId);
     };
   }, [relevantLayers.length]);
 
