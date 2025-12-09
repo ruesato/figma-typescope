@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight } from 'lucide-react';
 import TokenMetadataCard from './TokenMetadataCard';
 import type { TextLayer, TextStyle, DesignToken } from '@/shared/types';
+import { OVERSCAN_COUNTS, ScrollPerformanceMonitor } from '@/ui/utils/virtualization';
 
 // ============================================================================
-// Types
+// Types (T124 - Virtualized Detail Panel for 10k+ layers at 60fps)
 // ============================================================================
 
 export interface DetailPanelProps {
@@ -325,6 +326,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const parentRef = React.useRef<HTMLDivElement>(null);
+  const scrollMonitor = useRef(new ScrollPerformanceMonitor());
 
   // Get relevant layers based on selection
   const relevantLayers = useMemo(() => {
@@ -346,7 +348,28 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
     return flattenGroupedLayers(pageGroups);
   }, [pageGroups]);
 
-  // Setup virtualizer
+  // Monitor scroll performance for 10k+ layers
+  useEffect(() => {
+    const container = parentRef.current;
+    if (!container || relevantLayers.length < 5000) return;
+
+    let animationFrameId: number;
+    const onScroll = () => {
+      const fps = scrollMonitor.current.measureFrame();
+      if (!scrollMonitor.current.isOptimal() && fps < 50) {
+        console.warn(`DetailPanel scroll performance degraded: ${fps}fps for ${relevantLayers.length} layers`);
+      }
+      animationFrameId = requestAnimationFrame(onScroll);
+    };
+
+    container.addEventListener('scroll', onScroll);
+    return () => {
+      container.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [relevantLayers.length]);
+
+  // Setup virtualizer with enterprise zone optimization for 10k+ layers
   const virtualizer = useVirtualizer({
     count: flattenedItems.length,
     getScrollElement: () => parentRef.current,
@@ -356,7 +379,8 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
       if (item.type === 'component-header') return 36;
       return 120; // Layer item with more content
     },
-    overscan: 10,
+    overscan: flattenedItems.length > 5000 ? OVERSCAN_COUNTS.list : 10,
+    gap: 0,
   });
 
   const virtualItems = virtualizer.getVirtualItems();
@@ -636,6 +660,9 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
               flex: 1,
               overflow: 'auto',
               position: 'relative',
+              contain: 'layout style paint',
+              transform: 'translateZ(0)',
+              willChange: 'transform',
             }}
           >
             <div style={{ height: `${totalSize}px`, width: '100%', position: 'relative' }}>
@@ -649,6 +676,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
                       top: 0,
                       left: 0,
                       width: '100%',
+                      height: `${virtualItem.size}px`,
                       transform: `translateY(${virtualItem.start}px)`,
                     }}
                   >

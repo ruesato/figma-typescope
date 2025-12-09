@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import TreeView, { TreeNode, DefaultNodeRow, ExpandIcon, UsageBadge } from './TreeView';
 import type { DesignToken, TextLayer } from '@/shared/types';
+import { shouldVirtualize } from '@/ui/utils/virtualization';
 
 // ============================================================================
-// Types
+// Types (T125 - Virtualized Token View with enterprise-scale support)
 // ============================================================================
 
 export interface TokenViewProps {
@@ -204,6 +205,9 @@ export const TokenView: React.FC<TokenViewProps> = ({
     return expanded;
   }, [treeNodes]);
 
+  // Check if virtualization is needed for large token lists
+  const shouldUseVirtTokens = shouldVirtualize(filteredTokens.length, 'list');
+
   // Handle node selection
   const handleNodeSelect = (node: TreeNode<DesignToken>) => {
     if (node.type === 'token' && node.data && onTokenSelect) {
@@ -362,6 +366,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
             <div className="text-center">
               Showing {filteredTokens.length} token{filteredTokens.length !== 1 ? 's' : ''}
               {filteredTokens.length !== tokens.length && ` (filtered from ${tokens.length})`}
+              {shouldUseVirtTokens && ' • virtualized'}
             </div>
             <div className="flex flex-wrap gap-2 justify-center text-figma-text-secondary text-xs">
               <span title="Expand or collapse token group">

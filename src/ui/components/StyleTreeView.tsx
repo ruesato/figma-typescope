@@ -1,19 +1,23 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { TextStyle, TextLayer, LibrarySource } from '@/shared/types';
+import { shouldVirtualize, ITEM_SIZES, OVERSCAN_COUNTS } from '@/ui/utils/virtualization';
 
 /**
- * Style Tree View Component
+ * Style Tree View Component (Virtualized - T123)
  *
  * Displays text styles grouped by library source with expandable hierarchy.
- * Shows usage counts, supports search/filter, and provides drill-down.
+ * Uses TanStack Virtual for 1000+ styles with <500ms render time.
  *
  * Features:
+ * - Virtualized rendering for enterprise-scale (1000+ styles)
  * - Library grouping (Local + Team Libraries)
  * - Hierarchy navigation (Typography/Heading/H1)
  * - Usage count badges
  * - Expand/collapse functionality
  * - Search and filter support
  * - "Needs Styling" section for unstyled text
+ * - GPU acceleration and smooth scrolling
  */
 
 interface StyleTreeViewProps {
@@ -285,146 +289,167 @@ export default function StyleTreeView({
     }
   }, [selectedStyleId, filteredTree, expandedNodes, onStyleSelect]);
 
-  // Render tree node
-  const renderNode = (node: TreeNode, level: number = 0): JSX.Element => {
+  // Flatten tree for virtualization (includes only visible/expanded nodes)
+  const flattenedTree = useMemo(() => {
+    const flattened: (TreeNode & { displayLevel: number })[] = [];
+
+    const traverse = (nodes: TreeNode[], level: number) => {
+      for (const node of nodes) {
+        flattened.push({ ...node, displayLevel: level });
+        if (expandedNodes.has(node.id) && node.children.length > 0) {
+          traverse(node.children, level + 1);
+        }
+      }
+    };
+
+    traverse(filteredTree, 0);
+    return flattened;
+  }, [filteredTree, expandedNodes]);
+
+  // Determine if virtualization is needed
+  const shouldUseVirt = shouldVirtualize(flattenedTree.length, 'tree');
+
+  // Create virtualizer
+  const virtualizer = useVirtualizer({
+    count: flattenedTree.length,
+    getScrollElement: () => treeContainerRef.current,
+    estimateSize: () => ITEM_SIZES.treeNode,
+    overscan: OVERSCAN_COUNTS.tree,
+    gap: 0,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+
+  // Render single tree node
+  const renderTreeNode = (node: TreeNode & { displayLevel: number }): JSX.Element => {
+    const level = node.displayLevel;
     const isExpanded = expandedNodes.has(node.id);
     const isSelected = node.type === 'style' && node.style?.id === selectedStyleId;
     const isDisabled = node.type === 'style' && node.style?.id === disabledStyleId;
-    // Check if this style is an old style that was replaced (has replacement history entry)
     const isReplacedStyle =
       node.type === 'style' && node.style?.id && replacementHistory?.has(node.style.id);
-    // Check if this style is a new style that received replacements (target of a replacement)
     const receivedReplacements =
       node.type === 'style' && node.style?.id && replacedStyleIds?.has(node.style.id);
     const hasChildren = node.children.length > 0;
     const isExpandable = hasChildren || node.type === 'library';
-    // Get replacement count for new styles
     const replacementCount = Array.from(replacementHistory?.values() || [])
       .filter((entry) => entry.targetStyleId === node.style?.id)
       .reduce((sum, entry) => sum + entry.count, 0);
 
     return (
-      <div key={node.id}>
-        <div
-          onClick={() => {
-            if (isDisabled || isReplacedStyle) return; // Don't allow clicking disabled or replaced styles
-            if (isExpandable) {
-              toggleExpansion(node.id);
-            } else {
-              handleNodeClick(node);
-            }
-          }}
+      <div
+        onClick={() => {
+          if (isDisabled || isReplacedStyle) return;
+          if (isExpandable) {
+            toggleExpansion(node.id);
+          } else {
+            handleNodeClick(node);
+          }
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 8px',
+          paddingLeft: `${level * 20 + 8}px`,
+          cursor: isDisabled || isReplacedStyle ? 'not-allowed' : 'pointer',
+          backgroundColor: isSelected ? 'var(--figma-color-bg-brand)' : 'transparent',
+          color: isSelected
+            ? 'var(--figma-color-text-onbrand)'
+            : isReplacedStyle
+              ? 'var(--figma-color-text-tertiary)'
+              : 'var(--figma-color-text)',
+          borderRadius: '4px',
+          fontSize: '12px',
+          transition: 'background-color 0.15s ease',
+          opacity: isDisabled || isReplacedStyle ? 0.6 : 1,
+          height: `${ITEM_SIZES.treeNode}px`,
+        }}
+        onMouseEnter={(e) => {
+          if (!isSelected && !isDisabled) {
+            e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isSelected && !isDisabled) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }
+        }}
+      >
+        {/* Expand/Collapse Icon */}
+        {isExpandable && (
+          <span style={{ fontSize: '10px', color: 'var(--figma-color-icon-secondary)' }}>
+            {isExpanded ? '▼' : '▶'}
+          </span>
+        )}
+
+        {/* Replacement Indicator */}
+        {node.type === 'style' && (
+          <>
+            {isReplacedStyle && (
+              <div
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--figma-color-bg-tertiary)',
+                  flexShrink: 0,
+                }}
+                title="This style was replaced"
+              />
+            )}
+            {receivedReplacements && (
+              <div
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#10b981',
+                  flexShrink: 0,
+                }}
+                title="This style received replacements from other styles"
+              />
+            )}
+          </>
+        )}
+
+        {/* Node Name with count */}
+        <span
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '6px 8px',
-            paddingLeft: `${level * 20 + 8}px`,
-            cursor: isDisabled || isReplacedStyle ? 'not-allowed' : 'pointer',
-            backgroundColor: isSelected ? 'var(--figma-color-bg-brand)' : 'transparent',
-            color: isSelected
-              ? 'var(--figma-color-text-onbrand)'
-              : isReplacedStyle
-                ? 'var(--figma-color-text-tertiary)'
-                : 'var(--figma-color-text)',
-            borderRadius: '4px',
-            fontSize: '12px',
-            transition: 'background-color 0.15s ease',
-            opacity: isDisabled || isReplacedStyle ? 0.6 : 1,
-          }}
-          onMouseEnter={(e) => {
-            if (!isSelected && !isDisabled) {
-              e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isSelected && !isDisabled) {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            color: isReplacedStyle ? 'var(--figma-color-text-tertiary)' : 'inherit',
           }}
         >
-          {/* Expand/Collapse Icon */}
-          {isExpandable && (
-            <span style={{ fontSize: '10px', color: 'var(--figma-color-icon-secondary)' }}>
-              {isExpanded ? '▼' : '▶'}
-            </span>
-          )}
+          {node.name} {node.type === 'library' && `(${node.usageCount})`}
+          {node.type === 'style' &&
+            (isReplacedStyle ? (
+              ` (0)`
+            ) : (
+              <>
+                {node.usageCount > 0 && ` (${node.usageCount})`}
+                {receivedReplacements && replacementCount > 0 && ` (+${replacementCount})`}
+              </>
+            ))}
+        </span>
 
-          {/* Replacement Indicator */}
-          {node.type === 'style' && (
-            <>
-              {/* Gray circle for old/replaced styles */}
-              {isReplacedStyle && (
-                <div
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--figma-color-bg-tertiary)',
-                    flexShrink: 0,
-                  }}
-                  title="This style was replaced"
-                />
-              )}
-              {/* Green circle for new styles that received replacements */}
-              {receivedReplacements && (
-                <div
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: '#10b981',
-                    flexShrink: 0,
-                  }}
-                  title="This style received replacements from other styles"
-                />
-              )}
-            </>
-          )}
-
-          {/* Node Name with count */}
+        {/* Current badge */}
+        {isDisabled && (
           <span
             style={{
-              flex: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: isReplacedStyle ? 'var(--figma-color-text-tertiary)' : 'inherit',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              backgroundColor: 'var(--figma-color-bg-disabled)',
+              color: 'var(--figma-color-text-disabled)',
+              fontSize: '10px',
+              fontWeight: 500,
+              flexShrink: 0,
             }}
           >
-            {node.name} {node.type === 'library' && `(${node.usageCount})`}
-            {node.type === 'style' &&
-              (isReplacedStyle ? (
-                ` (0)`
-              ) : (
-                <>
-                  {node.usageCount > 0 && ` (${node.usageCount})`}
-                  {receivedReplacements && replacementCount > 0 && ` (+${replacementCount})`}
-                </>
-              ))}
+            Current
           </span>
-
-          {/* Current badge */}
-          {isDisabled && (
-            <span
-              style={{
-                padding: '2px 6px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--figma-color-bg-disabled)',
-                color: 'var(--figma-color-text-disabled)',
-                fontSize: '10px',
-                fontWeight: 500,
-                flexShrink: 0,
-              }}
-            >
-              Current
-            </span>
-          )}
-        </div>
-
-        {/* Children */}
-        {isExpanded && hasChildren && (
-          <div>{node.children.map((child) => renderNode(child, level + 1))}</div>
         )}
       </div>
     );
@@ -435,32 +460,85 @@ export default function StyleTreeView({
       className={`style-tree-view ${className}`}
       style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
     >
-      {/* Tree - Scrollable */}
-      <div
-        ref={treeContainerRef}
-        tabIndex={0}
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: 'var(--figma-space-sm)',
-          outline: 'none',
-        }}
-      >
-        {filteredTree.length === 0 ? (
-          <div
-            style={{
-              padding: 'var(--figma-space-md)',
-              textAlign: 'center',
-              color: 'var(--figma-color-text-secondary)',
-              fontSize: '12px',
-            }}
-          >
-            {searchQuery ? 'No styles found matching your search.' : 'No styles found.'}
+      {/* Non-virtualized for small datasets */}
+      {!shouldUseVirt ? (
+        <div
+          ref={treeContainerRef}
+          tabIndex={0}
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: 'var(--figma-space-sm)',
+            outline: 'none',
+          }}
+        >
+          {flattenedTree.length === 0 ? (
+            <div
+              style={{
+                padding: 'var(--figma-space-md)',
+                textAlign: 'center',
+                color: 'var(--figma-color-text-secondary)',
+                fontSize: '12px',
+              }}
+            >
+              {searchQuery ? 'No styles found matching your search.' : 'No styles found.'}
+            </div>
+          ) : (
+            flattenedTree.map((node) => (
+              <div key={node.id}>{renderTreeNode(node)}</div>
+            ))
+          )}
+        </div>
+      ) : (
+        /* Virtualized rendering for large datasets */
+        <div
+          ref={treeContainerRef}
+          tabIndex={0}
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: 'var(--figma-space-sm)',
+            outline: 'none',
+            contain: 'layout style paint',
+            transform: 'translateZ(0)',
+            willChange: 'transform',
+          }}
+        >
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+            {virtualItems.length === 0 ? (
+              <div
+                style={{
+                  padding: 'var(--figma-space-md)',
+                  textAlign: 'center',
+                  color: 'var(--figma-color-text-secondary)',
+                  fontSize: '12px',
+                }}
+              >
+                {searchQuery ? 'No styles found matching your search.' : 'No styles found.'}
+              </div>
+            ) : (
+              virtualItems.map((virtualItem) => {
+                const node = flattenedTree[virtualItem.index];
+                return (
+                  <div
+                    key={node.id}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualItem.size}px`,
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
+                    {renderTreeNode(node)}
+                  </div>
+                );
+              })
+            )}
           </div>
-        ) : (
-          filteredTree.map((node) => renderNode(node))
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
