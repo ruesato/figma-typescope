@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight } from 'lucide-react';
 import TokenMetadataCard from './TokenMetadataCard';
+import { TokenBadgeList } from './TokenBadge';
 import type { TextLayer, TextStyle, DesignToken } from '@/shared/types';
 import { OVERSCAN_COUNTS, ScrollPerformanceMonitor } from '@/ui/utils/virtualization';
 
@@ -274,18 +275,18 @@ const DetailRow: React.FC<DetailRowProps> = ({ item, onLayerSelect, onNavigateTo
                 </span>
               )}
 
-              {/* Token Count */}
-              {layer.tokens && layer.tokens.length > 0 && (
-                <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-800">
-                  {layer.tokens.length} token{layer.tokens.length !== 1 ? 's' : ''}
-                </span>
-              )}
-
               {/* Status Badge */}
               <span className={`text-xs px-2 py-1 rounded font-medium ${statusColor}`}>
                 {statusLabel}
               </span>
             </div>
+
+            {/* Token Badges - Expanded Display */}
+            {layer.tokens && layer.tokens.length > 0 && (
+              <div className="mt-2">
+                <TokenBadgeList tokens={layer.tokens} maxVisible={3} mode="expanded" size="sm" />
+              </div>
+            )}
 
             {/* Overrides Warning */}
             {layer.hasOverrides && (
