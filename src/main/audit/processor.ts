@@ -6,6 +6,9 @@ import type {
   StyleHierarchyNode,
   AuditMetrics,
   StyleGovernanceAuditResult,
+  RGBA,
+  LineHeight,
+  LetterSpacing,
 } from '@/shared/types';
 
 import { detectStyleAssignment } from '@/main/utils/styleDetection';
@@ -230,24 +233,65 @@ async function processTextLayer(rawLayer: any, _allStyles: TextStyle[]): Promise
   // Detect style assignment
   const styleAssignment = await detectStyleAssignment(textNode);
 
-  // Extract font properties from text node
+  // Extract font properties from text node (Phase 3: Complete property extraction)
+  let fontFamily = undefined;
+  let fontSize = undefined;
+  let fontWeight = undefined;
+  let lineHeight = undefined;
   let letterSpacing = undefined;
+  let fills = undefined;
+
   if (textNode.type === 'TEXT' && textNode.characters.length > 0) {
     try {
+      // Extract font name (family)
+      const fontName = textNode.getRangeFontName(0, 1);
+      if (fontName !== figma.mixed) {
+        fontFamily = fontName.family;
+      }
+
+      // Extract font size
+      const rawFontSize = textNode.getRangeFontSize(0, 1);
+      if (rawFontSize !== figma.mixed && typeof rawFontSize === 'number') {
+        fontSize = rawFontSize;
+      }
+
+      // Extract font weight
+      const rawFontWeight = textNode.getRangeFontWeight(0, 1);
+      if (rawFontWeight !== figma.mixed && typeof rawFontWeight === 'number') {
+        fontWeight = rawFontWeight;
+      }
+
+      // Extract line height
+      const rawLineHeight = textNode.getRangeLineHeight(0, 1);
+      if (rawLineHeight !== figma.mixed) {
+        lineHeight = extractLineHeight(rawLineHeight);
+      }
+
+      // Extract letter spacing
       const rawLetterSpacing = textNode.getRangeLetterSpacing(0, 1);
+      if (rawLetterSpacing !== figma.mixed) {
+        letterSpacing = extractLetterSpacing(rawLetterSpacing);
+      }
 
-      // Convert to our LetterSpacing type
-      if (typeof rawLetterSpacing === 'object' && 'unit' in rawLetterSpacing && 'value' in rawLetterSpacing) {
-        letterSpacing = {
-          unit: rawLetterSpacing.unit,
-          value: rawLetterSpacing.value,
-        };
+      // Extract fills (color)
+      const rawFills = textNode.getRangeFills(0, 1);
+      if (rawFills !== figma.mixed && Array.isArray(rawFills)) {
+        fills = extractFills(rawFills);
+      }
 
-        // DEBUG: Log letterSpacing for verification
-        console.log(`[DEBUG] Layer "${textNode.name}": letterSpacing =`, letterSpacing);
+      // DEBUG: Log extracted properties for verification (first 3 layers)
+      if (Math.random() < 0.05) { // Log ~5% of layers
+        console.log(`[DEBUG] Layer "${textNode.name}":`, {
+          fontFamily,
+          fontSize,
+          fontWeight,
+          lineHeight,
+          letterSpacing,
+          fillCount: fills?.length || 0,
+        });
       }
     } catch (error) {
-      console.warn(`Failed to extract letterSpacing for layer ${textNode.name}:`, error);
+      console.warn(`Failed to extract font properties for layer ${textNode.name}:`, error);
     }
   }
 
@@ -284,8 +328,13 @@ async function processTextLayer(rawLayer: any, _allStyles: TextStyle[]): Promise
     hasOverrides: styleAssignment.assignmentStatus === 'partially-styled',
     overriddenProperties: [], // TODO: Implement override detection
 
-    // Font Properties (Phase 2 enhancement)
+    // Font Properties (Phase 3: Complete property extraction)
+    fontFamily,
+    fontSize,
+    fontWeight,
+    lineHeight,
     letterSpacing,
+    fills,
   };
 
   return textLayer;
@@ -743,4 +792,81 @@ export function createAuditResult(
     isStale: false,
     auditDuration: duration,
   };
+}
+
+// ============================================================================
+// Font Property Extraction Helpers (Phase 3)
+// ============================================================================
+
+/**
+ * Extract and normalize line height from Figma's LineHeight type
+ *
+ * @param lineHeight - Figma's LineHeight object
+ * @returns Normalized LineHeight for our data model
+ */
+function extractLineHeight(lineHeight: any): any {
+  // Handle symbol type (AUTO)
+  if (typeof lineHeight === 'symbol') {
+    return { unit: 'AUTO' };
+  }
+
+  // Handle object with unit property
+  if (typeof lineHeight === 'object' && lineHeight !== null && 'unit' in lineHeight) {
+    if (lineHeight.unit === 'AUTO') {
+      return { unit: 'AUTO' };
+    }
+    if ('value' in lineHeight) {
+      return {
+        unit: lineHeight.unit,
+        value: lineHeight.value,
+      };
+    }
+  }
+
+  // Fallback to AUTO
+  return { unit: 'AUTO' };
+}
+
+/**
+ * Extract and normalize letter spacing from Figma's LetterSpacing type
+ *
+ * @param letterSpacing - Figma's LetterSpacing object
+ * @returns Normalized LetterSpacing for our data model
+ */
+function extractLetterSpacing(letterSpacing: any): any {
+  if (typeof letterSpacing === 'object' && letterSpacing !== null) {
+    if ('unit' in letterSpacing && 'value' in letterSpacing) {
+      return {
+        unit: letterSpacing.unit,
+        value: letterSpacing.value,
+      };
+    }
+  }
+
+  // Fallback to 0 pixels
+  return { unit: 'PIXELS', value: 0 };
+}
+
+/**
+ * Extract fill colors from Figma's Paint array
+ * Extracts solid fills and converts to RGBA format
+ *
+ * @param fills - Figma's Paint array
+ * @returns Array of RGBA colors (only solid fills)
+ */
+function extractFills(fills: readonly Paint[]): any[] {
+  const colors: any[] = [];
+
+  for (const fill of fills) {
+    if (fill.type === 'SOLID' && fill.visible !== false) {
+      colors.push({
+        r: fill.color.r,
+        g: fill.color.g,
+        b: fill.color.b,
+        a: fill.opacity ?? 1,
+      });
+    }
+  }
+
+  return colors;
 }

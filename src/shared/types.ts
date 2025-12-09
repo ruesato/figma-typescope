@@ -508,8 +508,13 @@ export interface TextLayer {
   overriddenProperties?: string[]; // DEPRECATED: List of overridden property names (use propertyOverrides instead)
   propertyOverrides?: PropertyOverride[]; // Detailed override information with before/after values
 
-  // Font Properties (Phase 2: Gradually adding property extraction)
-  letterSpacing?: LetterSpacing; // Letter spacing (pixels or %) - extracted from text node
+  // Font Properties (Phase 3: Complete property extraction)
+  fontFamily?: string; // Font family name (e.g., "Inter")
+  fontSize?: number; // Font size in pixels
+  fontWeight?: number; // Font weight (100-900)
+  lineHeight?: LineHeight; // Line height (pixels, %, or "AUTO")
+  letterSpacing?: LetterSpacing; // Letter spacing (pixels or %)
+  fills?: RGBA[]; // Fill colors (first solid fill extracted)
 }
 
 /**
