@@ -9,6 +9,7 @@ import type {
   RGBA,
   LineHeight,
   LetterSpacing,
+  TokenBinding,
 } from '@/shared/types';
 
 import { detectStyleAssignment } from '@/main/utils/styleDetection';
@@ -184,10 +185,13 @@ export async function processAuditData(
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    // Step 6: Integrate token usage (85-88%)
+    // Step 6: Integrate token usage into layers and styles (85-88%)
     if (options.includeTokens && output.tokens.length > 0) {
       if (onProgress) onProgress(85, 'Integrating token usage...');
       await integrateTokenUsageIntoLayers(output.layers, output.tokens);
+
+      // Also integrate tokens into styles
+      await integrateTokenUsageIntoStyles(output.styles, output.tokens);
     }
 
     // Step 7: Categorize layers (88-90%)
@@ -941,6 +945,82 @@ function parseFontWeight(style: string): number {
 
   // Default to regular
   return 400;
+}
+
+/**
+ * Integrate token usage into styles (Phase 6.1 - Bug fix)
+ * Detects token bindings on text styles and populates style.tokens array
+ *
+ * @param styles - Array of TextStyle objects to populate with tokens
+ * @param tokens - All available design tokens (for tokenMap)
+ */
+async function integrateTokenUsageIntoStyles(
+  styles: TextStyle[],
+  tokens: DesignToken[]
+): Promise<void> {
+  console.log(`[TokenIntegration] Integrating tokens into ${styles.length} styles...`);
+
+  // Build token map for quick lookup
+  const tokenMap = new Map<string, DesignToken>();
+  for (const token of tokens) {
+    tokenMap.set(token.id, token);
+  }
+
+  // Process each style
+  let stylesWithTokens = 0;
+  for (const style of styles) {
+    try {
+      // Fetch the actual Figma style object to access boundVariables
+      const figmaStyle = await figma.getStyleByIdAsync(style.id);
+      if (!figmaStyle || figmaStyle.type !== 'TEXT') {
+        continue;
+      }
+
+      // Check if style has bound variables
+      if (!figmaStyle.boundVariables) {
+        continue;
+      }
+
+      // Extract token bindings from the style
+      const bindings: TokenBinding[] = [];
+      for (const [propertyName, variableBindings] of Object.entries(figmaStyle.boundVariables)) {
+        const bindingsArray = Array.isArray(variableBindings)
+          ? variableBindings
+          : [variableBindings];
+
+        for (const binding of bindingsArray) {
+          if (binding && typeof binding === 'object' && 'id' in binding) {
+            const bindingId = binding.id;
+            const token = tokenMap.get(bindingId);
+
+            if (token) {
+              bindings.push({
+                property: propertyName as
+                  | 'fills'
+                  | 'fontFamily'
+                  | 'fontSize'
+                  | 'lineHeight'
+                  | 'letterSpacing',
+                tokenId: token.id,
+                tokenName: token.name,
+                tokenValue: token.value,
+              });
+            }
+          }
+        }
+      }
+
+      // Update style with token bindings
+      if (bindings.length > 0) {
+        style.tokens = bindings;
+        stylesWithTokens++;
+      }
+    } catch (error) {
+      console.warn(`Failed to integrate tokens for style ${style.name}:`, error);
+    }
+  }
+
+  console.log(`[TokenIntegration] Found tokens in ${stylesWithTokens} styles`);
 }
 
 /**
