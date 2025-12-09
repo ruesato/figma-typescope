@@ -230,6 +230,27 @@ async function processTextLayer(rawLayer: any, _allStyles: TextStyle[]): Promise
   // Detect style assignment
   const styleAssignment = await detectStyleAssignment(textNode);
 
+  // Extract font properties from text node
+  let letterSpacing = undefined;
+  if (textNode.type === 'TEXT' && textNode.characters.length > 0) {
+    try {
+      const rawLetterSpacing = textNode.getRangeLetterSpacing(0, 1);
+
+      // Convert to our LetterSpacing type
+      if (typeof rawLetterSpacing === 'object' && 'unit' in rawLetterSpacing && 'value' in rawLetterSpacing) {
+        letterSpacing = {
+          unit: rawLetterSpacing.unit,
+          value: rawLetterSpacing.value,
+        };
+
+        // DEBUG: Log letterSpacing for verification
+        console.log(`[DEBUG] Layer "${textNode.name}": letterSpacing =`, letterSpacing);
+      }
+    } catch (error) {
+      console.warn(`Failed to extract letterSpacing for layer ${textNode.name}:`, error);
+    }
+  }
+
   // Build TextLayer entity
   const textLayer: TextLayer = {
     // Identity
@@ -262,6 +283,9 @@ async function processTextLayer(rawLayer: any, _allStyles: TextStyle[]): Promise
     // Override Status
     hasOverrides: styleAssignment.assignmentStatus === 'partially-styled',
     overriddenProperties: [], // TODO: Implement override detection
+
+    // Font Properties (Phase 2 enhancement)
+    letterSpacing,
   };
 
   return textLayer;

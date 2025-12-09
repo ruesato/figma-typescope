@@ -32,6 +32,8 @@ const calculatePluginSize = () => {
 
 const pluginSize = calculatePluginSize();
 
+console.log('🚀 [TYPESCOPE] Plugin loaded successfully');
+
 figma.showUI(__html__, {
   width: pluginSize.width,
   height: pluginSize.height,

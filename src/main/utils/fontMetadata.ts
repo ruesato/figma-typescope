@@ -57,6 +57,9 @@ export async function extractFontMetadata(
   const extractedLineHeight: LineHeight = extractLineHeight(lineHeight);
   const extractedLetterSpacing: LetterSpacing = extractLetterSpacing(letterSpacing);
 
+  // DEBUG: Log letterSpacing values for verification
+  console.log(`[DEBUG] Layer "${node.name}": letterSpacing =`, extractedLetterSpacing);
+
   // Build component hierarchy path
   const componentContext = buildComponentHierarchy(node);
 

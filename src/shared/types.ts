@@ -507,6 +507,9 @@ export interface TextLayer {
   hasOverrides: boolean; // True if style properties locally overridden
   overriddenProperties?: string[]; // DEPRECATED: List of overridden property names (use propertyOverrides instead)
   propertyOverrides?: PropertyOverride[]; // Detailed override information with before/after values
+
+  // Font Properties (Phase 2: Gradually adding property extraction)
+  letterSpacing?: LetterSpacing; // Letter spacing (pixels or %) - extracted from text node
 }
 
 /**
