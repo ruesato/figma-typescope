@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight } from 'lucide-react';
 import TokenMetadataCard from './TokenMetadataCard';
 import { TokenBadgeList } from './TokenBadge';
+import { StylePropertiesPanel } from './StylePropertiesPanel';
 import type { TextLayer, TextStyle, DesignToken } from '@/shared/types';
 import { OVERSCAN_COUNTS, ScrollPerformanceMonitor } from '@/ui/utils/virtualization';
 
@@ -626,6 +627,13 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         {selectedToken && (
           <div style={{ marginTop: 'var(--figma-space-md)' }}>
             <TokenMetadataCard token={selectedToken} />
+          </div>
+        )}
+
+        {/* Style Properties Panel - NEW (Phase 5) */}
+        {selectedStyle && (
+          <div style={{ marginTop: 'var(--figma-space-md)' }}>
+            <StylePropertiesPanel style={selectedStyle} />
           </div>
         )}
 
