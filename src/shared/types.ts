@@ -11,6 +11,13 @@ export type LineHeight =
   | { unit: 'AUTO' };
 
 /**
+ * Letter spacing can be pixels or percentage
+ */
+export type LetterSpacing =
+  | { value: number; unit: 'PIXELS' }
+  | { value: number; unit: 'PERCENT' };
+
+/**
  * Standard RGBA color representation
  */
 export interface RGBA {
@@ -48,6 +55,7 @@ export interface PropertyMatchMap {
   fontSize: boolean;
   fontWeight: boolean;
   lineHeight: boolean;
+  letterSpacing: boolean;
   color: boolean;
 }
 
@@ -55,7 +63,7 @@ export interface PropertyMatchMap {
  * Differing property for style match suggestions
  */
 export interface DifferingProperty {
-  property: 'fontFamily' | 'fontSize' | 'fontWeight' | 'lineHeight' | 'color';
+  property: 'fontFamily' | 'fontSize' | 'fontWeight' | 'lineHeight' | 'letterSpacing' | 'color';
   textValue: string; // Current text property value
   styleValue: string; // Style property value
 }
@@ -85,6 +93,7 @@ export interface TextLayerData {
   fontSize: number; // Font size in pixels
   fontWeight: number; // Font weight (100-900)
   lineHeight: LineHeight; // Line height (pixels, %, or "AUTO")
+  letterSpacing: LetterSpacing; // Letter spacing (pixels or %)
 
   // Visual Properties
   color: RGBA; // Text color {r, g, b, a}
@@ -453,6 +462,17 @@ export type ReplacementState =
 // ----------------------------------------------------------------------------
 
 /**
+ * Property override with before/after values
+ */
+export interface PropertyOverride {
+  property: 'fontFamily' | 'fontSize' | 'fontWeight' | 'lineHeight' | 'letterSpacing' | 'fills';
+  styleValue: any; // Value from the applied style
+  overrideValue: any; // Overridden value on this layer
+  displayStyleValue: string; // Formatted style value for display
+  displayOverrideValue: string; // Formatted override value for display
+}
+
+/**
  * Text layer with style and token metadata
  */
 export interface TextLayer {
@@ -483,9 +503,10 @@ export interface TextLayer {
   visible: boolean; // Layer visibility state
   opacity: number; // Layer opacity (0-1)
 
-  // Override Status (for component instances)
+  // Override Status (for component instances and partially-styled layers)
   hasOverrides: boolean; // True if style properties locally overridden
-  overriddenProperties?: string[]; // List of overridden property names
+  overriddenProperties?: string[]; // DEPRECATED: List of overridden property names (use propertyOverrides instead)
+  propertyOverrides?: PropertyOverride[]; // Detailed override information with before/after values
 }
 
 /**
@@ -515,6 +536,17 @@ export interface TextStyle {
   // Status
   isDeprecated: boolean; // Marked as deprecated
   lastModified?: Date; // Last modification timestamp (if available)
+
+  // Base Properties (NEW - for style property display)
+  fontFamily: string; // Font family name
+  fontSize: number; // Font size in pixels
+  fontWeight: number; // Font weight (100-900)
+  lineHeight: LineHeight; // Line height (pixels, %, or AUTO)
+  letterSpacing: LetterSpacing; // Letter spacing (pixels or %)
+  fills: RGBA[]; // Fill colors (usually single color for text)
+
+  // Token Bindings (NEW - tokens used in this style)
+  tokens: TokenBinding[]; // Design tokens applied to this style
 }
 
 export interface PageUsage {
