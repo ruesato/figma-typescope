@@ -108,7 +108,7 @@ export default function StyleTreeView({
   useEffect(() => {
     try {
       parent.postMessage(
-        { pluginMessage: { type: 'SAVE_GROUP_BY_LIBRARY', value: groupByLibrary } },
+        { pluginMessage: { type: 'SAVE_GROUP_BY_LIBRARY', payload: { enabled: groupByLibrary } } },
         '*'
       );
     } catch (error) {
