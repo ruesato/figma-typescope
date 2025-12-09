@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight } from 'lucide-react';
 import TokenMetadataCard from './TokenMetadataCard';
@@ -366,16 +366,19 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
     };
   }, [relevantLayers.length]);
 
+  // Memoize estimateSize to prevent virtualizer re-creation on every render
+  const estimateSize = useCallback((index: number) => {
+    const item = flattenedItems[index];
+    if (item.type === 'page-header') return 48;
+    if (item.type === 'component-header') return 36;
+    return 120; // Layer item with more content
+  }, [flattenedItems]);
+
   // Setup virtualizer with enterprise zone optimization for 10k+ layers
   const virtualizer = useVirtualizer({
     count: flattenedItems.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (index) => {
-      const item = flattenedItems[index];
-      if (item.type === 'page-header') return 48;
-      if (item.type === 'component-header') return 36;
-      return 120; // Layer item with more content
-    },
+    estimateSize,
     overscan: flattenedItems.length > 5000 ? OVERSCAN_COUNTS.list : 10,
     gap: 0,
   });
