@@ -632,15 +632,32 @@ async function buildLibraryMap(): Promise<Map<string, string>> {
   const map = new Map<string, string>();
 
   try {
-    // Note: teamLibrary API may not be available in all contexts
-    // If unavailable, we'll fall back to basic library name resolution
-    if (figma.teamLibrary && typeof figma.teamLibrary.getAvailableLibrariesAsync === 'function') {
-      const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
-      for (const library of libraries) {
-        map.set(library.key, library.name);
+    // Try the new style libraries API first (returns library collections with keys)
+    if (figma.teamLibrary && typeof figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync === 'function') {
+      try {
+        const libraryCollections = await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
+        for (const collection of libraryCollections) {
+          // Map both the collection key and name for later lookup
+          map.set(collection.key, collection.name);
+        }
+      } catch (e) {
+        console.warn('Could not load library variable collections:', e);
       }
-    } else {
-      console.warn('teamLibrary API not available');
+    }
+
+    // Also try the traditional style libraries API as a fallback
+    if (figma.teamLibrary && typeof figma.teamLibrary.getAvailableLibrariesAsync === 'function') {
+      try {
+        const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
+        for (const library of libraries) {
+          // Only add if not already present (variable collections take precedence)
+          if (!map.has(library.key)) {
+            map.set(library.key, library.name);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load style libraries:', e);
+      }
     }
   } catch (error) {
     console.warn('Could not load team libraries - proceeding with basic name resolution:', error);
@@ -669,15 +686,33 @@ async function convertFigmaStyleToTextStyle(
   if (figmaStyle.remote) {
     sourceType = 'team_library';
 
-    // Extract library key from style key (format: "libraryKey/styleKey")
+    // Try to extract library key from style key
+    // Format could be "libraryKey/styleKey" or just a hash
     const keyParts = figmaStyle.key.split('/');
+
     if (keyParts.length >= 2) {
+      // Standard format: "libraryKey/styleKey"
       const libraryKey = keyParts[0];
-      libraryName = libraryMap.get(libraryKey) || `Library (${libraryKey.substring(0, 8)}...)`;
+      const resolvedName = libraryMap.get(libraryKey);
+      libraryName = resolvedName || `Library (${libraryKey.substring(0, 8)}...)`;
       libraryId = libraryKey;
     } else {
-      libraryName = 'External Library';
-      libraryId = 'external';
+      // Hash-based format: just the hash
+      // Try to find ANY library in the map and use that (typically there's only one library)
+      const libraryNames = Array.from(libraryMap.values());
+      if (libraryNames.length === 1) {
+        // Single library - use its name
+        libraryName = libraryNames[0];
+        libraryId = Array.from(libraryMap.keys())[0];
+      } else if (libraryNames.length > 1) {
+        // Multiple libraries - can't determine which one
+        libraryName = `Library (${figmaStyle.key.substring(0, 8)}...)`;
+        libraryId = figmaStyle.key;
+      } else {
+        // No libraries in map - this is truly external
+        libraryName = 'External Library';
+        libraryId = 'external';
+      }
     }
   }
 
