@@ -67,6 +67,17 @@ export default function StyleTreeView({
   // Expansion state
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
 
+  // Update expansion state when tree structure changes to expand top-level nodes
+  useEffect(() => {
+    const expanded = new Set<string>();
+    treeData.forEach((node) => {
+      if (node.type === 'library' || node.type === 'unstyled') {
+        expanded.add(node.id);
+      }
+    });
+    setExpandedNodeIds(expanded);
+  }, [treeData]);
+
   // Load groupByLibrary preference from Figma client storage
   useEffect(() => {
     try {
@@ -210,16 +221,6 @@ export default function StyleTreeView({
     return filterTree(result, searchQuery.toLowerCase());
   }, [treeData, searchQuery, sourceFilter]);
 
-  // Auto-expand all library nodes
-  const defaultExpandedIds = useMemo(() => {
-    const expanded = new Set<string>();
-    filteredTree.forEach((node) => {
-      if (node.type === 'library') {
-        expanded.add(node.id);
-      }
-    });
-    return expanded;
-  }, [filteredTree]);
 
   // Handle node selection
   const handleNodeSelect = (node: TreeNode<TextStyle>) => {
@@ -377,7 +378,6 @@ export default function StyleTreeView({
         onNodeSelect={handleNodeSelect}
         expandedIds={expandedNodeIds}
         onExpandedChange={handleExpandedChange}
-        defaultExpandedIds={defaultExpandedIds}
         renderNode={renderStyleNode}
         renderFooter={renderFooter}
         className={className}
