@@ -288,12 +288,9 @@ export class ReplacementEngine {
       counter++;
     }
 
-    console.log(`[StyleClone] Cloning "${sourceStyle.name}" → "${localStyleName}"`);
-
     // Load the source style's font first (required before setting properties)
     try {
       await figma.loadFontAsync(sourceStyle.fontName);
-      console.log(`[StyleClone] Loaded source font: ${sourceStyle.fontName.family} ${sourceStyle.fontName.style}`);
     } catch (error) {
       console.warn(`[StyleClone] Failed to load source font:`, error);
     }
@@ -319,12 +316,9 @@ export class ReplacementEngine {
     }
 
     // Copy variable bindings from source style, replacing the source token with target
-    console.log(`[StyleClone] Source style bound variables:`, JSON.stringify(sourceStyle.boundVariables || {}));
-
     if (sourceStyle.boundVariables) {
       for (const [property, bindings] of Object.entries(sourceStyle.boundVariables)) {
         const bindingArray = Array.isArray(bindings) ? bindings : [bindings];
-        console.log(`[StyleClone] Processing property "${property}" with ${bindingArray.length} bindings`);
 
         // Build the list of variables for this property
         const variablesToBind: Variable[] = [];
@@ -335,7 +329,6 @@ export class ReplacementEngine {
 
             if (binding.id === sourceTokenId) {
               // Use target variable for source token
-              console.log(`[StyleClone] Found source token in "${property}", will replace with target`);
               variableToUse = targetVariable;
 
               // Load font if changing fontFamily
@@ -349,16 +342,13 @@ export class ReplacementEngine {
 
                   try {
                     await figma.loadFontAsync({ family, style });
-                    console.log(`[StyleClone] Loaded font for cloning: ${family} ${style}`);
                   } catch (error) {
-                    console.warn(`[StyleClone] Failed to load font ${family} ${style}:`, error);
                     // Try with Regular as fallback
                     if (style !== 'Regular') {
                       try {
                         await figma.loadFontAsync({ family, style: 'Regular' });
-                        console.log(`[StyleClone] Loaded font fallback for cloning: ${family} Regular`);
                       } catch (fallbackError) {
-                        console.warn(`[StyleClone] Fallback also failed:`, fallbackError);
+                        console.warn(`[StyleClone] Failed to load font ${family} ${style}:`, fallbackError);
                       }
                     }
                   }
@@ -367,7 +357,6 @@ export class ReplacementEngine {
             } else {
               // Keep original binding
               variableToUse = await figma.variables.getVariableByIdAsync(binding.id);
-              console.log(`[StyleClone] Keeping original token in "${property}": ${binding.id}`);
             }
 
             if (variableToUse) {
@@ -382,14 +371,11 @@ export class ReplacementEngine {
             // For single binding, pass the variable directly
             if (variablesToBind.length === 1) {
               localStyle.setBoundVariable(property as any, variablesToBind[0]);
-              console.log(`[StyleClone] ✓ Bound "${property}" to variable ${variablesToBind[0].id}`);
             } else {
               // For multiple bindings, we need to call setBoundVariable multiple times
-              // This adds each variable to the array
               for (const variable of variablesToBind) {
                 localStyle.setBoundVariable(property as any, variable);
               }
-              console.log(`[StyleClone] ✓ Bound "${property}" to ${variablesToBind.length} variables`);
             }
           } catch (error) {
             console.warn(`[StyleClone] Failed to bind ${property}:`, error);
@@ -398,9 +384,6 @@ export class ReplacementEngine {
       }
     }
 
-    console.log(`[StyleClone] Final cloned style bound variables:`, JSON.stringify(localStyle.boundVariables || {}));
-
-    console.log(`[StyleClone] Created local style: "${localStyleName}" (ID: ${localStyle.id})`);
     return localStyle.id;
   }
 
@@ -516,19 +499,13 @@ export class ReplacementEngine {
     // Process layers with adaptive batching
     for await (const _ of batchProcessor.processBatches(affectedLayerIds, async (layerId) => {
       try {
-        console.log(`[TokenReplacement] Processing layer ${layerId}...`);
-
         // Get the text node
         const node = await figma.getNodeByIdAsync(layerId);
         if (!node || node.type !== 'TEXT') {
           throw new Error('Layer is not a text node');
         }
 
-        console.log(`[TokenReplacement] Found text node: "${node.name}"`);
-
         const textNode = node as TextNode;
-        console.log(`[TokenReplacement] Layer has text style: ${textNode.textStyleId || 'NONE'}`);
-        console.log(`[TokenReplacement] Layer bound variables:`, JSON.stringify(node.boundVariables || {}));
 
         // Check if layer has direct token bindings
         const boundVariables = node.boundVariables || {};
@@ -571,16 +548,13 @@ export class ReplacementEngine {
 
                   try {
                     await figma.loadFontAsync({ family, style });
-                    console.log(`[TokenReplacement] Loaded font: ${family} ${style}`);
                   } catch (error) {
-                    console.warn(`[TokenReplacement] Failed to load font ${family} ${style}:`, error);
                     // Try with Regular as fallback
                     if (style !== 'Regular') {
                       try {
                         await figma.loadFontAsync({ family, style: 'Regular' });
-                        console.log(`[TokenReplacement] Loaded font fallback: ${family} Regular`);
                       } catch (fallbackError) {
-                        console.warn(`[TokenReplacement] Fallback also failed:`, fallbackError);
+                        console.warn(`[TokenReplacement] Failed to load font ${family} ${style}:`, fallbackError);
                       }
                     }
                   }
@@ -617,8 +591,6 @@ export class ReplacementEngine {
               }
 
               replacementCount++;
-              console.log(`[TokenReplacement] Replaced direct token on layer "${node.name}" property "${property}"`);
-              console.log(`[TokenReplacement] After replacement - Layer bound variables:`, JSON.stringify(node.boundVariables || {}));
             }
           }
         }
@@ -630,9 +602,6 @@ export class ReplacementEngine {
           // Check if this style has already been cloned
           if (remoteToLocalStyleMap.has(textNode.textStyleId)) {
             const localStyleId = remoteToLocalStyleMap.get(textNode.textStyleId)!;
-            console.log(
-              `[TokenReplacement] Layer "${node.name}" uses already-cloned style, applying cloned style`
-            );
             // Apply the existing cloned style
             await textNode.setTextStyleIdAsync(localStyleId);
             replacementCount++;
@@ -643,9 +612,6 @@ export class ReplacementEngine {
           // Check if we've already processed this style
           if (processedStyles.has(textNode.textStyleId)) {
             // Style already processed - this layer is covered
-            console.log(
-              `[TokenReplacement] Layer "${node.name}" uses already-processed style, skipping`
-            );
             // Don't throw error - this is a success (style was already replaced)
             return;
           }
@@ -673,11 +639,6 @@ export class ReplacementEngine {
 
             if (styleHasSourceToken) {
               // Style has the source token - clone it
-              const styleType = style.remote ? 'remote' : 'local';
-              console.log(
-                `[TokenReplacement] Style "${style.name}" is ${styleType} and has source token - cloning with replacement`
-              );
-
               // Clone the style with token replacement
               const newLocalStyleId = await this.cloneStyleWithTokenReplacement(
                 style,
@@ -693,9 +654,6 @@ export class ReplacementEngine {
               await textNode.setTextStyleIdAsync(newLocalStyleId);
               replacementCount++;
 
-              console.log(
-                `[TokenReplacement] Applied cloned style to layer "${node.name}"`
-              );
               // Continue to next layer
               return;
             }

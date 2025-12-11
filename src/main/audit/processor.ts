@@ -286,17 +286,6 @@ async function processTextLayer(rawLayer: any, allStyles: TextStyle[]): Promise<
         fills = extractFills(rawFills);
       }
 
-      // DEBUG: Log extracted properties for verification (first 3 layers)
-      if (Math.random() < 0.05) { // Log ~5% of layers
-        console.log(`[DEBUG] Layer "${textNode.name}":`, {
-          fontFamily,
-          fontSize,
-          fontWeight,
-          lineHeight,
-          letterSpacing,
-          fillCount: fills?.length || 0,
-        });
-      }
     } catch (error) {
       console.warn(`Failed to extract font properties for layer ${textNode.name}:`, error);
     }
