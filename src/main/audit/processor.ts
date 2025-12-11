@@ -491,15 +491,6 @@ function calculateAuditMetrics(
     const uniqueProperties = new Set(layer.tokens?.map((t) => t.property) || []);
     const propertyCount = uniqueProperties.size;
 
-    // Debug first 3 layers
-    if (layers.indexOf(layer) < 3) {
-      console.log(`[TokenCoverage] Layer "${layer.name}":`, {
-        tokenBindings: layer.tokens?.length || 0,
-        properties: Array.from(uniqueProperties),
-        propertyCount,
-      });
-    }
-
     if (propertyCount === 0) {
       noTokenCoverageLayers.push(layer);
     } else if (propertyCount >= TOTAL_TOKEN_PROPERTIES) {
@@ -523,15 +514,6 @@ function calculateAuditMetrics(
   const noTokenCoverageCount = noTokenCoverageLayers.length;
   const noTokenCoverageRate =
     layers.length > 0 ? Math.round((noTokenCoverageCount / layers.length) * 100) : 0;
-
-  // Debug logging
-  console.log('[TokenCoverage] Breakdown:', {
-    total: layers.length,
-    full: fullTokenCoverageCount,
-    partial: partialTokenCoverageCount,
-    none: noTokenCoverageCount,
-    sum: fullTokenCoverageCount + partialTokenCoverageCount + noTokenCoverageCount,
-  });
 
   // Legacy token metrics (kept for backward compatibility)
   const layersUsingTokens = fullTokenCoverageCount + partialTokenCoverageCount;
@@ -985,15 +967,11 @@ async function integrateTokenUsageIntoStyles(
   styles: TextStyle[],
   tokens: DesignToken[]
 ): Promise<void> {
-  console.log(`[TokenIntegration] Integrating tokens into ${styles.length} styles...`);
-  console.log(`[TokenIntegration] Available tokens: ${tokens.length}`);
-
   // Build token map for quick lookup
   const tokenMap = new Map<string, DesignToken>();
   for (const token of tokens) {
     tokenMap.set(token.id, token);
   }
-  console.log(`[TokenIntegration] Token IDs in map:`, Array.from(tokenMap.keys()));
 
   // Process each style
   let stylesWithTokens = 0;
@@ -1003,18 +981,14 @@ async function integrateTokenUsageIntoStyles(
       // Fetch the actual Figma style object to access boundVariables
       const figmaStyle = await figma.getStyleByIdAsync(style.id);
       if (!figmaStyle || figmaStyle.type !== 'TEXT') {
-        console.log(`[TokenIntegration] Style "${style.name}": Not a text style or not found`);
         continue;
       }
 
       // Check if style has bound variables
       if (!figmaStyle.boundVariables) {
-        console.log(`[TokenIntegration] Style "${style.name}": No boundVariables`);
         stylesWithoutBoundVariables++;
         continue;
       }
-
-      console.log(`[TokenIntegration] Style "${style.name}": Has boundVariables`, figmaStyle.boundVariables);
 
       // Extract token bindings from the style
       const bindings: TokenBinding[] = [];
@@ -1026,17 +1000,13 @@ async function integrateTokenUsageIntoStyles(
         for (const binding of bindingsArray) {
           if (binding && typeof binding === 'object' && 'id' in binding) {
             const bindingId = binding.id;
-            console.log(`[TokenIntegration] Style "${style.name}": Property "${propertyName}" bound to variable ID: ${bindingId}`);
             let token = tokenMap.get(bindingId);
 
             // If not in local token map, try fetching from remote library
             if (!token) {
-              console.log(`[TokenIntegration] Style "${style.name}": Not in local map, fetching remote variable...`);
               try {
                 const variable = await figma.variables.getVariableByIdAsync(bindingId);
                 if (variable) {
-                  console.log(`[TokenIntegration] Style "${style.name}": Found remote variable "${variable.name}"`);
-
                   // Get token type from variable.resolvedType
                   const getTokenType = (v: any): 'color' | 'number' | 'string' | 'boolean' => {
                     if (!v.resolvedType) return 'string';
@@ -1078,16 +1048,14 @@ async function integrateTokenUsageIntoStyles(
                   tokenMap.set(bindingId, remoteToken);
                   // IMPORTANT: Also add to the main tokens array so it's available for propagation
                   tokens.push(remoteToken);
-                  console.log(`[TokenIntegration] Added remote token to main tokens array: "${remoteToken.name}" (ID: ${bindingId})`);
                   token = remoteToken;
                 }
               } catch (error) {
-                console.warn(`[TokenIntegration] Failed to fetch remote variable ${bindingId}:`, error);
+                console.warn(`Failed to fetch remote variable ${bindingId}:`, error);
               }
             }
 
             if (token) {
-              console.log(`[TokenIntegration] Style "${style.name}": Found matching token "${token.name}"`);
               bindings.push({
                 property: propertyName as
                   | 'fills'
@@ -1099,8 +1067,6 @@ async function integrateTokenUsageIntoStyles(
                 tokenName: token.name,
                 tokenValue: token.value,
               });
-            } else {
-              console.log(`[TokenIntegration] Style "${style.name}": No matching token found for variable ID: ${bindingId}`);
             }
           }
         }
@@ -1110,17 +1076,11 @@ async function integrateTokenUsageIntoStyles(
       if (bindings.length > 0) {
         style.tokens = bindings;
         stylesWithTokens++;
-        console.log(`[TokenIntegration] Style "${style.name}": Added ${bindings.length} token bindings`);
       }
     } catch (error) {
       console.warn(`Failed to integrate tokens for style ${style.name}:`, error);
     }
   }
-
-  console.log(`[TokenIntegration] Summary:`);
-  console.log(`  - Styles processed: ${styles.length}`);
-  console.log(`  - Styles without boundVariables: ${stylesWithoutBoundVariables}`);
-  console.log(`  - Styles with tokens: ${stylesWithTokens}`);
 }
 
 /**
@@ -1141,37 +1101,17 @@ function propagateStyleTokenUsageToLayers(
   styles: TextStyle[],
   tokens: DesignToken[]
 ): void {
-  console.log(`[StyleTokenPropagation] Starting propagation...`);
-  console.log(`[StyleTokenPropagation] Input: ${layers.length} layers, ${styles.length} styles, ${tokens.length} tokens`);
-
   // Build token map for quick lookup
   const tokenMap = new Map<string, DesignToken>();
   for (const token of tokens) {
     tokenMap.set(token.id, token);
   }
 
-  console.log(`[StyleTokenPropagation] Built token map with ${tokenMap.size} tokens`);
-  console.log(`[StyleTokenPropagation] Sample token IDs:`, Array.from(tokenMap.keys()).slice(0, 5));
-
   // Build style map for quick lookup
   const styleMap = new Map<string, TextStyle>();
-  let stylesWithTokens = 0;
   for (const style of styles) {
     styleMap.set(style.id, style);
-    if (style.tokens && style.tokens.length > 0) {
-      stylesWithTokens++;
-      if (stylesWithTokens <= 2) {
-        console.log(`[StyleTokenPropagation] Style "${style.name}" has ${style.tokens.length} tokens:`,
-          style.tokens.map(t => `${t.tokenName} (${t.tokenId})`));
-      }
-    }
   }
-
-  console.log(`[StyleTokenPropagation] ${stylesWithTokens} styles have tokens`);
-
-  // Count layers with styles
-  const layersWithStyles = layers.filter((l) => l.styleId).length;
-  console.log(`[StyleTokenPropagation] ${layersWithStyles} layers have styles assigned`);
 
   // Track statistics
   let layersProcessed = 0;
@@ -1183,25 +1123,8 @@ function propagateStyleTokenUsageToLayers(
     if (!layer.styleId) continue;
 
     const style = styleMap.get(layer.styleId);
-    if (!style) {
-      // Log first few missing styles
-      if (layersProcessed < 3) {
-        console.log(`[StyleTokenPropagation] Layer "${layer.name}" - style not found: ${layer.styleId}`);
-      }
+    if (!style || !style.tokens || style.tokens.length === 0) {
       continue;
-    }
-
-    if (!style.tokens || style.tokens.length === 0) {
-      // Log first few styles without tokens
-      if (layersProcessed < 3) {
-        console.log(`[StyleTokenPropagation] Layer "${layer.name}" - style "${style.name}" has no tokens`);
-      }
-      continue;
-    }
-
-    // Log first successful match
-    if (layersProcessed === 0) {
-      console.log(`[StyleTokenPropagation] Found first match: Layer "${layer.name}" uses style "${style.name}" with ${style.tokens.length} tokens`);
     }
 
     layersProcessed++;
@@ -1210,7 +1133,6 @@ function propagateStyleTokenUsageToLayers(
     for (const tokenBinding of style.tokens) {
       const token = tokenMap.get(tokenBinding.tokenId);
       if (!token) {
-        console.log(`[StyleTokenPropagation] Token not found in map: ${tokenBinding.tokenId}`);
         continue;
       }
 
@@ -1241,11 +1163,6 @@ function propagateStyleTokenUsageToLayers(
       }
     }
   }
-
-  console.log(`[StyleTokenPropagation] Summary:`);
-  console.log(`  - Layers with styles: ${layersProcessed}`);
-  console.log(`  - Tokens updated: ${tokensUpdated}`);
-  console.log(`  - Total indirect usages added: ${totalIndirectUsages}`);
 }
 
 /**
