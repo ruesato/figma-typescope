@@ -95,12 +95,16 @@ export function useMessageHandler() {
           break;
 
         case 'REPLACEMENT_CHECKPOINT_CREATED':
-          replacementState.transitionTo('processing');
+          replacementState.transitionTo('creating_checkpoint');
+          replacementState.setCheckpointTitle(msg.payload.checkpointTitle);
           console.log('[Replacement] Checkpoint created:', msg.payload.checkpointTitle);
           break;
 
         case 'REPLACEMENT_PROGRESS':
-          replacementState.transitionTo('processing');
+          // Only transition to processing if not already there
+          if (replacementState.replacementState !== 'processing') {
+            replacementState.transitionTo('processing');
+          }
           replacementState.setProgress(msg.payload.progress);
           if (msg.payload.batchInfo) {
             replacementState.setBatchInfo(

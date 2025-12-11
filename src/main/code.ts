@@ -94,7 +94,11 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
         break;
 
       case 'REPLACE_TOKEN':
-        await handleReplaceToken(msg.payload.sourceTokenId, msg.payload.targetTokenId);
+        await handleReplaceToken(
+          msg.payload.sourceTokenId,
+          msg.payload.targetTokenId,
+          msg.payload.affectedLayerIds
+        );
         break;
 
       // case 'ROLLBACK_TO_CHECKPOINT':
@@ -481,22 +485,97 @@ async function handleReplaceStyle(
 
 /**
  * Handle REPLACE_TOKEN message
- * PLACEHOLDER: Will be implemented in Phase 3
  */
-async function handleReplaceToken(sourceTokenId: string, targetTokenId: string): Promise<void> {
-  console.log('[Replacement] Replace token placeholder:', {
+async function handleReplaceToken(
+  sourceTokenId: string,
+  targetTokenId: string,
+  affectedLayerIds: string[]
+): Promise<void> {
+  console.log('[Replacement] Starting token replacement:', {
     sourceTokenId,
     targetTokenId,
+    affectedLayerCount: affectedLayerIds.length,
   });
-  sendMessage({
-    type: 'REPLACEMENT_ERROR',
-    payload: {
-      operationType: 'token',
-      error: 'Token replacement not yet implemented (Phase 3)',
-      errorType: 'validation',
-      canRollback: false,
-    },
-  });
+
+  try {
+    const engine = new ReplacementEngine();
+
+    // Setup progress callbacks
+    engine.onProgress((progress) => {
+      if (progress.state === 'processing') {
+        sendMessage({
+          type: 'REPLACEMENT_PROGRESS',
+          payload: {
+            state: 'processing',
+            progress: progress.percentage,
+            currentBatch: progress.currentBatch,
+            totalBatches: progress.totalBatches,
+            currentBatchSize: progress.currentBatchSize,
+            layersProcessed: progress.layersProcessed,
+            failedLayers: progress.failedLayers,
+          },
+        });
+      } else if (progress.state === 'creating_checkpoint' && progress.checkpointTitle) {
+        sendMessage({
+          type: 'REPLACEMENT_CHECKPOINT_CREATED',
+          payload: {
+            checkpointTitle: progress.checkpointTitle,
+            timestamp: new Date(),
+          },
+        });
+      }
+    });
+
+    // Send start message
+    sendMessage({
+      type: 'REPLACEMENT_STARTED',
+      payload: {
+        operationType: 'token',
+        state: 'validating',
+        sourceId: sourceTokenId,
+        targetId: targetTokenId,
+        affectedLayerCount: affectedLayerIds.length,
+      },
+    });
+
+    // Execute replacement
+    const result = await engine.replaceToken({
+      sourceTokenId,
+      targetTokenId,
+      affectedLayerIds,
+    });
+
+    // Send completion message
+    sendMessage({
+      type: 'REPLACEMENT_COMPLETE',
+      payload: {
+        operationType: 'token',
+        result: {
+          success: result.success,
+          layersUpdated: result.layersUpdated,
+          layersFailed: result.layersFailed,
+          failedLayers: result.failedLayers || [],
+          duration: result.duration,
+          checkpointTitle: result.checkpointTitle || 'Token Replacement',
+          canRollback: true,
+        },
+      },
+    });
+
+    // Cleanup
+    engine.dispose();
+  } catch (error) {
+    console.error('[Replacement] Token replacement error:', error);
+    sendMessage({
+      type: 'REPLACEMENT_ERROR',
+      payload: {
+        operationType: 'token',
+        error: error instanceof Error ? error.message : String(error),
+        errorType: 'processing',
+        canRollback: true,
+      },
+    });
+  }
 }
 
 /**

@@ -192,6 +192,9 @@ export async function processAuditData(
 
       // Also integrate tokens into styles
       await integrateTokenUsageIntoStyles(output.styles, output.tokens);
+
+      // Propagate style token usage to layers using those styles
+      propagateStyleTokenUsageToLayers(output.layers, output.styles, output.tokens);
     }
 
     // Step 7: Categorize layers (88-90%)
@@ -952,7 +955,7 @@ function parseFontWeight(style: string): number {
  * Detects token bindings on text styles and populates style.tokens array
  *
  * @param styles - Array of TextStyle objects to populate with tokens
- * @param tokens - All available design tokens (for tokenMap)
+ * @param tokens - All available design tokens (for tokenMap, will be mutated to add remote tokens)
  */
 async function integrateTokenUsageIntoStyles(
   styles: TextStyle[],
@@ -1025,10 +1028,11 @@ async function integrateTokenUsageIntoStyles(
                   const tokenType = getTokenType(variable);
 
                   // Create a token object from the remote variable
+                  // IMPORTANT: Use bindingId (not variable.id) as the ID since that's what's in style.tokens
                   const remoteToken: DesignToken = {
-                    id: variable.id,
+                    id: bindingId,
                     name: variable.name,
-                    key: `remote/${variable.id}`,
+                    key: `remote/${bindingId}`,
                     type: tokenType,
                     resolvedType: tokenType,
                     currentValue: firstValue,
@@ -1046,8 +1050,11 @@ async function integrateTokenUsageIntoStyles(
                     propertyTypes: [],
                   };
 
-                  // Add to token map for future lookups
-                  tokenMap.set(variable.id, remoteToken);
+                  // Add to token map for future lookups (using bindingId as key)
+                  tokenMap.set(bindingId, remoteToken);
+                  // IMPORTANT: Also add to the main tokens array so it's available for propagation
+                  tokens.push(remoteToken);
+                  console.log(`[TokenIntegration] Added remote token to main tokens array: "${remoteToken.name}" (ID: ${bindingId})`);
                   token = remoteToken;
                 }
               } catch (error) {
@@ -1090,6 +1097,131 @@ async function integrateTokenUsageIntoStyles(
   console.log(`  - Styles processed: ${styles.length}`);
   console.log(`  - Styles without boundVariables: ${stylesWithoutBoundVariables}`);
   console.log(`  - Styles with tokens: ${stylesWithTokens}`);
+}
+
+/**
+ * Propagate style token usage to layers
+ *
+ * When a token is bound to a style, and that style is applied to layers,
+ * those layers count as indirect usage of the token.
+ *
+ * This function updates token.usageCount and token.layerIds to include
+ * layers that use styles containing those tokens.
+ *
+ * @param layers - All text layers
+ * @param styles - All text styles (with tokens populated)
+ * @param tokens - All design tokens (will be mutated to update usage counts)
+ */
+function propagateStyleTokenUsageToLayers(
+  layers: TextLayer[],
+  styles: TextStyle[],
+  tokens: DesignToken[]
+): void {
+  console.log(`[StyleTokenPropagation] Starting propagation...`);
+  console.log(`[StyleTokenPropagation] Input: ${layers.length} layers, ${styles.length} styles, ${tokens.length} tokens`);
+
+  // Build token map for quick lookup
+  const tokenMap = new Map<string, DesignToken>();
+  for (const token of tokens) {
+    tokenMap.set(token.id, token);
+  }
+
+  console.log(`[StyleTokenPropagation] Built token map with ${tokenMap.size} tokens`);
+  console.log(`[StyleTokenPropagation] Sample token IDs:`, Array.from(tokenMap.keys()).slice(0, 5));
+
+  // Build style map for quick lookup
+  const styleMap = new Map<string, TextStyle>();
+  let stylesWithTokens = 0;
+  for (const style of styles) {
+    styleMap.set(style.id, style);
+    if (style.tokens && style.tokens.length > 0) {
+      stylesWithTokens++;
+      if (stylesWithTokens <= 2) {
+        console.log(`[StyleTokenPropagation] Style "${style.name}" has ${style.tokens.length} tokens:`,
+          style.tokens.map(t => `${t.tokenName} (${t.tokenId})`));
+      }
+    }
+  }
+
+  console.log(`[StyleTokenPropagation] ${stylesWithTokens} styles have tokens`);
+
+  // Count layers with styles
+  const layersWithStyles = layers.filter((l) => l.styleId).length;
+  console.log(`[StyleTokenPropagation] ${layersWithStyles} layers have styles assigned`);
+
+  // Track statistics
+  let layersProcessed = 0;
+  let tokensUpdated = 0;
+  let totalIndirectUsages = 0;
+
+  // For each layer that has a style applied
+  for (const layer of layers) {
+    if (!layer.styleId) continue;
+
+    const style = styleMap.get(layer.styleId);
+    if (!style) {
+      // Log first few missing styles
+      if (layersProcessed < 3) {
+        console.log(`[StyleTokenPropagation] Layer "${layer.name}" - style not found: ${layer.styleId}`);
+      }
+      continue;
+    }
+
+    if (!style.tokens || style.tokens.length === 0) {
+      // Log first few styles without tokens
+      if (layersProcessed < 3) {
+        console.log(`[StyleTokenPropagation] Layer "${layer.name}" - style "${style.name}" has no tokens`);
+      }
+      continue;
+    }
+
+    // Log first successful match
+    if (layersProcessed === 0) {
+      console.log(`[StyleTokenPropagation] Found first match: Layer "${layer.name}" uses style "${style.name}" with ${style.tokens.length} tokens`);
+    }
+
+    layersProcessed++;
+
+    // For each token in the style
+    for (const tokenBinding of style.tokens) {
+      const token = tokenMap.get(tokenBinding.tokenId);
+      if (!token) {
+        console.log(`[StyleTokenPropagation] Token not found in map: ${tokenBinding.tokenId}`);
+        continue;
+      }
+
+      // Check if this layer already has this token binding (from direct binding or previous style)
+      const layerHasTokenBinding = layer.tokens?.some((t) => t.tokenId === tokenBinding.tokenId);
+      const tokenHasLayer = token.layerIds.includes(layer.id);
+
+      if (!layerHasTokenBinding) {
+        // Add token binding to layer (indirect usage via style)
+        if (!layer.tokens) {
+          layer.tokens = [];
+        }
+        layer.tokens.push(tokenBinding);
+      }
+
+      if (!tokenHasLayer) {
+        // Add layer to token's usage tracking
+        token.usageCount++;
+        token.layerIds.push(layer.id);
+        totalIndirectUsages++;
+
+        // Track property type if not already tracked
+        if (!token.propertyTypes.includes(tokenBinding.property)) {
+          token.propertyTypes.push(tokenBinding.property);
+        }
+
+        tokensUpdated++;
+      }
+    }
+  }
+
+  console.log(`[StyleTokenPropagation] Summary:`);
+  console.log(`  - Layers with styles: ${layersProcessed}`);
+  console.log(`  - Tokens updated: ${tokensUpdated}`);
+  console.log(`  - Total indirect usages added: ${totalIndirectUsages}`);
 }
 
 /**

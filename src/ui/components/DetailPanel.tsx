@@ -636,7 +636,9 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
           {selectedToken && onReplaceToken && relevantLayers.length > 0 && (
             <button
               onClick={() => {
+                console.log('[UI] Relevant layers:', relevantLayers.slice(0, 3).map(l => ({name: l.name, id: l.id, type: typeof l.id})));
                 const affectedLayerIds = relevantLayers.map((l) => l.id);
+                console.log('[UI] Affected layer IDs:', affectedLayerIds.slice(0, 5));
                 onReplaceToken(selectedToken, affectedLayerIds);
               }}
               style={{
