@@ -43,26 +43,23 @@ export default function ConfirmationDialog({
 }: ConfirmationDialogProps) {
   if (!isOpen) return null;
 
-  // Get variant-specific styles
+  // Get variant-specific styles using Figma design tokens
   const getVariantStyles = () => {
     switch (variant) {
       case 'danger':
         return {
           icon: '⚠️',
-          confirmBg: 'bg-red-600 hover:bg-red-700',
-          borderColor: 'border-red-200 dark:border-red-800',
+          confirmBg: 'bg-figma-color-text-danger hover:bg-figma-color-text-danger/90',
         };
       case 'warning':
         return {
           icon: '⚡',
-          confirmBg: 'bg-yellow-600 hover:bg-yellow-700',
-          borderColor: 'border-yellow-200 dark:border-yellow-800',
+          confirmBg: 'bg-figma-bg-brand hover:bg-figma-bg-brand/90',
         };
       case 'info':
         return {
           icon: 'ℹ️',
-          confirmBg: 'bg-blue-600 hover:bg-blue-700',
-          borderColor: 'border-blue-200 dark:border-blue-800',
+          confirmBg: 'bg-figma-bg-brand hover:bg-figma-bg-brand/90',
         };
     }
   };
@@ -89,26 +86,26 @@ export default function ConfirmationDialog({
       onClick={onCancel}
     >
       <div
-        className={`
+        className="
           relative w-full max-w-md p-6 rounded-lg
-          bg-white dark:bg-gray-900
-          border ${styles.borderColor}
+          bg-figma-bg
+          border border-figma-border
           shadow-xl
-        `}
+        "
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-start gap-3 mb-4">
           <span className="text-2xl flex-shrink-0">{styles.icon}</span>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <h2 className="text-lg font-semibold text-figma-text">
               {title}
             </h2>
           </div>
         </div>
 
         {/* Message */}
-        <p className="text-sm text-gray-700 dark:text-gray-300 mb-6">
+        <p className="text-sm text-figma-text-secondary mb-6">
           {message}
         </p>
 
@@ -118,9 +115,9 @@ export default function ConfirmationDialog({
             onClick={onCancel}
             className="
               px-4 py-2 text-sm rounded
-              bg-gray-200 dark:bg-gray-700
-              text-gray-900 dark:text-gray-100
-              hover:bg-gray-300 dark:hover:bg-gray-600
+              bg-figma-bg-secondary
+              text-figma-text
+              hover:bg-figma-bg-hover
               transition-colors
             "
           >
@@ -130,7 +127,7 @@ export default function ConfirmationDialog({
             onClick={onConfirm}
             className={`
               px-4 py-2 text-sm rounded
-              text-white
+              text-figma-text-onbrand
               ${styles.confirmBg}
               transition-colors
             `}
