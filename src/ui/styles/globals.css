@@ -98,6 +98,7 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--figma-color-border-strong);
   border-radius: 4px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
