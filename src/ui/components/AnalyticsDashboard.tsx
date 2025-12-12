@@ -875,7 +875,7 @@ export default function AnalyticsDashboard({
         }
       `}</style>
 
-      <div className="space-y-2 p-2">
+      <div className="space-y-2 p-2 h-full overflow-auto">
         {/* Header */}
         {/*<div className="pb-3">
           <h2 className="text-lg font-semibold text-figma-text">Analytics Dashboard</h2>

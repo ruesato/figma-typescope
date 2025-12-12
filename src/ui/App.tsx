@@ -458,7 +458,7 @@ export default function App() {
               <div
                 style={{
                   flex: 1,
-                  overflow: 'auto',
+                  overflow: 'hidden',
                   padding: 'var(--figma-space-md)',
                 }}
               >

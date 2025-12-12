@@ -556,11 +556,11 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* Header - Sticky at top */}
+      {/* Header - Fixed at top */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'center',
           justifyContent: 'space-between',
           gap: 'var(--figma-space-md)',
           padding: 'var(--figma-space-md)',
@@ -617,6 +617,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               transition: 'all 0.2s ease',
+              flexShrink: 0,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
@@ -647,6 +648,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               transition: 'all 0.2s ease',
+              flexShrink: 0,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
@@ -660,8 +662,18 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         )}
       </div>
 
-      {/* Scrollable Content Section */}
-      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* Scrollable Content Section - DIRECTLY SCROLLABLE */}
+      <div
+        ref={parentRef}
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          contain: 'layout style paint',
+        }}
+      >
         {/* Token Metadata Card */}
         {selectedToken && (
           <div style={{ padding: 'var(--figma-space-md)', flexShrink: 0 }}>
@@ -693,14 +705,9 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         {/* Virtualized layers list */}
         {isExpanded && (
           <div
-            ref={parentRef}
             style={{
-              flex: 1,
               position: 'relative',
-              contain: 'layout style paint',
-              transform: 'translateZ(0)',
-              willChange: 'transform',
-              minHeight: 0,
+              width: '100%',
             }}
           >
             <div style={{ height: `${totalSize}px`, width: '100%', position: 'relative' }}>
