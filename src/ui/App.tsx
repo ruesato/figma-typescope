@@ -364,6 +364,7 @@ export default function App() {
         height: '100vh',
         backgroundColor: 'var(--figma-color-bg)',
         color: 'var(--figma-color-text)',
+        overflow: 'hidden'
       }}
     >
       {/* Sidebar Navigation with Badge Counts */}
@@ -506,7 +507,7 @@ export default function App() {
                       </div>
 
                       {/* Right Panel - Detail Panel (50%) */}
-                      <div style={{ border: '1px solid var(--figma-color-border)', borderRadius: '0.5rem',  flex: 1, height: '100%', overflow: 'scroll' }}>
+                      <div style={{ border: '1px solid var(--figma-color-border)', borderRadius: '0.5rem',  flex: 1, height: '100%', overflow: 'hidden' }}>
                         {selectedStyle ? (
                           <DetailPanel
                             selectedStyle={selectedStyle}
