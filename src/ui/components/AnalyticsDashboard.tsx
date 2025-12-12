@@ -875,14 +875,14 @@ export default function AnalyticsDashboard({
         }
       `}</style>
 
-      <div className="space-y-6 p-4">
+      <div className="space-y-2 p-2">
         {/* Header */}
-        <div className="border-b border-figma-border pb-3">
+        {/*<div className="pb-3">
           <h2 className="text-lg font-semibold text-figma-text">Analytics Dashboard</h2>
           <p className="text-figma-text-tertiary text-xs mt-1">
             Design system adoption and token usage metrics
           </p>
-        </div>
+        </div>*/}
 
         {/* Key Metrics Grid - 2 columns on desktop, 1 on mobile */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

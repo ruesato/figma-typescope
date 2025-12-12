@@ -358,7 +358,8 @@ export default function App() {
   return (
     <div
       style={{
-        position: 'relative',
+      	display: 'flex',
+       	flexDirection: 'row',
         width: '100%',
         height: '100vh',
         backgroundColor: 'var(--figma-color-bg)',
@@ -377,10 +378,10 @@ export default function App() {
       {/* Main Content Area */}
       <div
         style={{
-          marginLeft: '48px',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
+          width: '100vw'
         }}
       >
         {/* Header */}
@@ -487,7 +488,7 @@ export default function App() {
                     />
 
                     {/* 2-Column Layout */}
-                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', flex: 1, gap: '1rem', overflow: 'hidden' }}>
                       {/* Left Panel - Style Tree (50%) */}
                       <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
                         <StyleTreeView
@@ -504,17 +505,8 @@ export default function App() {
                         />
                       </div>
 
-                      {/* Visible Divider */}
-                      <div
-                        style={{
-                          width: '1px',
-                          backgroundColor: 'var(--figma-color-border)',
-                          flexShrink: 0,
-                        }}
-                      />
-
                       {/* Right Panel - Detail Panel (50%) */}
-                      <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+                      <div style={{ border: '1px solid var(--figma-color-border)', borderRadius: '0.5rem',  flex: 1, height: '100%', overflow: 'scroll' }}>
                         {selectedStyle ? (
                           <DetailPanel
                             selectedStyle={selectedStyle}

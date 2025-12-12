@@ -40,10 +40,12 @@ export default function Badge({ count, triggerAnimation = false }: BadgeProps) {
       }}
       style={{
         position: 'absolute',
-        top: '-4px',
-        right: '-4px',
+        top: '-8px',
+        // right: '-4px',
+        left: '20px',
         minWidth: '20px',
         height: '20px',
+        border: '1px solid var(--figma-color-bg)',
         borderRadius: '10px',
         backgroundColor: 'var(--figma-color-bg-brand)',
         color: 'var(--figma-color-text-onbrand)',

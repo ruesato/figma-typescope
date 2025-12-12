@@ -7,8 +7,8 @@ interface HeaderProps {
 }
 
 const tabTitles: Record<TabType, string> = {
-  analytics: 'Analytics',
-  styles: 'Styles',
+  analytics: 'Analytics Dashboard',
+  styles: 'Text Styles',
   tokens: 'Tokens',
 };
 
@@ -17,10 +17,8 @@ export default function Header({ activeTab, onNewAnalysis, showActions = false }
     <div
       className="flex items-center justify-between"
       style={{
-        height: '68px',
-        padding: 'var(--figma-space-md)',
-        marginLeft: '48px',
-        borderBottom: '1px solid var(--figma-color-border)',
+        padding: 'var(--figma-space-md) var(--figma-space-lg) 0',
+        // borderBottom: '1px solid var(--figma-color-border)',
       }}
     >
       <h1

@@ -63,7 +63,7 @@ export const StylePropertiesPanel: React.FC<StylePropertiesPanelProps> = ({ styl
   const color = formatColor(style.fills);
 
   return (
-    <div className="p-4 bg-figma-bg-secondary border-b border-figma-border">
+    <div className="layerStyles">
       {/* Style Name Header */}
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-figma-text">{style.name}</h3>

@@ -13,12 +13,8 @@ export default function EmptyState({
     <div
       className="flex flex-col items-center justify-center"
       style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: '276px',
         gap: '32px',
+        height: '100%'
       }}
     >
       <p

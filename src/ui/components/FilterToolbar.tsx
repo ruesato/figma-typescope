@@ -65,22 +65,22 @@ export default function FilterToolbar(props: FilterToolbarProps) {
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        backgroundColor: 'var(--figma-color-bg)',
-        borderBottom: '1px solid var(--figma-color-border)',
-        padding: '12px 16px',
+        // backgroundColor: 'var(--figma-color-bg)',
+        // borderBottom: '1px solid var(--figma-color-border)',
+        padding: '0 0 12px'
       }}
     >
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
+          gap: '16px',
         }}
       >
         {/* Search Input */}
         <div style={{ position: 'relative', flex: '1 1 auto', minWidth: '200px' }}>
           <Search
-            size={18}
+            size={24}
             style={{
               position: 'absolute',
               left: '12px',
@@ -105,7 +105,7 @@ export default function FilterToolbar(props: FilterToolbarProps) {
               border: '1px solid var(--figma-color-border)',
               borderRadius: '6px',
               color: 'var(--figma-color-text)',
-              fontSize: '12px',
+              fontSize: '16px',
               outline: 'none',
             }}
             onFocus={(e) => {
@@ -125,7 +125,7 @@ export default function FilterToolbar(props: FilterToolbarProps) {
           onChange={(e) => onSourceFilterChange(e.target.value as any)}
           style={{
             padding: '6px 12px',
-            fontSize: '12px',
+            fontSize: '14px',
             border: '1px solid var(--figma-color-border)',
             borderRadius: '6px',
             backgroundColor: 'var(--figma-color-bg)',
@@ -183,7 +183,7 @@ export default function FilterToolbar(props: FilterToolbarProps) {
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            fontSize: '12px',
+            fontSize: '14px',
             color: 'var(--figma-color-text)',
             cursor: 'pointer',
             whiteSpace: 'nowrap',

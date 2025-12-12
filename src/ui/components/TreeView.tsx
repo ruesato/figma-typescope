@@ -178,7 +178,7 @@ export default function TreeView<T = any>({
   };
 
   return (
-    <div className={`flex flex-col h-full overflow-hidden bg-figma-bg ${containerClassName}`}>
+    <div className={`flex flex-col h-full overflow-hidden bg-figma-bg border border-figma-border rounded-lg pt-4 ${containerClassName}`}>
       {/* Toolbar (filters, toggles, etc.) */}
       {renderToolbar && (
         <div className="flex-shrink-0 border-b border-figma-border">
@@ -188,7 +188,7 @@ export default function TreeView<T = any>({
 
       {/* Search Input */}
       {searchEnabled && (
-        <div className="p-4 border-b border-figma-border flex-shrink-0">
+        <div className="p-4 flex-shrink-0">
           <div className="relative">
             <Search
               size={18}
@@ -236,11 +236,11 @@ export default function TreeView<T = any>({
       </div>
 
       {/* Footer (stats, shortcuts, etc.) */}
-      {renderFooter && (
+      {/*{renderFooter && (
         <div className="flex-shrink-0 border-t border-figma-border">
           {renderFooter()}
         </div>
-      )}
+      )}*/}
     </div>
   );
 }
@@ -287,7 +287,7 @@ export function DefaultNodeRow({
         cursor: isDisabled ? 'not-allowed' : 'pointer',
         backgroundColor: isSelected ? 'var(--figma-color-bg-brand)' : 'transparent',
         color: isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text)',
-        borderRadius: '4px',
+        borderRadius: '0',
         opacity: isDisabled ? 0.6 : 1,
         transition: 'background-color 0.15s ease',
       }}

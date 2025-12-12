@@ -41,12 +41,11 @@ export default function Sidebar({
 }: SidebarProps) {
   return (
     <div
-      className="fixed left-0 top-0 h-full flex flex-col items-center gap-4"
+      className="h-full flex flex-col items-center gap-8"
       style={{
-        width: '48px',
+        minWidth: '48px',
         backgroundColor: 'var(--figma-color-bg)',
-        borderRight: '1px solid var(--figma-color-border)',
-        padding: 'var(--figma-space-md) var(--figma-space-sm)',
+        padding: 'var(--figma-space-md) var(--figma-space-md)',
       }}
     >
       {tabs.map((tab) => {
@@ -103,7 +102,7 @@ export default function Sidebar({
             {/* Tooltip */}
             {!isDisabled && (
               <div
-                className="absolute left-full ml-2 px-2 py-1 rounded whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50"
+                className="absolute left-full ml-2 px-2 py-1 rounded whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-500"
                 style={{
                   backgroundColor: 'var(--figma-color-text)',
                   color: 'var(--figma-color-bg)',

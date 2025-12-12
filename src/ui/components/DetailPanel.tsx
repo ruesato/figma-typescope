@@ -552,7 +552,6 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: 'var(--figma-color-bg)',
       }}
     >
       {/* Header - Fixed at top */}
@@ -572,6 +571,8 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
             alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 'var(--figma-space-md)',
+            position: 'sticky',
+            top: 0
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -673,7 +674,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
 
         {/* Style Properties Panel - NEW (Phase 5) */}
         {selectedStyle && (
-          <div style={{ marginTop: 'var(--figma-space-md)' }}>
+          <div style={{ marginTop: '0' }}>
             <StylePropertiesPanel style={selectedStyle} />
           </div>
         )}
@@ -701,7 +702,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
-            overflow: 'hidden',
+            // overflow: 'hidden',
           }}
         >
           <div
