@@ -1,6 +1,6 @@
 import React from 'react';
-import type { TextStyle } from '@/shared/types';
-import { TokenBadgeList } from './TokenBadge';
+import type { TextStyle, TokenBinding } from '@/shared/types';
+import { TokenBadge, TokenBadgeList } from './TokenBadge';
 
 /**
  * StylePropertiesPanel Component Props
@@ -21,6 +21,11 @@ interface StylePropertiesPanelProps {
  * <StylePropertiesPanel style={selectedStyle} />
  */
 export const StylePropertiesPanel: React.FC<StylePropertiesPanelProps> = ({ style }) => {
+  // Get tokens for a specific property
+  const getTokensForProperty = (property: TokenBinding['property']): TokenBinding[] => {
+    return (style.tokens || []).filter((token) => token.property === property);
+  };
+
   // Format line height for display
   const formatLineHeight = (lineHeight: any): string => {
     if (!lineHeight) return 'AUTO';
@@ -58,69 +63,80 @@ export const StylePropertiesPanel: React.FC<StylePropertiesPanelProps> = ({ styl
   const color = formatColor(style.fills);
 
   return (
-    <div className="p-4 bg-gray-50 border-b border-gray-200">
+    <div className="p-4 bg-figma-bg-secondary border-b border-figma-border">
       {/* Style Name Header */}
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-gray-900">{style.name}</h3>
-        <p className="text-xs text-gray-500 mt-0.5">{style.libraryName}</p>
+        <h3 className="text-sm font-semibold text-figma-text">{style.name}</h3>
+        <p className="text-xs text-figma-text-tertiary mt-0.5">{style.libraryName}</p>
       </div>
 
       {/* Properties Grid */}
       <div className="space-y-2">
         {/* Font Family */}
-        <PropertyRow label="Font Family" value={style.fontFamily} />
+        <PropertyRow label="Font Family" value={style.fontFamily} tokens={getTokensForProperty('fontFamily')} />
 
         {/* Font Size */}
-        <PropertyRow label="Size" value={`${style.fontSize}px`} />
+        <PropertyRow label="Size" value={`${style.fontSize}px`} tokens={getTokensForProperty('fontSize')} />
 
         {/* Font Weight */}
-        <PropertyRow label="Weight" value={String(style.fontWeight)} />
+        <PropertyRow label="Weight" value={String(style.fontWeight)} tokens={[]} />
 
         {/* Line Height */}
-        <PropertyRow label="Line Height" value={formatLineHeight(style.lineHeight)} />
+        <PropertyRow label="Line Height" value={formatLineHeight(style.lineHeight)} tokens={getTokensForProperty('lineHeight')} />
 
         {/* Letter Spacing */}
-        <PropertyRow label="Letter Spacing" value={formatLetterSpacing(style.letterSpacing)} />
+        <PropertyRow label="Letter Spacing" value={formatLetterSpacing(style.letterSpacing)} tokens={getTokensForProperty('letterSpacing')} />
 
         {/* Color */}
         <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-600 font-medium">Color</span>
+          <span className="text-figma-text-secondary font-medium">Color</span>
           <div className="flex items-center gap-2">
-            <div
-              className="w-4 h-4 rounded border border-gray-300 flex-shrink-0"
-              style={{ backgroundColor: color.hex }}
-              title={color.display}
-            />
-            <span className="text-gray-900 font-mono">{color.display}</span>
+            {getTokensForProperty('fills').length > 0 ? (
+              <div className="flex flex-wrap gap-1 justify-end">
+                {getTokensForProperty('fills').map((token, idx) => (
+                  <TokenBadge key={idx} token={token} mode="expanded" size="sm" />
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-4 h-4 rounded border border-figma-border flex-shrink-0"
+                  style={{ backgroundColor: color.hex }}
+                  title={color.display}
+                />
+                <span className="text-figma-text font-mono">{color.display}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Token Badges */}
-      {style.tokens && style.tokens.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <div className="text-xs text-gray-600 font-medium mb-2">Design Tokens</div>
-          <TokenBadgeList tokens={style.tokens} mode="expanded" size="sm" />
-        </div>
-      )}
     </div>
   );
 };
 
 /**
  * PropertyRow Component
- * Displays a single property row with label and value
+ * Displays a single property row with label and value, with optional token badges
  */
 interface PropertyRowProps {
   label: string;
   value: string;
+  tokens?: TokenBinding[];
 }
 
-const PropertyRow: React.FC<PropertyRowProps> = ({ label, value }) => {
+const PropertyRow: React.FC<PropertyRowProps> = ({ label, value, tokens = [] }) => {
   return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="text-gray-600 font-medium">{label}</span>
-      <span className="text-gray-900 font-mono">{value}</span>
+    <div className="flex items-center justify-between text-xs gap-2">
+      <span className="text-figma-text-secondary font-medium">{label}</span>
+      {tokens.length > 0 ? (
+        <div className="flex flex-wrap gap-1 justify-end">
+          {tokens.map((token, idx) => (
+            <TokenBadge key={idx} token={token} mode="expanded" size="sm" />
+          ))}
+        </div>
+      ) : (
+        <span className="text-figma-text font-mono">{value}</span>
+      )}
     </div>
   );
 };
