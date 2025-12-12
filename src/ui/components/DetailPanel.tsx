@@ -550,9 +550,10 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
     <div
       style={{
         height: '100%',
+        width: '100%',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'auto',
+        overflow: 'hidden',
       }}
     >
       {/* Header - Sticky at top */}
@@ -564,116 +565,103 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
           gap: 'var(--figma-space-md)',
           padding: 'var(--figma-space-md)',
           borderBottom: '1px solid var(--figma-color-border)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
           backgroundColor: 'var(--figma-color-bg)',
           flexShrink: 0,
+          zIndex: 10,
         }}
       >
-        {/* Title and Replace button */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 'var(--figma-space-md)',
-            width: '100%',
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h2
-              style={{
-                fontSize: '18px',
-                fontWeight: 700,
-                lineHeight: '28px',
-                color: 'var(--figma-color-text)',
-                margin: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {selectedStyle ? selectedStyle.name : selectedToken?.name || 'Details'}
-            </h2>
-            <p
-              style={{
-                fontSize: '12px',
-                color: 'var(--figma-color-text-secondary)',
-                margin: '4px 0 0 0',
-              }}
-            >
-              Used in {relevantLayers.length} layer{relevantLayers.length !== 1 ? 's' : ''}
-              {partiallyStyledCount > 0 &&
-                ` (${partiallyStyledCount} override${partiallyStyledCount !== 1 ? 's' : ''})`}
-            </p>
-          </div>
-
-          {/* Replace button */}
-          {selectedStyle && onReplaceStyle && relevantLayers.length > 0 && (
-            <button
-              onClick={() => {
-                const affectedLayerIds = relevantLayers.map((l) => l.id);
-                onReplaceStyle(selectedStyle, affectedLayerIds);
-              }}
-              style={{
-                height: '32px',
-                padding: '0 16px',
-                border: '1px solid var(--figma-color-border)',
-                borderRadius: '8px',
-                backgroundColor: 'transparent',
-                color: 'var(--figma-color-text)',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              Replace style
-            </button>
-          )}
-
-          {selectedToken && onReplaceToken && relevantLayers.length > 0 && (
-            <button
-              onClick={() => {
-                const affectedLayerIds = relevantLayers.map((l) => l.id);
-                onReplaceToken(selectedToken, affectedLayerIds);
-              }}
-              style={{
-                height: '32px',
-                padding: '0 16px',
-                border: '1px solid var(--figma-color-border)',
-                borderRadius: '8px',
-                backgroundColor: 'transparent',
-                color: 'var(--figma-color-text)',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              Replace token
-            </button>
-          )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              lineHeight: '28px',
+              color: 'var(--figma-color-text)',
+              margin: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {selectedStyle ? selectedStyle.name : selectedToken?.name || 'Details'}
+          </h2>
+          <p
+            style={{
+              fontSize: '12px',
+              color: 'var(--figma-color-text-secondary)',
+              margin: '4px 0 0 0',
+            }}
+          >
+            Used in {relevantLayers.length} layer{relevantLayers.length !== 1 ? 's' : ''}
+            {partiallyStyledCount > 0 &&
+              ` (${partiallyStyledCount} override${partiallyStyledCount !== 1 ? 's' : ''})`}
+          </p>
         </div>
+
+        {/* Replace button */}
+        {selectedStyle && onReplaceStyle && relevantLayers.length > 0 && (
+          <button
+            onClick={() => {
+              const affectedLayerIds = relevantLayers.map((l) => l.id);
+              onReplaceStyle(selectedStyle, affectedLayerIds);
+            }}
+            style={{
+              height: '32px',
+              padding: '0 16px',
+              border: '1px solid var(--figma-color-border)',
+              borderRadius: '8px',
+              backgroundColor: 'transparent',
+              color: 'var(--figma-color-text)',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            Replace style
+          </button>
+        )}
+
+        {selectedToken && onReplaceToken && relevantLayers.length > 0 && (
+          <button
+            onClick={() => {
+              const affectedLayerIds = relevantLayers.map((l) => l.id);
+              onReplaceToken(selectedToken, affectedLayerIds);
+            }}
+            style={{
+              height: '32px',
+              padding: '0 16px',
+              border: '1px solid var(--figma-color-border)',
+              borderRadius: '8px',
+              backgroundColor: 'transparent',
+              color: 'var(--figma-color-text)',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            Replace token
+          </button>
+        )}
       </div>
 
       {/* Scrollable Content Section */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* Token Metadata Card */}
         {selectedToken && (
           <div style={{ padding: 'var(--figma-space-md)', flexShrink: 0 }}>
