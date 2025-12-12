@@ -552,16 +552,23 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'auto',
       }}
     >
-      {/* Header - Fixed at top */}
+      {/* Header - Sticky at top */}
       <div
         style={{
           display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--figma-space-sm)',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 'var(--figma-space-md)',
           padding: 'var(--figma-space-md)',
           borderBottom: '1px solid var(--figma-color-border)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          backgroundColor: 'var(--figma-color-bg)',
+          flexShrink: 0,
         }}
       >
         {/* Title and Replace button */}
@@ -571,8 +578,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
             alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 'var(--figma-space-md)',
-            position: 'sticky',
-            top: 0
+            width: '100%',
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -664,23 +670,26 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
             </button>
           )}
         </div>
+      </div>
 
+      {/* Scrollable Content Section */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* Token Metadata Card */}
         {selectedToken && (
-          <div style={{ marginTop: 'var(--figma-space-md)' }}>
+          <div style={{ padding: 'var(--figma-space-md)', flexShrink: 0 }}>
             <TokenMetadataCard token={selectedToken} />
           </div>
         )}
 
         {/* Style Properties Panel - NEW (Phase 5) */}
         {selectedStyle && (
-          <div style={{ marginTop: '0' }}>
+          <div style={{ flexShrink: 0 }}>
             <StylePropertiesPanel style={selectedStyle} />
           </div>
         )}
 
         {/* Layers Section Header */}
-        <div style={{ marginTop: 'var(--figma-space-md)' }}>
+        <div style={{ padding: 'var(--figma-space-md) var(--figma-space-md) 0', flexShrink: 0 }}>
           <h3
             style={{
               fontSize: '12px',
@@ -692,28 +701,18 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
             Layers
           </h3>
         </div>
-      </div>
 
-      {/* Scrollable layers list */}
-      {isExpanded && (
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0,
-            // overflow: 'hidden',
-          }}
-        >
+        {/* Virtualized layers list */}
+        {isExpanded && (
           <div
             ref={parentRef}
             style={{
               flex: 1,
-              overflow: 'auto',
               position: 'relative',
               contain: 'layout style paint',
               transform: 'translateZ(0)',
               willChange: 'transform',
+              minHeight: 0,
             }}
           >
             <div style={{ height: `${totalSize}px`, width: '100%', position: 'relative' }}>
@@ -741,78 +740,78 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
               })}
             </div>
           </div>
+        )}
 
-          {/* Replacement History Section - shown at bottom for styles that received replacements */}
-          {selectedStyle &&
-            replacementHistory &&
-            Array.from(replacementHistory.entries()).some(
-              ([_, entry]) => entry.targetStyleId === selectedStyle.id
-            ) && (
-              <div
+        {/* Replacement History Section - shown at bottom for styles that received replacements */}
+        {selectedStyle &&
+          replacementHistory &&
+          Array.from(replacementHistory.entries()).some(
+            ([_, entry]) => entry.targetStyleId === selectedStyle.id
+          ) && (
+            <div
+              style={{
+                borderTop: '1px solid var(--figma-color-border)',
+                padding: 'var(--figma-space-md)',
+                backgroundColor: 'var(--figma-color-bg-secondary)',
+                flexShrink: 0,
+              }}
+            >
+              <h3
                 style={{
-                  borderTop: '1px solid var(--figma-color-border)',
-                  padding: 'var(--figma-space-md)',
-                  backgroundColor: 'var(--figma-color-bg-secondary)',
-                  flexShrink: 0,
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--figma-color-text)',
+                  margin: '0 0 var(--figma-space-sm) 0',
                 }}
               >
-                <h3
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--figma-color-text)',
-                    margin: '0 0 var(--figma-space-sm) 0',
-                  }}
-                >
-                  Replacement History
-                </h3>
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 'var(--figma-space-sm)' }}
-                >
-                  {Array.from(replacementHistory.entries())
-                    .filter(([_, entry]) => entry.targetStyleId === selectedStyle.id)
-                    .map(([originalStyleId, entry]) => {
-                      const originalStyle = allStyles?.find((s) => s.id === originalStyleId);
-                      return (
-                        <div
-                          key={originalStyleId}
+                Replacement History
+              </h3>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 'var(--figma-space-sm)' }}
+              >
+                {Array.from(replacementHistory.entries())
+                  .filter(([_, entry]) => entry.targetStyleId === selectedStyle.id)
+                  .map(([originalStyleId, entry]) => {
+                    const originalStyle = allStyles?.find((s) => s.id === originalStyleId);
+                    return (
+                      <div
+                        key={originalStyleId}
+                        style={{
+                          padding: '8px',
+                          backgroundColor: 'var(--figma-color-bg)',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                        }}
+                      >
+                        <p
                           style={{
-                            padding: '8px',
-                            backgroundColor: 'var(--figma-color-bg)',
-                            borderRadius: '4px',
-                            fontSize: '11px',
+                            margin: '0 0 4px 0',
+                            color: 'var(--figma-color-text-secondary)',
                           }}
                         >
-                          <p
+                          <span
                             style={{
-                              margin: '0 0 4px 0',
-                              color: 'var(--figma-color-text-secondary)',
+                              textDecoration: 'line-through',
+                              color: 'var(--figma-color-text-tertiary)',
                             }}
                           >
-                            <span
-                              style={{
-                                textDecoration: 'line-through',
-                                color: 'var(--figma-color-text-tertiary)',
-                              }}
-                            >
-                              {originalStyle?.name || originalStyleId}
-                            </span>
-                            {' → '}
-                            <span style={{ fontWeight: 600, color: 'var(--figma-color-text)' }}>
-                              {entry.targetStyleName}
-                            </span>
-                          </p>
-                          <p style={{ margin: 0, color: 'var(--figma-color-text-tertiary)' }}>
-                            {entry.count} instance{entry.count !== 1 ? 's' : ''} moved
-                          </p>
-                        </div>
-                      );
-                    })}
-                </div>
+                            {originalStyle?.name || originalStyleId}
+                          </span>
+                          {' → '}
+                          <span style={{ fontWeight: 600, color: 'var(--figma-color-text)' }}>
+                            {entry.targetStyleName}
+                          </span>
+                        </p>
+                        <p style={{ margin: 0, color: 'var(--figma-color-text-tertiary)' }}>
+                          {entry.count} instance{entry.count !== 1 ? 's' : ''} moved
+                        </p>
+                      </div>
+                    );
+                  })}
               </div>
-            )}
-        </div>
-      )}
+            </div>
+          )}
+      </div>
     </div>
   );
 };
