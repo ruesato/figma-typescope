@@ -87,8 +87,8 @@ body {
 
 /* Scrollbar Styles */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -97,7 +97,7 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--figma-color-border-strong);
-  border-radius: var(--figma-radius-sm);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
