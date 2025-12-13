@@ -188,7 +188,7 @@ export default function FilterToolbar(props: FilterToolbarProps) {
             />
           </button>
 
-          {/* Dropdown Menu */}
+          {/* Dropdown Menu with Radio Buttons */}
           {isFilterDropdownOpen && (
             <div
               style={{
@@ -196,7 +196,9 @@ export default function FilterToolbar(props: FilterToolbarProps) {
                 top: '100%',
                 left: 0,
                 marginTop: '4px',
-                minWidth: '200px',
+                minWidth: '100%',
+                width: 'calc(100vw - 32px)',
+                maxWidth: '600px',
                 backgroundColor: 'var(--figma-color-bg)',
                 border: '1px solid var(--figma-color-border)',
                 borderRadius: '8px',
@@ -205,127 +207,182 @@ export default function FilterToolbar(props: FilterToolbarProps) {
               }}
             >
               {/* Source Filter */}
-              <div style={{ padding: '8px' }}>
-                <label
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--figma-color-border)' }}>
+                <div
                   style={{
                     display: 'block',
-                    fontSize: '11px',
+                    fontSize: '10px',
                     fontWeight: '600',
                     color: 'var(--figma-color-text-secondary)',
-                    marginBottom: '6px',
+                    marginBottom: '8px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px',
                   }}
                 >
                   Source
-                </label>
-                <select
-                  value={sourceFilter}
-                  onChange={(e) => {
-                    onSourceFilterChange(e.target.value as any);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    fontSize: '13px',
-                    border: '1px solid var(--figma-color-border)',
-                    borderRadius: '4px',
-                    backgroundColor: 'var(--figma-color-bg-secondary)',
-                    color: 'var(--figma-color-text)',
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="all">All sources</option>
-                  <option value="local">Local only</option>
-                  <option value="library">Libraries only</option>
-                </select>
+                </div>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  {['all', 'local', 'library'].map((option) => (
+                    <label
+                      key={option}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '13px',
+                        color: 'var(--figma-color-text)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="source-filter"
+                        value={option}
+                        checked={sourceFilter === option}
+                        onChange={(e) => onSourceFilterChange(e.target.value as any)}
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          cursor: 'pointer',
+                          margin: 0,
+                        }}
+                      />
+                      <span>
+                        {option === 'all' && 'All sources'}
+                        {option === 'local' && 'Local only'}
+                        {option === 'library' && 'Libraries only'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               {/* Usage Filter */}
-              <div
-                style={{
-                  padding: '8px',
-                  borderTop: '1px solid var(--figma-color-border)',
-                }}
-              >
-                <label
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--figma-color-border)' }}>
+                <div
                   style={{
                     display: 'block',
-                    fontSize: '11px',
+                    fontSize: '10px',
                     fontWeight: '600',
                     color: 'var(--figma-color-text-secondary)',
-                    marginBottom: '6px',
+                    marginBottom: '8px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px',
                   }}
                 >
                   Usage
-                </label>
-                <select
-                  value={usageFilter}
-                  onChange={(e) => onUsageFilterChange?.(e.target.value as UsageFilter)}
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    fontSize: '13px',
-                    border: '1px solid var(--figma-color-border)',
-                    borderRadius: '4px',
-                    backgroundColor: 'var(--figma-color-bg-secondary)',
-                    color: 'var(--figma-color-text)',
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="all">All</option>
-                  <option value="used">Used only</option>
-                  <option value="unused">Unused only</option>
-                </select>
+                </div>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  {['all', 'used', 'unused'].map((option) => (
+                    <label
+                      key={option}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '13px',
+                        color: 'var(--figma-color-text)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="usage-filter"
+                        value={option}
+                        checked={usageFilter === option}
+                        onChange={(e) => onUsageFilterChange?.(e.target.value as UsageFilter)}
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          cursor: 'pointer',
+                          margin: 0,
+                        }}
+                      />
+                      <span>
+                        {option === 'all' && 'All'}
+                        {option === 'used' && 'Used only'}
+                        {option === 'unused' && 'Unused only'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               {/* Type Filter (Tokens only) */}
               {props.type === 'tokens' && (
-                <div
-                  style={{
-                    padding: '8px',
-                    borderTop: '1px solid var(--figma-color-border)',
-                  }}
-                >
-                  <label
+                <div style={{ padding: '12px 16px' }}>
+                  <div
                     style={{
                       display: 'block',
-                      fontSize: '11px',
+                      fontSize: '10px',
                       fontWeight: '600',
                       color: 'var(--figma-color-text-secondary)',
-                      marginBottom: '6px',
+                      marginBottom: '8px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.5px',
                     }}
                   >
                     Type
-                  </label>
-                  <select
-                    value={props.typeFilter}
-                    onChange={(e) => props.onTypeFilterChange(e.target.value as any)}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      fontSize: '13px',
-                      border: '1px solid var(--figma-color-border)',
-                      borderRadius: '4px',
-                      backgroundColor: 'var(--figma-color-bg-secondary)',
-                      color: 'var(--figma-color-text)',
-                      cursor: 'pointer',
-                      outline: 'none',
-                    }}
-                  >
-                    <option value="all">All types</option>
+                  </div>
+                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '13px',
+                        color: 'var(--figma-color-text)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="type-filter"
+                        value="all"
+                        checked={props.typeFilter === 'all'}
+                        onChange={(e) => props.onTypeFilterChange(e.target.value as any)}
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          cursor: 'pointer',
+                          margin: 0,
+                        }}
+                      />
+                      <span>All types</span>
+                    </label>
                     {props.availableTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                      </option>
+                      <label
+                        key={type}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '13px',
+                          color: 'var(--figma-color-text)',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="type-filter"
+                          value={type}
+                          checked={props.typeFilter === type}
+                          onChange={(e) => props.onTypeFilterChange(e.target.value as any)}
+                          style={{
+                            width: '14px',
+                            height: '14px',
+                            cursor: 'pointer',
+                            margin: 0,
+                          }}
+                        />
+                        <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
               )}
             </div>
