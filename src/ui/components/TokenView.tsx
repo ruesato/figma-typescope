@@ -103,7 +103,20 @@ const groupTokensByCollection = (tokens: DesignToken[]): Map<string, DesignToken
 /**
  * Build tree structure from tokens
  */
-const buildTokenTree = (tokens: DesignToken[]): TreeNode<DesignToken>[] => {
+const buildTokenTree = (tokens: DesignToken[], groupByCollection: boolean): TreeNode<DesignToken>[] => {
+  // If not grouping, return flat list of tokens
+  if (!groupByCollection) {
+    return tokens.map((token) => ({
+      id: token.id,
+      name: token.name,
+      type: 'token',
+      data: token,
+      children: [],
+      level: 0,
+    }));
+  }
+
+  // Build grouped tree by collection
   const groupedTokens = groupTokensByCollection(tokens);
   const tree: TreeNode<DesignToken>[] = [];
 
@@ -205,7 +218,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
   }, [searchFilteredTokens, sourceFilter, typeFilter, usageFilter]);
 
   // Build tree structure from filtered tokens
-  const treeNodes = useMemo(() => buildTokenTree(filteredTokens), [filteredTokens]);
+  const treeNodes = useMemo(() => buildTokenTree(filteredTokens, groupByLibrary), [filteredTokens, groupByLibrary]);
 
   // Initialize all collection nodes as expanded (recalculate when tree changes)
   const expandedIds = useMemo(() => {
