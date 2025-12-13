@@ -389,31 +389,52 @@ export default function FilterToolbar(props: FilterToolbarProps) {
           )}
         </div>
 
-        {/* Group by Library Checkbox */}
-        <label
+        {/* Group by Library Toggle */}
+        <button
+          onClick={() => onGroupByLibraryChange(!groupByLibrary)}
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '8px',
+            padding: '4px 10px',
             fontSize: '13px',
             color: 'var(--figma-color-text)',
             cursor: 'pointer',
             whiteSpace: 'nowrap',
             marginLeft: 'auto',
+            border: 'none',
+            backgroundColor: 'transparent',
+            outline: 'none',
           }}
+          title={groupByLibrary ? 'Disable grouping' : 'Enable grouping'}
         >
-          <input
-            type="checkbox"
-            checked={groupByLibrary}
-            onChange={(e) => onGroupByLibraryChange(e.target.checked)}
-            style={{
-              width: '14px',
-              height: '14px',
-              cursor: 'pointer',
-            }}
-          />
           <span>Group</span>
-        </label>
+          {/* Toggle Switch */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              width: '32px',
+              height: '18px',
+              borderRadius: '9px',
+              backgroundColor: groupByLibrary ? 'var(--figma-color-bg-brand)' : 'var(--figma-color-bg-tertiary)',
+              transition: 'background-color 0.2s ease',
+              padding: '2px',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div
+              style={{
+                width: '14px',
+                height: '14px',
+                borderRadius: '50%',
+                backgroundColor: 'white',
+                transition: 'transform 0.2s ease',
+                transform: groupByLibrary ? 'translateX(14px)' : 'translateX(0)',
+              }}
+            />
+          </div>
+        </button>
       </div>
 
       {/* Close dropdown when clicking outside */}
