@@ -70,6 +70,13 @@ export default function StyleTreeView({
   // Expansion state
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
 
+  // Sync prop changes to internal state
+  useEffect(() => {
+    if (groupByLibraryProp !== undefined) {
+      setGroupByLibrary(groupByLibraryProp);
+    }
+  }, [groupByLibraryProp]);
+
   // Load groupByLibrary preference from Figma client storage
   useEffect(() => {
     try {
