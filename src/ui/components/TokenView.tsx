@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import TreeView, { TreeNode, DefaultNodeRow, ExpandIcon, UsageBadge } from './TreeView';
 import { useFuzzySearch } from '@/ui/hooks/useFuzzySearch';
 import type { DesignToken, TextLayer } from '@/shared/types';
@@ -220,11 +220,20 @@ export const TokenView: React.FC<TokenViewProps> = ({
   // Build tree structure from filtered tokens
   const treeNodes = useMemo(() => buildTokenTree(filteredTokens, groupByLibrary), [filteredTokens, groupByLibrary]);
 
-  // Initialize all collection nodes as expanded (recalculate when tree changes)
-  const expandedIds = useMemo(() => {
+  // Track expanded state for tree nodes
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const expanded = new Set<string>();
     treeNodes.forEach((node) => expanded.add(node.id));
     return expanded;
+  });
+
+  // Update expanded state when tree structure changes (to ensure all collections start expanded)
+  useMemo(() => {
+    setExpandedIds((prevExpanded) => {
+      const newExpanded = new Set(prevExpanded);
+      treeNodes.forEach((node) => newExpanded.add(node.id));
+      return newExpanded;
+    });
   }, [treeNodes]);
 
   // Check if virtualization is needed for large token lists
@@ -280,6 +289,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
       selectedId={selectedTokenId}
       onNodeSelect={handleNodeSelect}
       expandedIds={expandedIds}
+      onExpandedChange={setExpandedIds}
       renderNode={(node, options) => {
         // Render collection group header
         if (node.type === 'collection') {
