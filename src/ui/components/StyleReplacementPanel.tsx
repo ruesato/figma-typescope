@@ -2,6 +2,7 @@ import { useState } from 'react';
 import ReplacementPanel from './ReplacementPanel';
 import { StyleReplacementPreview } from './ReplacementPreview';
 import StyleTreeView from './StyleTreeView';
+import FilterToolbar from './FilterToolbar';
 import type { TextStyle, LibrarySource, TextLayer } from '@/shared/types';
 
 export interface StyleReplacementPanelProps {
@@ -49,6 +50,10 @@ export default function StyleReplacementPanel({
   replacedStyleIds,
 }: StyleReplacementPanelProps) {
   const [selectedTargetStyle, setSelectedTargetStyle] = useState<TextStyle | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'local' | 'library'>('all');
+  const [usageFilter, setUsageFilter] = useState<'all' | 'used' | 'unused'>('all');
+  const [groupByLibrary, setGroupByLibrary] = useState(true);
 
   // Handle replacement
   const handleReplace = () => {
@@ -60,6 +65,9 @@ export default function StyleReplacementPanel({
   // Handle close
   const handleClose = () => {
     setSelectedTargetStyle(null); // Reset selection
+    setSearchQuery(''); // Reset filters
+    setSourceFilter('all');
+    setUsageFilter('all');
     onClose();
   };
 
@@ -81,17 +89,38 @@ export default function StyleReplacementPanel({
       cancelLabel="Cancel"
       replaceLabel="Replace"
     >
-      <StyleTreeView
-        styles={availableStyles}
-        libraries={libraries}
-        unstyledLayers={[]} // Not showing unstyled layers in replacement panel
-        onStyleSelect={setSelectedTargetStyle}
-        selectedStyleId={selectedTargetStyle?.id}
-        disabledStyleId={sourceStyle.id} // Prevent selecting the same style
-        allLayers={allLayers}
-        replacedStyleIds={replacedStyleIds}
-        showGroupByLibrary={true}
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ padding: '0 16px' }}>
+          <FilterToolbar
+            type="styles"
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search styles..."
+            sourceFilter={sourceFilter}
+            onSourceFilterChange={setSourceFilter}
+            usageFilter={usageFilter}
+            onUsageFilterChange={setUsageFilter}
+            groupByLibrary={groupByLibrary}
+            onGroupByLibraryChange={setGroupByLibrary}
+          />
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+          <StyleTreeView
+            styles={availableStyles}
+            libraries={libraries}
+            unstyledLayers={[]} // Not showing unstyled layers in replacement panel
+            onStyleSelect={setSelectedTargetStyle}
+            selectedStyleId={selectedTargetStyle?.id}
+            disabledStyleId={sourceStyle.id} // Prevent selecting the same style
+            allLayers={allLayers}
+            replacedStyleIds={replacedStyleIds}
+            searchQuery={searchQuery}
+            sourceFilter={sourceFilter}
+            usageFilter={usageFilter}
+            groupByLibrary={groupByLibrary}
+          />
+        </div>
+      </div>
     </ReplacementPanel>
   );
 }

@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import TreeView, { TreeNode, DefaultNodeRow, ExpandIcon, UsageBadge } from './TreeView';
+import { useFuzzySearch } from '@/ui/hooks/useFuzzySearch';
 import type { DesignToken, TextLayer } from '@/shared/types';
 import { shouldVirtualize } from '@/ui/utils/virtualization';
 
@@ -18,6 +19,7 @@ export interface TokenViewProps {
   searchQuery?: string;
   sourceFilter?: 'all' | 'local' | 'library';
   typeFilter?: 'all' | 'color' | 'number' | 'string' | 'boolean';
+  usageFilter?: 'all' | 'used' | 'unused';
   groupByLibrary?: boolean;
 }
 
@@ -150,6 +152,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
   searchQuery = '',
   sourceFilter = 'all',
   typeFilter = 'all',
+  usageFilter = 'all',
   groupByLibrary = true,
 }) => {
 
@@ -163,17 +166,16 @@ export const TokenView: React.FC<TokenViewProps> = ({
     return Array.from(types).sort();
   }, [tokens]);
 
-  // Filter tokens based on selected filters and search
-  const filteredTokens = useMemo(() => {
-    return tokens.filter((token) => {
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const nameMatch = token.name.toLowerCase().includes(query);
-        const collectionMatch = token.collectionName.toLowerCase().includes(query);
-        if (!nameMatch && !collectionMatch) return false;
-      }
+  // Apply fuzzy search filtering
+  const searchFilteredTokens = useFuzzySearch(
+    tokens,
+    searchQuery,
+    ['name', 'collectionName']
+  );
 
+  // Filter tokens based on selected filters and fuzzy search
+  const filteredTokens = useMemo(() => {
+    return searchFilteredTokens.filter((token) => {
       // Source filter
       if (sourceFilter === 'local') {
         // Local tokens have key starting with 'local/'
@@ -191,9 +193,16 @@ export const TokenView: React.FC<TokenViewProps> = ({
         if (tokenType !== typeFilter) return false;
       }
 
+      // Usage filter
+      if (usageFilter !== 'all') {
+        const usageCount = token.usageCount ?? 0;
+        if (usageFilter === 'used' && usageCount === 0) return false;
+        if (usageFilter === 'unused' && usageCount > 0) return false;
+      }
+
       return true;
     });
-  }, [tokens, searchQuery, sourceFilter, typeFilter]);
+  }, [searchFilteredTokens, sourceFilter, typeFilter, usageFilter]);
 
   // Build tree structure from filtered tokens
   const treeNodes = useMemo(() => buildTokenTree(filteredTokens), [filteredTokens]);

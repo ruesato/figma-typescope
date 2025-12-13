@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import ReplacementPanel from './ReplacementPanel';
 import { TokenReplacementPreview } from './ReplacementPreview';
 import TokenView from './TokenView';
+import FilterToolbar from './FilterToolbar';
 import type { DesignToken, TextLayer } from '@/shared/types';
 
 export interface TokenReplacementPanelProps {
@@ -45,6 +46,21 @@ export default function TokenReplacementPanel({
   error,
 }: TokenReplacementPanelProps) {
   const [selectedTargetToken, setSelectedTargetToken] = useState<DesignToken | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'local' | 'library'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'color' | 'number' | 'string' | 'boolean'>('all');
+  const [usageFilter, setUsageFilter] = useState<'all' | 'used' | 'unused'>('all');
+  const [groupByLibrary, setGroupByLibrary] = useState(true);
+
+  // Get available token types
+  const availableTypes = useMemo(() => {
+    const types = new Set<string>();
+    availableTokens.forEach((token) => {
+      const type = (token.type as string).toLowerCase();
+      types.add(type);
+    });
+    return Array.from(types).sort();
+  }, [availableTokens]);
 
   // Handle replacement
   const handleReplace = () => {
@@ -56,6 +72,10 @@ export default function TokenReplacementPanel({
   // Handle close
   const handleClose = () => {
     setSelectedTargetToken(null); // Reset selection
+    setSearchQuery(''); // Reset filters
+    setSourceFilter('all');
+    setTypeFilter('all');
+    setUsageFilter('all');
     onClose();
   };
 
@@ -77,12 +97,38 @@ export default function TokenReplacementPanel({
       cancelLabel="Cancel"
       replaceLabel="Replace"
     >
-      <TokenView
-        tokens={availableTokens}
-        allLayers={allLayers}
-        onTokenSelect={setSelectedTargetToken}
-        selectedTokenId={selectedTargetToken?.id}
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ padding: '0 16px' }}>
+          <FilterToolbar
+            type="tokens"
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search tokens..."
+            sourceFilter={sourceFilter}
+            onSourceFilterChange={setSourceFilter}
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
+            availableTypes={availableTypes}
+            usageFilter={usageFilter}
+            onUsageFilterChange={setUsageFilter}
+            groupByLibrary={groupByLibrary}
+            onGroupByLibraryChange={setGroupByLibrary}
+          />
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+          <TokenView
+            tokens={availableTokens}
+            allLayers={allLayers}
+            onTokenSelect={setSelectedTargetToken}
+            selectedTokenId={selectedTargetToken?.id}
+            searchQuery={searchQuery}
+            sourceFilter={sourceFilter}
+            typeFilter={typeFilter}
+            usageFilter={usageFilter}
+            groupByLibrary={groupByLibrary}
+          />
+        </div>
+      </div>
     </ReplacementPanel>
   );
 }

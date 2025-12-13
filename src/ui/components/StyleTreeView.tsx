@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import TreeView, { TreeNode, DefaultNodeRow, ExpandIcon, UsageBadge } from './TreeView';
+import { useFuzzySearch } from '@/ui/hooks/useFuzzySearch';
 import type { TextStyle, TextLayer, LibrarySource } from '@/shared/types';
 
 /**
@@ -36,7 +37,8 @@ interface StyleTreeViewProps {
   className?: string;
   // Filter props (controlled from parent)
   searchQuery?: string;
-  sourceFilter?: 'all' | 'local' | 'library' | 'unused';
+  sourceFilter?: 'all' | 'local' | 'library';
+  usageFilter?: 'all' | 'used' | 'unused';
   groupByLibrary?: boolean;
 }
 
@@ -56,6 +58,7 @@ export default function StyleTreeView({
   className = '',
   searchQuery = '',
   sourceFilter = 'all',
+  usageFilter = 'all',
   groupByLibrary: groupByLibraryProp,
 }: StyleTreeViewProps) {
   // Use internal state for groupByLibrary with Figma client storage sync
@@ -183,7 +186,18 @@ export default function StyleTreeView({
     setExpandedNodeIds(expanded);
   }, [treeData]);
 
-  // Filter tree based on search query and source filter
+  // Apply search filtering using fuzzy search
+  const searchFilteredStyles = useFuzzySearch(
+    styles,
+    searchQuery,
+    ['name']
+  );
+
+  const searchFilteredStyleIds = useMemo(() => {
+    return new Set(searchFilteredStyles.map(s => s.id));
+  }, [searchFilteredStyles]);
+
+  // Filter tree based on search query, source filter, and usage filter
   const filteredTree = useMemo(() => {
     let result = treeData;
 
@@ -203,23 +217,37 @@ export default function StyleTreeView({
           }
           return true;
         });
-      } else if (sourceFilter === 'unused') {
-        result = result
-          .map((node) => ({
-            ...node,
-            children: node.children.filter((child) => (child.metadata?.usageCount ?? 0) === 0),
-          }))
-          .filter((node) => node.children.length > 0 || (node.metadata?.usageCount ?? 0) === 0);
       }
     }
 
-    // Apply search filter
+    // Apply usage filter
+    if (usageFilter !== 'all') {
+      result = result
+        .map((node) => ({
+          ...node,
+          children: node.children.filter((child) => {
+            const usageCount = child.metadata?.usageCount ?? 0;
+            if (usageFilter === 'used') return usageCount > 0;
+            if (usageFilter === 'unused') return usageCount === 0;
+            return true;
+          }),
+        }))
+        .filter((node) => {
+          // Keep library nodes if they have matching children, or if it's an unstyled node
+          if (node.type === 'library') {
+            return node.children.length > 0;
+          }
+          return true;
+        });
+    }
+
+    // Apply search filter with fuzzy matching
     if (!searchQuery.trim()) {
       return result;
     }
 
-    return filterTree(result, searchQuery.toLowerCase());
-  }, [treeData, searchQuery, sourceFilter]);
+    return filterTree(result, searchFilteredStyleIds);
+  }, [treeData, searchQuery, searchFilteredStyleIds, sourceFilter, usageFilter]);
 
 
   // Handle node selection
@@ -322,7 +350,7 @@ export default function StyleTreeView({
     flatten(filteredTree);
     const visibleCount = flattenedList.filter((n) => n.type === 'style').length;
     const totalCount = treeData.filter((n) => n.type === 'style').length;
-    const isFiltered = searchQuery.trim() !== '' || sourceFilter !== 'all';
+    const isFiltered = searchQuery.trim() !== '' || sourceFilter !== 'all' || usageFilter !== 'all';
 
     return (
       <div className="p-3 text-xs bg-figma-bg-secondary text-figma-text-tertiary border-t border-figma-border">
@@ -389,20 +417,18 @@ export default function StyleTreeView({
 }
 
 /**
- * Filter tree nodes based on search query
+ * Filter tree nodes based on search matched style IDs
  */
-function filterTree(nodes: TreeNode<TextStyle>[], query: string): TreeNode<TextStyle>[] {
+function filterTree(nodes: TreeNode<TextStyle>[], matchedStyleIds: Set<string>): TreeNode<TextStyle>[] {
   return nodes.reduce((filtered: TreeNode<TextStyle>[], node) => {
-    const matches = node.name.toLowerCase().includes(query);
-
-    if (matches) {
-      const filteredNode = { ...node };
-      if (node.children.length > 0) {
-        filteredNode.children = filterTree(node.children, query);
+    // For style nodes, check if they matched the search
+    if (node.type === 'style') {
+      if (matchedStyleIds.has(node.data?.id || '')) {
+        filtered.push(node);
       }
-      filtered.push(filteredNode);
-    } else if (node.children.length > 0) {
-      const matchingChildren = filterTree(node.children, query);
+    } else if (node.type === 'library' || node.type === 'unstyled') {
+      // For group nodes, filter children first
+      const matchingChildren = filterTree(node.children, matchedStyleIds);
       if (matchingChildren.length > 0) {
         filtered.push({
           ...node,
