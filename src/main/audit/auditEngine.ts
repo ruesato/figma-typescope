@@ -34,6 +34,22 @@ export class AuditEngine {
   private startTime: number = 0;
   private cancelled: boolean = false;
 
+  // PERFORMANCE: Custom timing helpers (console.time not available in Figma sandbox)
+  private timers: Map<string, number> = new Map();
+
+  private startTimer(label: string): void {
+    this.timers.set(label, Date.now());
+  }
+
+  private endTimer(label: string): number {
+    const start = this.timers.get(label);
+    if (!start) return 0;
+    const duration = Date.now() - start;
+    console.log(`${label}: ${duration}ms`);
+    this.timers.delete(label);
+    return duration;
+  }
+
   // State transition validation (from data-model.md)
   private readonly VALID_TRANSITIONS: Record<AuditState, AuditState[]> = {
     idle: ['validating'],
@@ -64,7 +80,7 @@ export class AuditEngine {
     // PERFORMANCE: Log audit start
     console.log('━'.repeat(60));
     console.log('[Performance] Audit started');
-    console.time('[Performance] Total audit duration');
+    this.startTimer('[Performance] Total audit duration');
 
     try {
       // Validate Figma environment
@@ -81,18 +97,18 @@ export class AuditEngine {
         payload: { state: 'validating' },
       });
 
-      console.time('[Performance] Validation phase');
+      this.startTimer('[Performance] Validation phase');
       await this.validateDocument(options);
-      console.timeEnd('[Performance] Validation phase');
+      this.endTimer('[Performance] Validation phase');
 
       // State 2: SCANNING
       if (!this.transition('scanning')) {
         throw new Error('Cannot start scanning: invalid state transition');
       }
 
-      console.time('[Performance] Document scan phase');
+      this.startTimer('[Performance] Document scan phase');
       const scanResult = await this.scanDocument();
-      console.timeEnd('[Performance] Document scan phase');
+      this.endTimer('[Performance] Document scan phase');
       console.log(`[Performance] Scanned ${scanResult.totalTextLayers} text layers across ${scanResult.totalPages} pages`);
 
       // State 3: PROCESSING
@@ -100,9 +116,9 @@ export class AuditEngine {
         throw new Error('Cannot start processing: invalid state transition');
       }
 
-      console.time('[Performance] Data processing phase');
+      this.startTimer('[Performance] Data processing phase');
       const auditResult = await this.processScanResults(scanResult, options);
-      console.timeEnd('[Performance] Data processing phase');
+      this.endTimer('[Performance] Data processing phase');
 
       // State 4: COMPLETE
       if (!this.transition('complete')) {
@@ -110,7 +126,7 @@ export class AuditEngine {
       }
 
       const duration = Date.now() - this.startTime;
-      console.timeEnd('[Performance] Total audit duration');
+      this.endTimer('[Performance] Total audit duration');
       console.log(`[Performance] Audit completed successfully in ${duration}ms`);
 
       // Send final result to UI
@@ -122,7 +138,7 @@ export class AuditEngine {
       return auditResult;
     } catch (error) {
       // PERFORMANCE: Log error timing
-      console.timeEnd('[Performance] Total audit duration');
+      this.endTimer('[Performance] Total audit duration');
       console.error('[Performance] Audit failed:', error);
       console.log('━'.repeat(60));
 
