@@ -8,6 +8,9 @@
 /**
  * Recursively traverse a node tree and collect all text nodes
  *
+ * PERFORMANCE OPTIMIZED: Uses Figma's findAllWithCriteria when available,
+ * which is 10-100x faster than manual recursion on large documents.
+ *
  * @param node - Root node to start traversal from
  * @param cancelFn - Optional function that returns true if traversal should be cancelled
  * @returns Array of all text nodes found in the tree
@@ -22,6 +25,31 @@ export async function traverseTextNodes(
   node: BaseNode,
   cancelFn?: () => boolean
 ): Promise<TextNode[]> {
+  // Check for cancellation before starting
+  if (cancelFn && cancelFn()) {
+    return [];
+  }
+
+  // PERFORMANCE: Use Figma's optimized findAllWithCriteria when available
+  // This is up to 100x faster than manual recursion on large documents
+  // Reference: https://developers.figma.com/docs/plugins/api/properties/nodes-findallwithcriteria
+  if ('findAllWithCriteria' in node) {
+    try {
+      const textNodes = (node as any).findAllWithCriteria({
+        types: ['TEXT']
+      }) as TextNode[];
+
+      console.log(`[Performance] Found ${textNodes.length} text nodes using optimized findAllWithCriteria`);
+      return textNodes;
+    } catch (error) {
+      console.warn('[Performance] findAllWithCriteria failed, falling back to recursive traversal:', error);
+      // Fall through to recursive traversal
+    }
+  }
+
+  // FALLBACK: Use recursive traversal for nodes that don't support findAllWithCriteria
+  // or if the optimized method fails
+  console.log('[Performance] Using recursive traversal (slower fallback)');
   const textNodes: TextNode[] = [];
 
   async function traverse(currentNode: BaseNode): Promise<void> {

@@ -346,6 +346,10 @@ async function handleRunStyleAudit(payload?: {
   try {
     console.log('[StyleAudit] Starting audit with options:', payload);
 
+    // PERFORMANCE: Enable flag to skip invisible instance children
+    // This can be hundreds of times faster for large documents
+    figma.skipInvisibleInstanceChildren = true;
+
     // Send initial message to UI to start state machine
     figma.ui.postMessage({
       type: 'STYLE_AUDIT_STARTED',
@@ -366,6 +370,9 @@ async function handleRunStyleAudit(payload?: {
 
     // Error will be handled by AuditEngine and sent via message handler
     // No need to send additional error message here
+  } finally {
+    // Reset flag after audit
+    figma.skipInvisibleInstanceChildren = false;
   }
 }
 

@@ -231,10 +231,17 @@ export async function processAuditData(
  * @returns Processed TextLayer with full metadata
  */
 async function processTextLayer(rawLayer: any, allStyles: TextStyle[]): Promise<TextLayer> {
-  // Get the actual Figma node for detailed analysis
-  const textNode = await figma.getNodeByIdAsync(rawLayer.id);
+  // PERFORMANCE: Use cached node reference if available, avoiding async API call
+  // This eliminates thousands of getNodeByIdAsync calls on large documents
+  let textNode = rawLayer._nodeRef;
+
+  // Fallback: fetch node if not cached (shouldn't happen with optimized scanner)
   if (!textNode) {
-    throw new Error(`Text node not found: ${rawLayer.id}`);
+    console.warn(`[Performance] Node not cached, fetching: ${rawLayer.id}`);
+    textNode = await figma.getNodeByIdAsync(rawLayer.id);
+    if (!textNode) {
+      throw new Error(`Text node not found: ${rawLayer.id}`);
+    }
   }
 
   // Detect style assignment

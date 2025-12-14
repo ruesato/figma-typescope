@@ -61,6 +61,11 @@ export class AuditEngine {
     this.cancelled = false;
     this.startTime = Date.now();
 
+    // PERFORMANCE: Log audit start
+    console.log('━'.repeat(60));
+    console.log('[Performance] Audit started');
+    console.time('[Performance] Total audit duration');
+
     try {
       // Validate Figma environment
       await this.validateFigmaEnvironment();
@@ -76,21 +81,28 @@ export class AuditEngine {
         payload: { state: 'validating' },
       });
 
+      console.time('[Performance] Validation phase');
       await this.validateDocument(options);
+      console.timeEnd('[Performance] Validation phase');
 
       // State 2: SCANNING
       if (!this.transition('scanning')) {
         throw new Error('Cannot start scanning: invalid state transition');
       }
 
+      console.time('[Performance] Document scan phase');
       const scanResult = await this.scanDocument();
+      console.timeEnd('[Performance] Document scan phase');
+      console.log(`[Performance] Scanned ${scanResult.totalTextLayers} text layers across ${scanResult.totalPages} pages`);
 
       // State 3: PROCESSING
       if (!this.transition('processing')) {
         throw new Error('Cannot start processing: invalid state transition');
       }
 
+      console.time('[Performance] Data processing phase');
       const auditResult = await this.processScanResults(scanResult, options);
+      console.timeEnd('[Performance] Data processing phase');
 
       // State 4: COMPLETE
       if (!this.transition('complete')) {
@@ -98,6 +110,8 @@ export class AuditEngine {
       }
 
       const duration = Date.now() - this.startTime;
+      console.timeEnd('[Performance] Total audit duration');
+      console.log(`[Performance] Audit completed successfully in ${duration}ms`);
 
       // Send final result to UI
       this.sendMessage({
@@ -107,6 +121,11 @@ export class AuditEngine {
 
       return auditResult;
     } catch (error) {
+      // PERFORMANCE: Log error timing
+      console.timeEnd('[Performance] Total audit duration');
+      console.error('[Performance] Audit failed:', error);
+      console.log('━'.repeat(60));
+
       // Handle cancellation separately
       if (this.cancelled) {
         this.transition('cancelled');

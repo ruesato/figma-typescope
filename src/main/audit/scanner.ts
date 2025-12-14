@@ -47,6 +47,10 @@ export interface RawTextLayer {
   parentId?: string;
   parentName?: string;
   depth: number;
+
+  // PERFORMANCE: Cache node reference to avoid re-fetching with getNodeByIdAsync
+  // This eliminates thousands of async API calls during processing
+  _nodeRef?: TextNode;
 }
 
 export interface ScanOptions {
@@ -114,6 +118,11 @@ export async function scanDocument(
 
         // Extract text layer data
         const textLayer = extractTextLayerData(textNode, page);
+
+        // PERFORMANCE: Cache node reference to avoid re-fetching later
+        // This eliminates async getNodeByIdAsync calls in processor
+        textLayer._nodeRef = textNode;
+
         result.textLayers.push(textLayer);
       }
 
