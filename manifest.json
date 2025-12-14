@@ -3,6 +3,6 @@
   "editorType": ["figma"],
   "id": "typescope",
   "name": "Typescope",
-  "main": "build/main.js",
+  "main": "main.js",
   "permissions": ["teamlibrary"]
 }
