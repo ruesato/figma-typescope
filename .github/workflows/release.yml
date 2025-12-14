@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build plugin
+        run: pnpm build
+
       - name: Run tests
         run: pnpm test || echo "Tests skipped (no test files found)"
         continue-on-error: true
@@ -36,9 +39,6 @@ jobs:
       - name: Type check
         run: pnpm typecheck || echo "Type checking skipped (type errors present)"
         continue-on-error: true
-
-      - name: Build plugin
-        run: pnpm build
 
       - name: Verify version consistency
         run: |
