@@ -62,6 +62,7 @@ jobs:
         run: bash scripts/package-release.sh
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
           files: |
