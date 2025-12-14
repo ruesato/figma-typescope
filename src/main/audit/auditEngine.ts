@@ -341,6 +341,9 @@ export class AuditEngine {
   }): Promise<void> {
     try {
       // Progress: 0-10% (Validation phase)
+      // PERFORMANCE: Lightweight validation - DO NOT traverse document tree
+      // Traversing the entire document causes OOM on large files (2GB limit)
+
       this.sendMessage({
         type: 'STYLE_AUDIT_PROGRESS',
         payload: {
@@ -355,79 +358,35 @@ export class AuditEngine {
         throw new Error('Cannot access current page');
       }
 
+      // Check if we can access root pages
+      if (!figma.root || !figma.root.children) {
+        throw new Error('Cannot access document pages');
+      }
+
       this.sendMessage({
         type: 'STYLE_AUDIT_PROGRESS',
         payload: {
           state: 'validating',
           progress: 5,
-          currentStep: 'Validating page access...',
+          currentStep: 'Document ready - preparing scan...',
         },
       });
 
-      // Count total text layers
-      // We'll count from the current page first, then all pages if needed
-      let totalTextLayers = 0;
-      let totalPages = 0;
-
-      this.sendMessage({
-        type: 'STYLE_AUDIT_PROGRESS',
-        payload: {
-          state: 'validating',
-          progress: 7,
-          currentStep: 'Counting text layers...',
-        },
-      });
-
-      try {
-        // Try to access all pages via figma.root
-        if (figma.root && figma.root.children) {
-          totalPages = figma.root.children.length;
-          for (const page of figma.root.children) {
-            // Find all text nodes in this page directly
-            // Note: We don't use figma.loadPageAsync as it doesn't exist
-            const textNodes = this.findTextNodesInPage(page);
-            totalTextLayers += textNodes.length;
-          }
-        } else {
-          // Fallback: just use current page
-          totalPages = 1;
-          const textNodes = this.findTextNodesInPage(figma.currentPage);
-          totalTextLayers = textNodes.length;
-        }
-      } catch (error) {
-        // If we can't access multiple pages, just use current page
-        totalPages = 1;
-        const textNodes = this.findTextNodesInPage(figma.currentPage);
-        totalTextLayers = textNodes.length;
-      }
-
-      // Enforce size limits (from spec FR-007e/f/g)
-      if (totalTextLayers > 25000) {
-        throw new Error(
-          `Document too large: ${totalTextLayers.toLocaleString()} text layers found. ` +
-            'Maximum supported is 25,000 layers. Consider splitting into smaller documents.'
-        );
-      }
-
-      if (totalTextLayers > 5000) {
-        // Warning for Warning Zone (5k-25k layers)
-        console.warn(
-          `Large document detected: ${totalTextLayers.toLocaleString()} text layers. Performance may be impacted.`
-        );
-      }
+      // PERFORMANCE NOTE: We do NOT count text layers here
+      // Counting requires traversing the entire document tree which causes OOM
+      // Layer counts will be discovered during the actual scan phase
+      const totalPages = figma.root.children.length;
 
       this.sendMessage({
         type: 'STYLE_AUDIT_PROGRESS',
         payload: {
           state: 'validating',
           progress: 10,
-          currentStep: `Found ${totalTextLayers.toLocaleString()} text layers across ${totalPages} page${totalPages !== 1 ? 's' : ''}`,
+          currentStep: `Ready to scan ${totalPages} page${totalPages !== 1 ? 's' : ''}`,
         },
       });
 
-      console.log(
-        `Document validation complete: ${totalTextLayers.toLocaleString()} text layers found`
-      );
+      console.log(`✓ Document validation complete: ${totalPages} pages ready for scanning`);
     } catch (error) {
       // Re-throw validation errors
       throw error;
