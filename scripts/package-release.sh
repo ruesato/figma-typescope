@@ -18,8 +18,11 @@ mkdir -p dist
 
 # Copy essential files to dist
 echo "📋 Copying files..."
-cp manifest.json dist/
 cp build/main.js dist/
+
+# Update manifest.json to point to main.js at root (not build/main.js)
+echo "📝 Updating manifest.json for release..."
+sed 's|"main": "build/main.js"|"main": "main.js"|' manifest.json > dist/manifest.json
 
 # Copy installation guide
 cp INSTALL.md dist/
