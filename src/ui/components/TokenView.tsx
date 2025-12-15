@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import TreeView, { TreeNode, DefaultNodeRow, ExpandIcon, UsageBadge } from './TreeView';
-import { useFuzzySearch } from '@/ui/hooks/useFuzzySearch';
 import type { DesignToken, TextLayer } from '@/shared/types';
 import { shouldVirtualize } from '@/ui/utils/virtualization';
 
@@ -235,16 +234,20 @@ export const TokenView: React.FC<TokenViewProps> = ({
     return Array.from(types).sort();
   }, [tokens]);
 
-  // Apply fuzzy search filtering
-  const searchFilteredTokens = useFuzzySearch(
-    tokens,
-    searchQuery,
-    ['name', 'collectionName']
-  );
-
-  // Filter tokens based on selected filters and fuzzy search
+  // Filter tokens based on selected filters and simple search
   const filteredTokens = useMemo(() => {
-    return searchFilteredTokens.filter((token) => {
+    // Apply simple search filter first
+    let filtered = tokens;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = tokens.filter((token) =>
+        token.name.toLowerCase().includes(query) ||
+        token.collectionName.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply other filters
+    return filtered.filter((token) => {
       // Source filter
       if (sourceFilter === 'local') {
         // Local tokens have key starting with 'local/'
@@ -271,7 +274,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
 
       return true;
     });
-  }, [searchFilteredTokens, sourceFilter, typeFilter, usageFilter]);
+  }, [tokens, searchQuery, sourceFilter, typeFilter, usageFilter]);
 
   // Build tree structure from filtered tokens
   const treeNodes = useMemo(() => buildTokenTree(filteredTokens, groupByLibrary), [filteredTokens, groupByLibrary]);
