@@ -110,16 +110,63 @@ const groupTokensByCollection = (tokens: DesignToken[]): Map<string, DesignToken
 };
 
 /**
+ * Sanitize token data to only include primitive values
+ * This prevents React #301 errors from accidentally rendering arrays/objects
+ */
+const sanitizeTokenData = (token: DesignToken): DesignToken => {
+  // Safely handle currentValue - if it's an object, keep it as-is since formatTokenValue handles it
+  // But ensure it won't be accidentally rendered directly
+  let safeCurrentValue = token.currentValue;
+  if (typeof safeCurrentValue === 'object' && safeCurrentValue !== null && !Array.isArray(safeCurrentValue)) {
+    // For color objects {r, g, b, a}, keep them but ensure they're new objects
+    if ('r' in safeCurrentValue && 'g' in safeCurrentValue && 'b' in safeCurrentValue) {
+      safeCurrentValue = {
+        r: Number(safeCurrentValue.r),
+        g: Number(safeCurrentValue.g),
+        b: Number(safeCurrentValue.b),
+        a: Number(safeCurrentValue.a ?? 1)
+      };
+    } else {
+      // Other objects - convert to string representation
+      safeCurrentValue = JSON.stringify(safeCurrentValue);
+    }
+  }
+
+  return {
+    id: String(token.id),
+    name: String(token.name),
+    key: String(token.key),
+    type: token.type,
+    resolvedType: String(token.resolvedType),
+    currentValue: safeCurrentValue,
+    value: token.value,
+    collectionId: String(token.collectionId),
+    collectionName: String(token.collectionName),
+    collections: [], // Empty array - not needed for rendering
+    modeId: String(token.modeId),
+    modeName: String(token.modeName),
+    valuesByMode: {}, // Empty object - not needed for rendering
+    modes: {}, // Empty object - not needed for rendering
+    isAlias: Boolean(token.isAlias),
+    aliasedTokenId: token.aliasedTokenId ? String(token.aliasedTokenId) : undefined,
+    aliasChain: [], // Empty array - not needed for rendering
+    usageCount: Number(token.usageCount ?? 0),
+    layerIds: [], // Empty array - not needed for rendering
+    propertyTypes: [], // Empty array - not needed for rendering
+  };
+};
+
+/**
  * Build tree structure from tokens
  */
 const buildTokenTree = (tokens: DesignToken[], groupByCollection: boolean): TreeNode<DesignToken>[] => {
   // If not grouping, return flat list of tokens
   if (!groupByCollection) {
     return tokens.map((token) => ({
-      id: token.id,
-      name: token.name,
+      id: String(token.id),
+      name: String(token.name),
       type: 'token',
-      data: token,
+      data: sanitizeTokenData(token),
       children: [],
       level: 0,
     }));
@@ -132,8 +179,8 @@ const buildTokenTree = (tokens: DesignToken[], groupByCollection: boolean): Tree
   for (const [collectionName, collectionTokens] of groupedTokens.entries()) {
     // Create collection group node
     const groupNode: TreeNode<DesignToken> = {
-      id: `collection-${collectionName}`,
-      name: collectionName,
+      id: `collection-${String(collectionName)}`,
+      name: String(collectionName),
       type: 'collection',
       children: [],
       level: 0,
@@ -145,10 +192,10 @@ const buildTokenTree = (tokens: DesignToken[], groupByCollection: boolean): Tree
     // Add tokens as children
     for (const token of collectionTokens) {
       groupNode.children.push({
-        id: token.id,
-        name: token.name,
+        id: String(token.id),
+        name: String(token.name),
         type: 'token',
-        data: token,
+        data: sanitizeTokenData(token),
         children: [],
         level: 1,
       });
