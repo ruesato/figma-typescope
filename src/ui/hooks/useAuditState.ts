@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { AuditResult, AuditState, StyleGovernanceAuditResult } from '@/shared/types';
+import { calculateOptimizedMetrics } from '@/ui/utils/metricsCalculator';
 
 /**
  * Audit state store using React hooks with 7-state machine
@@ -188,6 +189,31 @@ export function useAuditState() {
         `${styleGovernanceResult.styles.length} styles, ${styleGovernanceResult.tokens.length} tokens, ` +
         `${styleGovernanceResult.libraries.length} libraries`
       );
+
+      notifyListeners();
+    },
+
+    // STREAMING: Finalize accumulated result by calculating full metrics (Phase 2.3.4)
+    finalizeAccumulatedResult: () => {
+      if (!styleGovernanceResult) {
+        console.warn('[AuditState] Cannot finalize - no accumulated result');
+        return;
+      }
+
+      console.log('[AuditState] Finalizing accumulated result - calculating metrics...');
+
+      // Calculate full metrics using the accumulated data
+      const calculatedMetrics = calculateOptimizedMetrics(styleGovernanceResult);
+
+      // Update the result with calculated metrics
+      styleGovernanceResult.metrics = calculatedMetrics;
+
+      console.log('[AuditState] Metrics calculated:', {
+        styleAdoptionRate: calculatedMetrics.styleAdoptionRate.toFixed(1) + '%',
+        tokenAdoptionRate: calculatedMetrics.tokenAdoptionRate.toFixed(1) + '%',
+        totalLayers: calculatedMetrics.elementCount,
+        fullyStyledCount: calculatedMetrics.fullyStyledCount,
+      });
 
       notifyListeners();
     },

@@ -84,11 +84,11 @@ export function useMessageHandler() {
           break;
 
         case 'STYLE_AUDIT_COMPLETE':
+          // STREAMING: Calculate metrics on accumulated data before marking complete
+          // The UI has all layers/styles/tokens from STYLE_AUDIT_PARTIAL_RESULT messages
+          auditState.finalizeAccumulatedResult();
           auditState.transitionTo('complete');
           auditState.setProgress(100);
-          // STREAMING: Don't replace accumulated results with minimal result from main thread
-          // The UI already has all the data from STYLE_AUDIT_PARTIAL_RESULT messages
-          // Just mark as complete, keep the accumulated data
           console.log('[StyleAudit] Audit completed successfully');
           break;
 
