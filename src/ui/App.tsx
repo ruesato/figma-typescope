@@ -90,6 +90,17 @@ export default function App() {
   const styleBadgeCount = styleGovernanceResult?.styles.length ?? 0;
   const tokenBadgeCount = styleGovernanceResult?.tokens.length ?? 0;
 
+  // DEBUG: Log badge counts whenever they change
+  useEffect(() => {
+    console.log('[App] Badge counts updated:', {
+      styleBadgeCount,
+      tokenBadgeCount,
+      hasStyleGovernanceResult: !!styleGovernanceResult,
+      stylesLength: styleGovernanceResult?.styles.length,
+      tokensLength: styleGovernanceResult?.tokens.length,
+    });
+  }, [styleBadgeCount, tokenBadgeCount, styleGovernanceResult]);
+
   // Calculate which tabs should be disabled
   const disabledTabs: TabType[] = !styleGovernanceResult ? ['styles', 'tokens'] : [];
 

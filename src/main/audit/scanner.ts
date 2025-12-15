@@ -56,6 +56,8 @@ export interface RawTextLayer {
 export interface ScanOptions {
   includeHiddenLayers?: boolean;
   progressCallback?: (progress: ScanProgress) => void;
+  // PERFORMANCE: Limit pages scanned on large documents to prevent OOM
+  maxPages?: number;
 }
 
 export interface ScanProgress {
@@ -86,8 +88,20 @@ export async function scanDocument(
 
   try {
     // Get all pages in document
-    const pages = figma.root.children as PageNode[];
-    result.totalPages = pages.length;
+    const allPages = figma.root.children as PageNode[];
+    result.totalPages = allPages.length;
+
+    // PERFORMANCE: Limit pages scanned on large documents to prevent OOM
+    // For documents with many pages, only scan first N pages
+    const maxPages = options.maxPages || allPages.length;
+    const pagesToScan = allPages.slice(0, Math.min(maxPages, allPages.length));
+
+    if (pagesToScan.length < allPages.length) {
+      console.warn(
+        `[Performance] Large document detected (${allPages.length} pages). ` +
+        `Scanning first ${pagesToScan.length} pages to prevent memory issues.`
+      );
+    }
 
     // Check for cancellation
     if (signal?.aborted) {
@@ -95,8 +109,8 @@ export async function scanDocument(
     }
 
     // Scan each page
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
+    for (let i = 0; i < pagesToScan.length; i++) {
+      const page = pagesToScan[i];
 
       // Check for cancellation
       if (signal?.aborted) {

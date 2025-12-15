@@ -55,6 +55,8 @@ export function useMessageHandler() {
         case 'STYLE_AUDIT_STARTED':
           auditState.transitionTo(msg.payload.state);
           auditState.setProgress(0);
+          // STREAMING: Clear previous results before starting new audit
+          auditState.setStyleGovernanceResult(null);
           break;
 
         case 'STYLE_AUDIT_PROGRESS':
@@ -65,10 +67,29 @@ export function useMessageHandler() {
           auditState.setProgress(msg.payload.progress, msg.payload.currentStep);
           break;
 
+        case 'STYLE_AUDIT_PARTIAL_RESULT':
+          // STREAMING: Accumulate new data from this page (Phase 2.3.1)
+          // Main thread sends ONLY new layers/styles/tokens/libraries to prevent OOM
+          // UI accumulates them here where more memory is available
+          auditState.accumulatePartialResult(
+            msg.payload.newLayers,
+            msg.payload.newStyles,
+            msg.payload.newTokens,
+            msg.payload.newLibraries
+          );
+          console.log(
+            `[StyleAudit] Partial result accumulated: Page ${msg.payload.pageNumber}/${msg.payload.totalPages} ("${msg.payload.pageName}") ` +
+            `added ${msg.payload.newLayers.length} layers, ${msg.payload.newStyles.length} styles, ${msg.payload.newTokens.length} tokens`
+          );
+          break;
+
         case 'STYLE_AUDIT_COMPLETE':
           auditState.transitionTo('complete');
-          auditState.setStyleGovernanceResult(msg.payload.result);
           auditState.setProgress(100);
+          // STREAMING: Don't replace accumulated results with minimal result from main thread
+          // The UI already has all the data from STYLE_AUDIT_PARTIAL_RESULT messages
+          // Just mark as complete, keep the accumulated data
+          console.log('[StyleAudit] Audit completed successfully');
           break;
 
         case 'STYLE_AUDIT_ERROR':

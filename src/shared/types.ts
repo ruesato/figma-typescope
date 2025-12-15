@@ -235,6 +235,19 @@ export type MainToUIMessage =
       };
     }
   | {
+      type: 'STYLE_AUDIT_PARTIAL_RESULT';
+      payload: {
+        // Only send NEW data from this page (not accumulated)
+        newLayers: TextLayer[];
+        newStyles: TextStyle[];
+        newTokens: DesignToken[];
+        newLibraries: LibrarySource[];
+        pageNumber: number;
+        totalPages: number;
+        pageName: string;
+      };
+    }
+  | {
       type: 'STYLE_AUDIT_COMPLETE';
       payload: { result: StyleGovernanceAuditResult; duration: number };
     }
