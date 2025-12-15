@@ -290,14 +290,10 @@ export const TokenView: React.FC<TokenViewProps> = ({
     );
   }
 
-  // TEMP: Disable search entirely to avoid React #301 error
-  // TODO: Debug why searching causes object rendering error
-  const displayNodes = searchQuery ? [] : treeNodes;
-
   return (
     <TreeView
       key={`token-view-${typeFilter}-${sourceFilter}`}
-      nodes={displayNodes}
+      nodes={treeNodes}
       searchEnabled={false}
       selectedId={selectedTokenId}
       onNodeSelect={handleNodeSelect}
