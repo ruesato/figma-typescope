@@ -17,6 +17,7 @@ import TokenReplacementPanel from './components/TokenReplacementPanel';
 import FilterToolbar from './components/FilterToolbar';
 import Toast from './components/Toast';
 import ConfirmationDialog from './components/ConfirmationDialog';
+import PageSelector from './components/PageSelector';
 import type { TextStyle, DesignToken } from '@/shared/types';
 
 /**
@@ -70,6 +71,9 @@ export default function App() {
     type: 'success' | 'error' | 'loading';
   } | null>(null);
 
+  // Page selection state
+  const [showPageSelector, setShowPageSelector] = useState(false);
+
   // Get message handlers for communication with main context
   const { runStyleAudit, navigateToLayer, replaceStyle, replaceToken } = useMessageHandler();
 
@@ -121,10 +125,15 @@ export default function App() {
   // ============================================================================
 
   const handleRunAuditPage = () => {
+    // Show page selector instead of immediately running audit
+    setShowPageSelector(true);
+  };
+
+  const handlePageSelectorConfirm = (pageIds: string[]) => {
     reset();
     // Immediately transition to validating state for instant visual feedback
     transitionTo('validating');
-    runStyleAudit({ includeHiddenLayers: false, includeTokens: true });
+    runStyleAudit({ includeHiddenLayers: false, includeTokens: true, pageIds });
   };
 
   const handleRunAuditSelection = () => {
@@ -724,6 +733,13 @@ export default function App() {
           duration={toast.type === 'loading' ? 0 : 3000}
         />
       )}
+
+      {/* Page Selector Dialog */}
+      <PageSelector
+        isOpen={showPageSelector}
+        onClose={() => setShowPageSelector(false)}
+        onConfirm={handlePageSelectorConfirm}
+      />
     </div>
   );
 }

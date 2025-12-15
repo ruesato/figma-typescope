@@ -130,6 +130,13 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
         await handleSaveGroupByLibrary(msg.payload.enabled);
         break;
 
+      // ==================================================================
+      // Page Selection
+      // ==================================================================
+      case 'GET_PAGES':
+        handleGetPages();
+        break;
+
       default:
         console.warn('Unknown message type:', (msg as { type: string }).type);
     }
@@ -311,6 +318,34 @@ async function handleNavigateToLayer(layerId: string): Promise<void> {
     sendMessage({
       type: 'NAVIGATE_ERROR',
       error: errorMessage,
+    });
+  }
+}
+
+// ============================================================================
+// Page Selection Handler
+// ============================================================================
+
+/**
+ * Handle GET_PAGES message - return list of all pages in document
+ */
+function handleGetPages(): void {
+  try {
+    const pages = figma.root.children.map((page: any) => ({
+      id: page.id,
+      name: page.name,
+    }));
+
+    sendMessage({
+      type: 'PAGES_LIST',
+      payload: { pages },
+    });
+  } catch (error) {
+    console.error('[handleGetPages] Error fetching pages:', error);
+    // Send empty list on error
+    sendMessage({
+      type: 'PAGES_LIST',
+      payload: { pages: [] },
     });
   }
 }

@@ -138,7 +138,7 @@ const buildTokenTree = (tokens: DesignToken[], groupByCollection: boolean): Tree
       children: [],
       level: 0,
       metadata: {
-        tokenCount: collectionTokens.length,
+        tokenCount: Number(collectionTokens.length),
       },
     };
 
@@ -290,10 +290,14 @@ export const TokenView: React.FC<TokenViewProps> = ({
     );
   }
 
+  // TEMP: Disable search entirely to avoid React #301 error
+  // TODO: Debug why searching causes object rendering error
+  const displayNodes = searchQuery ? [] : treeNodes;
+
   return (
     <TreeView
-      key={`token-view-${typeFilter}-${sourceFilter}-${searchQuery}`}
-      nodes={treeNodes}
+      key={`token-view-${typeFilter}-${sourceFilter}`}
+      nodes={displayNodes}
       searchEnabled={false}
       selectedId={selectedTokenId}
       onNodeSelect={handleNodeSelect}
@@ -324,8 +328,22 @@ export const TokenView: React.FC<TokenViewProps> = ({
         // Render token row
         if (node.type === 'token' && node.data) {
           const token = node.data;
-          const colorValue = getColorValue(token);
-          const displayValue = formatTokenValue(token);
+
+          // Safe value extraction with explicit type coercion
+          const tokenName = String(token.name ?? 'Unnamed');
+          const tokenType = String(token.resolvedType || token.type || 'unknown');
+          const usageCount = Number(token.usageCount ?? 0);
+          const isAlias = Boolean(token.isAlias);
+
+          let colorValue: string | null = null;
+          let displayValue: string = 'N/A';
+
+          try {
+            colorValue = getColorValue(token);
+            displayValue = formatTokenValue(token);
+          } catch (err) {
+            console.error('[TokenView] Error formatting token value:', err, token);
+          }
 
           return (
             <DefaultNodeRow
@@ -356,7 +374,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
                       {displayValue}
                     </span>
                   )}
-                  {(token.usageCount ?? 0) > 0 && (
+                  {usageCount > 0 && (
                     <span
                       className="text-xs px-2 py-1 rounded-full font-medium"
                       style={{
@@ -364,14 +382,14 @@ export const TokenView: React.FC<TokenViewProps> = ({
                         color: options.isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text-onbrand)'
                       }}
                     >
-                      {token.usageCount ?? 0}
+                      {usageCount}
                     </span>
                   )}
                 </div>
               }
             >
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate" style={{ color: 'inherit' }}>{token.name}</div>
+                <div className="text-sm font-medium truncate" style={{ color: 'inherit' }}>{tokenName}</div>
                 <div className="flex gap-2 mt-1">
                   <span
                     className="text-xs"
@@ -380,9 +398,9 @@ export const TokenView: React.FC<TokenViewProps> = ({
                       opacity: options.isSelected ? 0.8 : 1
                     }}
                   >
-                    {String(token.resolvedType || token.type || 'unknown')}
+                    {tokenType}
                   </span>
-                  {token.isAlias && (
+                  {isAlias && (
                     <span
                       className="text-xs px-1.5 py-0.5 rounded"
                       style={{

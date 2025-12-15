@@ -72,6 +72,7 @@ export class AuditEngine {
     options: {
       includeHiddenLayers?: boolean;
       includeTokens?: boolean;
+      pageIds?: string[];
     } = {}
   ): Promise<StyleGovernanceAuditResult> {
     // Reset cancellation flag
@@ -435,6 +436,7 @@ export class AuditEngine {
   private async streamScanAndProcess(options: {
     includeHiddenLayers?: boolean;
     includeTokens?: boolean;
+    pageIds?: string[];
   }): Promise<StyleGovernanceAuditResult> {
     // CRITICAL: Do NOT accumulate on main thread - causes OOM
     // Only track metadata for final result
@@ -449,7 +451,12 @@ export class AuditEngine {
         throw new Error('Cannot access document pages');
       }
 
-      const allPages = figma.root.children;
+      // Filter pages based on pageIds if provided
+      let allPages = figma.root.children;
+      if (options.pageIds && options.pageIds.length > 0) {
+        const pageIdSet = new Set(options.pageIds);
+        allPages = allPages.filter((page: any) => pageIdSet.has(page.id));
+      }
       totalPages = allPages.length;
 
       console.log(`[Performance] Starting streaming scan of ${totalPages} pages (non-accumulating mode)`);

@@ -147,9 +147,12 @@ export type UIToMainMessage =
   // Style governance audit messages
   | {
       type: 'RUN_STYLE_AUDIT';
-      payload?: { includeHiddenLayers?: boolean; includeTokens?: boolean };
+      payload?: { includeHiddenLayers?: boolean; includeTokens?: boolean; pageIds?: string[] };
     }
   | { type: 'CANCEL_STYLE_AUDIT' }
+
+  // Page selection messages
+  | { type: 'GET_PAGES' }
 
   // Replacement messages
   | {
@@ -355,7 +358,10 @@ export type MainToUIMessage =
 
   // UI preference messages
   | { type: 'GROUP_BY_LIBRARY_LOADED'; payload: { enabled: boolean } }
-  | { type: 'GROUP_BY_LIBRARY_SAVED'; payload: { success: boolean } };
+  | { type: 'GROUP_BY_LIBRARY_SAVED'; payload: { success: boolean } }
+
+  // Page selection messages
+  | { type: 'PAGES_LIST'; payload: { pages: Array<{ id: string; name: string }> } };
 
 // ============================================================================
 // Export Format Types
