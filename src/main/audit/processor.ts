@@ -15,6 +15,7 @@ import type {
 import { detectStyleAssignment } from '@/main/utils/styleDetection';
 import { getAvailableStyles } from '@/main/utils/styleLibrary';
 import { getAllDocumentTokens, integrateTokenUsageIntoLayers } from '@/main/utils/tokenDetection';
+import { calculateOptimizedMetrics } from '@/main/utils/summaryOptimized';
 
 /**
  * Metadata Processor for Style Governance Audit
@@ -829,6 +830,17 @@ export function createAuditResult(
   },
   duration: number
 ): StyleGovernanceAuditResult {
+  // Build the partial result for metrics calculation
+  const partialResult: Partial<StyleGovernanceAuditResult> = {
+    layers: processed.layers,
+    styles: processed.styles,
+    tokens: processed.tokens,
+    libraries: processed.libraries,
+  };
+
+  // Calculate metrics using optimized function
+  const metrics = calculateOptimizedMetrics(partialResult);
+
   return {
     // Metadata
     timestamp: new Date(),
@@ -853,7 +865,7 @@ export function createAuditResult(
     unstyledLayers: processed.unstyledLayers,
 
     // Analytics
-    metrics: processed.metrics,
+    metrics: metrics,
 
     // Status
     isStale: false,
