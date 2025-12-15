@@ -93,7 +93,7 @@ export default function TokenMetadataCard({ token }: TokenMetadataCardProps) {
           className={`text-xs px-2 py-1 rounded font-medium ${getTypeColor()}`}
           style={{ textTransform: 'uppercase' }}
         >
-          {token.type}
+          {String(token.type)}
         </span>
         {token.collectionName && (
           <span
@@ -262,9 +262,9 @@ export default function TokenMetadataCard({ token }: TokenMetadataCardProps) {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <span style={{ fontWeight: 600, color: 'var(--figma-color-text)' }}>
-              {token.usageCount}
+              {String(token.usageCount ?? 0)}
             </span>
-            <span>usage{token.usageCount !== 1 ? 's' : ''} in document</span>
+            <span>usage{(token.usageCount ?? 0) !== 1 ? 's' : ''} in document</span>
           </div>
         </div>
       )}

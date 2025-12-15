@@ -80,6 +80,15 @@ const formatTokenValue = (token: DesignToken): string => {
     return token.currentValue ? 'true' : 'false';
   }
 
+  // Handle objects by converting to JSON string
+  if (typeof token.currentValue === 'object' && token.currentValue !== null) {
+    try {
+      return JSON.stringify(token.currentValue);
+    } catch {
+      return '[Object]';
+    }
+  }
+
   return 'N/A';
 };
 
@@ -283,7 +292,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
 
   return (
     <TreeView
-      key={`${typeFilter}-${sourceFilter}-${searchQuery}`}
+      key={`token-view-${typeFilter}-${sourceFilter}-${searchQuery}`}
       nodes={treeNodes}
       searchEnabled={false}
       selectedId={selectedTokenId}
@@ -303,7 +312,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
               }
               rightContent={
                 <span className="text-xs text-figma-text-tertiary">
-                  {node.metadata?.tokenCount || 0}
+                  {String(node.metadata?.tokenCount ?? 0)}
                 </span>
               }
             >
@@ -347,7 +356,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
                       {displayValue}
                     </span>
                   )}
-                  {token.usageCount > 0 && (
+                  {(token.usageCount ?? 0) > 0 && (
                     <span
                       className="text-xs px-2 py-1 rounded-full font-medium"
                       style={{
@@ -355,7 +364,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
                         color: options.isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text-onbrand)'
                       }}
                     >
-                      {token.usageCount}
+                      {token.usageCount ?? 0}
                     </span>
                   )}
                 </div>
@@ -371,7 +380,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
                       opacity: options.isSelected ? 0.8 : 1
                     }}
                   >
-                    {token.resolvedType}
+                    {String(token.resolvedType || token.type || 'unknown')}
                   </span>
                   {token.isAlias && (
                     <span

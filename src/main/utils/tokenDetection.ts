@@ -63,7 +63,11 @@ function getTokenType(variable: any): 'color' | 'number' | 'string' | 'boolean' 
   if (!variable.resolvedType) {
     return 'string';
   }
-  const type = variable.resolvedType.toLowerCase();
+  // Ensure resolvedType is a string (Figma API sometimes returns objects)
+  const resolvedTypeStr = typeof variable.resolvedType === 'string'
+    ? variable.resolvedType
+    : String(variable.resolvedType);
+  const type = resolvedTypeStr.toLowerCase();
   return type === 'color' ? 'color' :
     type === 'float' || type === 'number' ? 'number' :
     type === 'boolean' ? 'boolean' :
@@ -137,7 +141,7 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
             name: variable.name,
             key: `local/${variable.id}`,
             type: tokenType,
-            resolvedType: tokenType,
+            resolvedType: String(tokenType), // Ensure string for React rendering
             currentValue: firstValue,
             value: firstValue,
             collectionId: variable.variableCollectionId,
@@ -277,7 +281,7 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                     name: variable.name,
                     key: variableKey,
                     type: tokenType,
-                    resolvedType: tokenType,
+                    resolvedType: String(tokenType), // Ensure string for React rendering
                     currentValue,
                     value: currentValue,
                     collectionId: libraryCollection.key,
@@ -383,7 +387,7 @@ export async function detectTokenBindings(
                   name: variable.name,
                   key: bindingId,
                   type: tokenType,
-                  resolvedType: tokenType,
+                  resolvedType: String(tokenType), // Ensure string for React rendering
                   currentValue: firstValue,
                   value: firstValue,
                   collectionId: variable.variableCollectionId,
