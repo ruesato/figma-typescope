@@ -509,7 +509,7 @@ function TokenCoverageBreakdownSection({
             <span className="text-[10px] text-figma-text-tertiary">All 5 properties</span>
           </div>
           <span className="text-sm font-semibold text-green-600">
-            {fullTokenCoverageCount.toLocaleString()} ({fullTokenCoverageRate}%)
+            {fullTokenCoverageCount.toLocaleString()} ({fullTokenCoverageRate.toFixed(2)}%)
           </span>
         </div>
 
@@ -519,7 +519,7 @@ function TokenCoverageBreakdownSection({
             <span className="text-[10px] text-figma-text-tertiary">1-4 properties</span>
           </div>
           <span className="text-sm font-semibold text-yellow-600">
-            {partialTokenCoverageCount.toLocaleString()} ({partialTokenCoverageRate}%)
+            {partialTokenCoverageCount.toLocaleString()} ({partialTokenCoverageRate.toFixed(2)}%)
           </span>
         </div>
 
@@ -529,7 +529,7 @@ function TokenCoverageBreakdownSection({
             <span className="text-[10px] text-figma-text-tertiary">0 properties</span>
           </div>
           <span className="text-sm font-semibold text-red-600">
-            {noTokenCoverageCount.toLocaleString()} ({noTokenCoverageRate}%)
+            {noTokenCoverageCount.toLocaleString()} ({noTokenCoverageRate.toFixed(2)}%)
           </span>
         </div>
 
