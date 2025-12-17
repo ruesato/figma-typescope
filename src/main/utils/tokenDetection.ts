@@ -173,7 +173,70 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
         );
         const libraryCollections =
           await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
-        console.log(`[TokenDetection] Found ${libraryCollections.length} library collections`);
+        console.log(`[TokenDetection] Found ${libraryCollections.length} library collections via getAvailableLibraryVariableCollectionsAsync`);
+
+        // WORKAROUND: If getAvailableLibraryVariableCollectionsAsync returns 0,
+        // try to discover remote collections by scanning all variables in the document
+        if (libraryCollections.length === 0) {
+          console.log('[TokenDetection] No library collections found via API, scanning document for remote collections...');
+
+          // Get all variable collections (both local and remote)
+          const allCollections: any[] = [];
+
+          // Scan all pages for variable usage to discover remote collections
+          const remoteCollectionIds = new Set<string>();
+
+          for (const page of figma.root.children) {
+            await page.loadAsync();
+            const nodes = page.findAll((node: any) => {
+              return node.type === 'TEXT' && node.boundVariables;
+            });
+
+            for (const node of nodes) {
+              const textNode = node as any;
+              if (textNode.boundVariables) {
+                for (const [_prop, binding] of Object.entries(textNode.boundVariables)) {
+                  const bindingsArray = Array.isArray(binding) ? binding : [binding];
+                  for (const b of bindingsArray) {
+                    if (b && typeof b === 'object' && 'id' in b) {
+                      try {
+                        const variable = await figma.variables.getVariableByIdAsync(b.id);
+                        if (variable && variable.variableCollectionId) {
+                          remoteCollectionIds.add(variable.variableCollectionId);
+                        }
+                      } catch (error) {
+                        // Variable might be deleted or inaccessible
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          console.log(`[TokenDetection] Found ${remoteCollectionIds.size} unique remote collections in document`);
+
+          // Fetch each discovered collection
+          for (const collectionId of remoteCollectionIds) {
+            try {
+              const collection = await figma.variables.getVariableCollectionByIdAsync(collectionId);
+              if (collection && collection.remote) {
+                console.log(`[TokenDetection] Discovered remote collection: "${collection.name}" (key: ${collection.key})`);
+                allCollections.push({
+                  name: collection.name,
+                  key: collection.key,
+                  id: collection.id
+                });
+              }
+            } catch (error) {
+              console.warn(`[TokenDetection] Failed to fetch collection ${collectionId}:`, error);
+            }
+          }
+
+          // Use discovered collections
+          libraryCollections.push(...allCollections);
+          console.log(`[TokenDetection] Total library collections after discovery: ${libraryCollections.length}`);
+        }
 
         // Log collection details
         if (libraryCollections.length > 0) {

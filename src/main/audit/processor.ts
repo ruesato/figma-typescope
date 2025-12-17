@@ -1035,6 +1035,35 @@ async function integrateTokenUsageIntoStyles(
                       type === 'boolean' ? 'boolean' : 'string';
                   };
 
+                  // Get collection name from the variable collection
+                  let collectionName = 'Remote Library';
+                  try {
+                    const collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+                    if (collection) {
+                      console.log(`[TokenDetection] Collection object:`, {
+                        id: collection.id,
+                        name: collection.name,
+                        key: collection.key,
+                        remote: collection.remote,
+                        allProps: Object.keys(collection)
+                      });
+
+                      // Try to get the library name from the collection
+                      if (collection.name) {
+                        collectionName = collection.name;
+                      } else if (collection.key) {
+                        // Fallback to key if name is not available
+                        collectionName = collection.key;
+                      }
+
+                      console.log(`[TokenDetection] Resolved remote library: "${collectionName}" (collectionId: ${variable.variableCollectionId})`);
+                    } else {
+                      console.warn(`[TokenDetection] Collection not found for ID: ${variable.variableCollectionId}`);
+                    }
+                  } catch (error) {
+                    console.warn(`Failed to fetch collection for variable ${bindingId}:`, error);
+                  }
+
                   // Get first mode value
                   const firstModeId = Object.keys(variable.valuesByMode)[0];
                   const firstValue = variable.valuesByMode[firstModeId];
@@ -1051,8 +1080,8 @@ async function integrateTokenUsageIntoStyles(
                     currentValue: firstValue,
                     value: firstValue,
                     collectionId: variable.variableCollectionId,
-                    collectionName: 'Remote Library',
-                    collections: ['Remote Library'],
+                    collectionName: collectionName,
+                    collections: [collectionName],
                     modeId: firstModeId,
                     modeName: 'Default',
                     valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
