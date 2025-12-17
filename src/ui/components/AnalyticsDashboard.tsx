@@ -1091,8 +1091,34 @@ export default function AnalyticsDashboard({
             }}
           >
             <p>
-              Audit performed on {new Date(auditResult.timestamp).toLocaleDateString()} at{' '}
-              {new Date(auditResult.timestamp).toLocaleTimeString()}
+              {(() => {
+                // Handle timestamp - could be Date object or string
+                let timestamp: Date;
+                if (auditResult.timestamp instanceof Date) {
+                  timestamp = auditResult.timestamp;
+                } else if (auditResult.timestamp) {
+                  timestamp = new Date(auditResult.timestamp);
+                } else {
+                  timestamp = new Date();
+                }
+
+                // Check if valid date
+                if (isNaN(timestamp.getTime())) {
+                  return 'Audit completed';
+                }
+
+                // Format duration in seconds
+                const durationSeconds = auditResult.auditDuration
+                  ? (auditResult.auditDuration / 1000).toFixed(2)
+                  : '0';
+
+                return (
+                  <>
+                    Audit performed on {timestamp.toLocaleDateString()} at{' '}
+                    {timestamp.toLocaleTimeString()} • Completed in {durationSeconds}s
+                  </>
+                );
+              })()}
             </p>
           </div>
         )}

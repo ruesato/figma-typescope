@@ -34,6 +34,7 @@ let progress = 0;
 let currentStep = '';
 let error: string | null = null;
 let isStale = false; // Document modified since audit
+let auditStartTime: number | null = null; // Track when audit started
 
 const listeners = new Set<() => void>();
 
@@ -112,6 +113,10 @@ export function useAuditState() {
       if (!styleGovernanceResult) {
         // First partial result - initialize structure
         console.log('[AuditState] Initializing styleGovernanceResult for accumulation');
+
+        // Track when audit started
+        auditStartTime = Date.now();
+
         styleGovernanceResult = {
           layers: [],
           styles: [],
@@ -121,13 +126,13 @@ export function useAuditState() {
           metrics: {} as any,
           styledLayers: [],
           unstyledLayers: [],
-          metadata: {
-            documentName: '',
-            documentId: '',
-            totalPages: 0,
-            auditDuration: 0,
-            timestamp: new Date().toISOString(),
-          },
+          timestamp: new Date(),
+          documentName: '',
+          documentId: '',
+          totalPages: 0,
+          totalTextLayers: 0,
+          isStale: false,
+          auditDuration: 0,
         };
       }
 
@@ -202,6 +207,15 @@ export function useAuditState() {
 
       console.log('[AuditState] Finalizing accumulated result - calculating metrics...');
 
+      // Calculate audit duration
+      if (auditStartTime) {
+        styleGovernanceResult.auditDuration = Date.now() - auditStartTime;
+        console.log(`[AuditState] Audit duration: ${styleGovernanceResult.auditDuration}ms`);
+      }
+
+      // Update totalTextLayers
+      styleGovernanceResult.totalTextLayers = styleGovernanceResult.layers.length;
+
       // Calculate full metrics using the accumulated data
       const calculatedMetrics = calculateOptimizedMetrics(styleGovernanceResult);
 
@@ -244,6 +258,7 @@ export function useAuditState() {
       currentStep = '';
       error = null;
       isStale = false;
+      auditStartTime = null;
       notifyListeners();
     },
   };
