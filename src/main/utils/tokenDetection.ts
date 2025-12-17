@@ -134,7 +134,23 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
           const firstModeId = Object.keys(variable.valuesByMode)[0];
           const firstValue = variable.valuesByMode[firstModeId];
           const tokenType = getTokenType(variable);
-          const collectionName = collectionMap.get(variable.variableCollectionId) || 'Unknown';
+
+          // Try to get collection name from map, or fetch it if not found
+          let collectionName = collectionMap.get(variable.variableCollectionId);
+
+          if (!collectionName) {
+            // Collection not in local map - might be a remote collection
+            try {
+              const collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+              if (collection) {
+                collectionName = collection.name || 'Variable collection';
+              } else {
+                collectionName = 'Unknown';
+              }
+            } catch (error) {
+              collectionName = 'Unknown';
+            }
+          }
 
           const token: DesignToken = {
             id: variable.id,
@@ -145,8 +161,8 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
             currentValue: firstValue,
             value: firstValue,
             collectionId: variable.variableCollectionId,
-            collectionName: collectionName,
-            collections: [collectionName],
+            collectionName: `${collectionName} (local)`,
+            collections: [`${collectionName} (local)`],
             modeId: firstModeId,
             modeName: 'Default',
             valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
@@ -173,13 +189,10 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
         );
         const libraryCollections =
           await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
-        console.log(`[TokenDetection] Found ${libraryCollections.length} library collections via getAvailableLibraryVariableCollectionsAsync`);
 
         // WORKAROUND: If getAvailableLibraryVariableCollectionsAsync returns 0,
         // try to discover remote collections by scanning all variables in the document
         if (libraryCollections.length === 0) {
-          console.log('[TokenDetection] No library collections found via API, scanning document for remote collections...');
-
           // Get all variable collections (both local and remote)
           const allCollections: any[] = [];
 
@@ -214,14 +227,11 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
             }
           }
 
-          console.log(`[TokenDetection] Found ${remoteCollectionIds.size} unique remote collections in document`);
-
           // Fetch each discovered collection
           for (const collectionId of remoteCollectionIds) {
             try {
               const collection = await figma.variables.getVariableCollectionByIdAsync(collectionId);
               if (collection && collection.remote) {
-                console.log(`[TokenDetection] Discovered remote collection: "${collection.name}" (key: ${collection.key})`);
                 allCollections.push({
                   name: collection.name,
                   key: collection.key,
@@ -235,18 +245,6 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
 
           // Use discovered collections
           libraryCollections.push(...allCollections);
-          console.log(`[TokenDetection] Total library collections after discovery: ${libraryCollections.length}`);
-        }
-
-        // Log collection details
-        if (libraryCollections.length > 0) {
-          console.log(
-            '[TokenDetection] Library collections:',
-            libraryCollections.map((c: any) => ({
-              name: c.name,
-              key: c.key,
-            }))
-          );
         }
 
         for (const libraryCollection of libraryCollections) {
@@ -348,8 +346,8 @@ export async function getAllDocumentTokens(): Promise<DesignToken[]> {
                     currentValue,
                     value: currentValue,
                     collectionId: libraryCollection.key,
-                    collectionName: libraryCollection.name,
-                    collections: [libraryCollection.name],
+                    collectionName: `${String(libraryCollection.name || 'Variable collection')} (remote)`,
+                    collections: [`${String(libraryCollection.name || 'Variable collection')} (remote)`],
                     modeId,
                     modeName,
                     valuesByMode,

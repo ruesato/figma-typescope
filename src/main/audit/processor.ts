@@ -1040,14 +1040,6 @@ async function integrateTokenUsageIntoStyles(
                   try {
                     const collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
                     if (collection) {
-                      console.log(`[TokenDetection] Collection object:`, {
-                        id: collection.id,
-                        name: collection.name,
-                        key: collection.key,
-                        remote: collection.remote,
-                        allProps: Object.keys(collection)
-                      });
-
                       // Try to get the library name from the collection
                       if (collection.name) {
                         collectionName = collection.name;
@@ -1055,13 +1047,9 @@ async function integrateTokenUsageIntoStyles(
                         // Fallback to key if name is not available
                         collectionName = collection.key;
                       }
-
-                      console.log(`[TokenDetection] Resolved remote library: "${collectionName}" (collectionId: ${variable.variableCollectionId})`);
-                    } else {
-                      console.warn(`[TokenDetection] Collection not found for ID: ${variable.variableCollectionId}`);
                     }
                   } catch (error) {
-                    console.warn(`Failed to fetch collection for variable ${bindingId}:`, error);
+                    // Silently fall back to default name
                   }
 
                   // Get first mode value
@@ -1080,8 +1068,8 @@ async function integrateTokenUsageIntoStyles(
                     currentValue: firstValue,
                     value: firstValue,
                     collectionId: variable.variableCollectionId,
-                    collectionName: collectionName,
-                    collections: [collectionName],
+                    collectionName: `${collectionName} (remote)`,
+                    collections: [`${collectionName} (remote)`],
                     modeId: firstModeId,
                     modeName: 'Default',
                     valuesByMode: variable.valuesByMode || { [firstModeId]: firstValue },
