@@ -483,7 +483,6 @@ export class ReplacementEngine {
       },
     });
 
-    console.log(`Processing ${totalLayers} layers for token replacement`);
 
     // Track which styles we've already processed (to avoid duplicate replacements)
     const processedStyles = new Set<string>();
@@ -507,10 +506,14 @@ export class ReplacementEngine {
 
         const textNode = node as TextNode;
 
+        // DEBUG: Log layer info for investigation
+
         // Check if layer has direct token bindings
         const boundVariables = node.boundVariables || {};
         let foundDirectToken = false;
+        let foundInStyle = false;
         let replacementCount = 0;
+
 
         // Replace token binding on the layer (direct bindings)
         if ('setBoundVariable' in node && typeof node.setBoundVariable === 'function') {
@@ -599,14 +602,21 @@ export class ReplacementEngine {
         // This must be checked REGARDLESS of whether there's a direct binding,
         // because style bindings override direct bindings
         if (textNode.textStyleId) {
+
           // Check if this style has already been cloned
           if (remoteToLocalStyleMap.has(textNode.textStyleId)) {
             const localStyleId = remoteToLocalStyleMap.get(textNode.textStyleId)!;
             // Apply the existing cloned style
             await textNode.setTextStyleIdAsync(localStyleId);
-            replacementCount++;
-            // Continue to next layer
-            return;
+
+            // Important: Don't return yet! We may have already replaced a direct binding above,
+            // or the layer may have been incorrectly added via style propagation.
+            // Only count this as a replacement if we didn't already replace a direct binding.
+            if (!foundDirectToken) {
+              replacementCount++;
+            }
+            foundInStyle = true;
+            // Continue to check if there was a direct token replacement
           }
 
           // Check if we've already processed this style
@@ -621,6 +631,7 @@ export class ReplacementEngine {
           if (style && style.type === 'TEXT') {
             const styleBoundVariables = style.boundVariables || {};
             let styleHasSourceToken = false;
+
 
             for (const [property, bindings] of Object.entries(styleBoundVariables)) {
               const bindingArray = Array.isArray(bindings) ? bindings : [bindings];
@@ -652,20 +663,47 @@ export class ReplacementEngine {
 
               // Apply the new cloned style to this layer
               await textNode.setTextStyleIdAsync(newLocalStyleId);
-              replacementCount++;
 
-              // Continue to next layer
-              return;
+              // Mark that we found and replaced via style
+              foundInStyle = true;
+
+              // Only increment replacementCount if we didn't already replace a direct binding
+              if (!foundDirectToken) {
+                replacementCount++;
+              }
+
+              // Continue to check if we also need to handle direct token replacement
             }
           }
         }
 
         // If we get here and haven't found the token anywhere, it's an error
-        if (!foundDirectToken) {
+        // UNLESS we already successfully replaced a direct binding
+        if (!foundDirectToken && !foundInStyle) {
+          // Get the actual fontFamily binding to see what token it has
+          const fontFamilyBinding = boundVariables.fontFamily;
+          const fontFamilyTokenId = fontFamilyBinding && !Array.isArray(fontFamilyBinding) && 'id' in fontFamilyBinding
+            ? fontFamilyBinding.id
+            : Array.isArray(fontFamilyBinding) && fontFamilyBinding.length > 0 && 'id' in fontFamilyBinding[0]
+            ? fontFamilyBinding[0].id
+            : 'none';
+
+          console.error(`[TokenReplacement] FAILURE - Token not found anywhere:`, {
+            layerId: layerId,
+            layerName: textNode.name,
+            hasStyle: !!textNode.textStyleId,
+            styleId: textNode.textStyleId,
+            styleWasCloned: textNode.textStyleId ? remoteToLocalStyleMap.has(textNode.textStyleId) : false,
+            hasBoundVariables: !!boundVariables && Object.keys(boundVariables).length > 0,
+            boundVariableProperties: boundVariables ? Object.keys(boundVariables) : [],
+            searchingForTokenId: options.sourceTokenId,
+            actualFontFamilyTokenId: fontFamilyTokenId
+          });
           throw new Error(`Source token not found on layer (checked both direct bindings and style)`);
         }
 
-        if (replacementCount === 0) {
+        // If we found the token but didn't make any replacements, that's also an error
+        if (replacementCount === 0 && !foundDirectToken && !foundInStyle) {
           throw new Error(`Source token found but replacement failed`);
         }
       } catch (error) {

@@ -1011,6 +1011,14 @@ async function integrateTokenUsageIntoStyles(
 
       // Extract token bindings from the style
       const bindings: TokenBinding[] = [];
+
+      // Debug logging for specific styles
+      const isTargetStyle = style.name?.includes('text-sm/normal') || style.name?.includes('text-base/normal');
+      if (isTargetStyle) {
+        console.log(`[StyleTokenDetection] Processing style "${style.name}" (${style.id})`);
+        console.log(`[StyleTokenDetection] Style boundVariables:`, Object.keys(figmaStyle.boundVariables || {}));
+      }
+
       for (const [propertyName, variableBindings] of Object.entries(figmaStyle.boundVariables)) {
         const bindingsArray = Array.isArray(variableBindings)
           ? variableBindings
@@ -1020,6 +1028,16 @@ async function integrateTokenUsageIntoStyles(
           if (binding && typeof binding === 'object' && 'id' in binding) {
             const bindingId = binding.id;
             let token = tokenMap.get(bindingId);
+
+            // Debug logging for target styles
+            if (isTargetStyle && propertyName === 'fontFamily') {
+              console.log(`[StyleTokenDetection] Style ${style.name} fontFamily binding:`, {
+                bindingId,
+                foundInMap: !!token,
+                tokenName: token?.name,
+                tokenId: token?.id
+              });
+            }
 
             // If not in local token map, try fetching from remote library
             if (!token) {
@@ -1082,6 +1100,16 @@ async function integrateTokenUsageIntoStyles(
 
                   // Add to token map for future lookups (using bindingId as key)
                   tokenMap.set(bindingId, remoteToken);
+
+                  // Debug logging for target styles
+                  if (isTargetStyle && propertyName === 'fontFamily') {
+                    console.log(`[StyleTokenDetection] Created remote token for style ${style.name}:`, {
+                      bindingId,
+                      tokenName: variable.name,
+                      collectionName: variable.variableCollectionId
+                    });
+                  }
+
                   // IMPORTANT: Also add to the main tokens array so it's available for propagation
                   tokens.push(remoteToken);
                   token = remoteToken;
@@ -1176,16 +1204,26 @@ function propagateStyleTokenUsageToLayers(
       const layerHasTokenBinding = layer.tokens?.some((t) => t.tokenId === tokenBinding.tokenId);
       const tokenHasLayer = token.layerIds.includes(layer.id);
 
-      if (!layerHasTokenBinding) {
+      // Check if the layer has overridden this property with a DIFFERENT token
+      // If the layer has a direct binding for the same property but with a different token ID,
+      // the layer has overridden the style's token, so we should NOT track this usage
+      const layerHasPropertyOverride = layer.tokens?.some(
+        (t) => t.property === tokenBinding.property && t.tokenId !== tokenBinding.tokenId
+      );
+
+
+      if (!layerHasTokenBinding && !layerHasPropertyOverride) {
         // Add token binding to layer (indirect usage via style)
+        // Only add if the layer hasn't overridden this property
         if (!layer.tokens) {
           layer.tokens = [];
         }
         layer.tokens.push(tokenBinding);
       }
 
-      if (!tokenHasLayer) {
+      if (!tokenHasLayer && !layerHasPropertyOverride) {
         // Add layer to token's usage tracking
+        // Only add if the layer hasn't overridden this property with a different token
         token.usageCount++;
         token.layerIds.push(layer.id);
         totalIndirectUsages++;
