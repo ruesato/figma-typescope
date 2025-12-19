@@ -511,9 +511,42 @@ export class ReplacementEngine {
     const remoteToLocalStyleMap = new Map<string, string>();
 
     // Get the target variable node (required for new API)
-    const targetVariable = await figma.variables.getVariableByIdAsync(targetTokenId);
+    let targetVariable = await figma.variables.getVariableByIdAsync(targetTokenId);
+
+    // If not found, try to import it as a library token
     if (!targetVariable) {
-      throw new Error(`Target token not found: ${targetTokenId}`);
+      console.log('[TokenReplacement] Token not found locally, attempting import:', targetTokenId);
+
+      // Try importing by key (library tokens)
+      try {
+        targetVariable = await figma.variables.importVariableByKeyAsync(targetTokenId);
+        console.log('[TokenReplacement] Successfully imported library token by key');
+      } catch (importError) {
+        console.log('[TokenReplacement] Could not import by key:', importError);
+
+        // If it contains VariableID: prefix, try stripping it
+        if (targetTokenId.startsWith('VariableID:')) {
+          const keyPart = targetTokenId.replace('VariableID:', '');
+          console.log('[TokenReplacement] Trying with stripped key:', keyPart);
+          try {
+            targetVariable = await figma.variables.importVariableByKeyAsync(keyPart);
+            console.log('[TokenReplacement] Successfully imported with stripped key');
+          } catch (stripError) {
+            console.error('[TokenReplacement] Failed with stripped key:', stripError);
+          }
+        }
+      }
+    }
+
+    if (!targetVariable) {
+      throw new Error(
+        `Target token not found: ${targetTokenId}\n\n` +
+        `This usually means:\n` +
+        `1. The library containing this token is not enabled\n` +
+        `2. The token was deleted or moved\n` +
+        `3. You don't have access to the library\n\n` +
+        `Check Figma menu → Libraries to enable the required library.`
+      );
     }
 
     // Process layers with adaptive batching
