@@ -174,6 +174,7 @@ export type UIToMainMessage =
         propertyTypes?: string[];
       };
     }
+  | { type: 'CANCEL_REPLACEMENT' }
 
   // Export messages
   | {
@@ -324,6 +325,13 @@ export type MainToUIMessage =
         checkpointTitle?: string;
         canRollback: boolean;
         details?: string;
+      };
+    }
+  | {
+      type: 'REPLACEMENT_CANCELLED';
+      payload: {
+        operationType: 'style' | 'token';
+        layersProcessed: number;
       };
     }
 

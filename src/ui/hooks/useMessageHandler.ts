@@ -112,6 +112,7 @@ export function useMessageHandler() {
         // ====================================================================
         case 'REPLACEMENT_STARTED':
           replacementState.transitionTo(msg.payload.state);
+          replacementState.setOperationType(msg.payload.operationType);
           console.log(`[Replacement] Started: ${msg.payload.operationType}`);
           break;
 
@@ -127,23 +128,39 @@ export function useMessageHandler() {
             replacementState.transitionTo('processing');
           }
           replacementState.setProgress(msg.payload.progress);
-          if (msg.payload.batchInfo) {
-            replacementState.setBatchInfo(
-              msg.payload.batchInfo.currentBatch,
-              msg.payload.batchInfo.totalBatches,
-              msg.payload.batchInfo.currentBatchSize
-            );
-          }
+          replacementState.setBatchInfo(
+            msg.payload.currentBatch,
+            msg.payload.totalBatches,
+            msg.payload.currentBatchSize
+          );
+          replacementState.setLayersProcessed(msg.payload.layersProcessed);
+          replacementState.setFailedLayersCount(msg.payload.failedLayers);
           break;
 
         case 'REPLACEMENT_COMPLETE':
           replacementState.transitionTo('complete');
-          console.log('[Replacement] Complete:', msg.payload.result);
+          replacementState.setProgress(100);
+          replacementState.setResult({
+            success: true,
+            layersUpdated: msg.payload.layersUpdated,
+            layersFailed: msg.payload.failedLayers?.length || 0,
+            failedLayers: msg.payload.failedLayers || [],
+            checkpointTitle: replacementState.checkpointTitle || '',
+            duration: msg.payload.duration,
+            hasWarnings: msg.payload.hasWarnings,
+          });
+          console.log('[Replacement] Complete:', msg.payload);
           break;
 
         case 'REPLACEMENT_ERROR':
           replacementState.transitionTo('error');
+          replacementState.setError(msg.payload.error);
           console.error('[Replacement] Error:', msg.payload.error);
+          break;
+
+        case 'REPLACEMENT_CANCELLED':
+          replacementState.reset();
+          console.log('[Replacement] Cancelled by user');
           break;
 
         // ====================================================================

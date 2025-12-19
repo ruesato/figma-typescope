@@ -11,6 +11,13 @@ import { ReplacementEngine } from './replacement/replacementEngine';
 // ============================================================================
 
 // ============================================================================
+// State Management
+// ============================================================================
+
+// Track current replacement engine for cancellation
+let currentReplacementEngine: ReplacementEngine | null = null;
+
+// ============================================================================
 // Plugin Initialization
 // ============================================================================
 
@@ -99,6 +106,10 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
           msg.payload.targetTokenId,
           msg.payload.affectedLayerIds
         );
+        break;
+
+      case 'CANCEL_REPLACEMENT':
+        handleCancelReplacement();
         break;
 
       // case 'ROLLBACK_TO_CHECKPOINT':
@@ -443,22 +454,32 @@ async function handleReplaceStyle(
 
   try {
     const engine = new ReplacementEngine();
+    currentReplacementEngine = engine;
+
+    // Throttle progress updates to avoid UI blocking (max one update per 150ms)
+    let lastProgressUpdate = 0;
+    const PROGRESS_THROTTLE_MS = 150;
 
     // Setup progress callbacks
     engine.onProgress((progress) => {
       if (progress.state === 'processing') {
-        sendMessage({
-          type: 'REPLACEMENT_PROGRESS',
-          payload: {
-            state: 'processing',
-            progress: progress.percentage,
-            currentBatch: progress.currentBatch,
-            totalBatches: progress.totalBatches,
-            currentBatchSize: progress.currentBatchSize,
-            layersProcessed: progress.layersProcessed,
-            failedLayers: progress.failedLayers,
-          },
-        });
+        const now = Date.now();
+        // Only send progress updates if enough time has passed or if we're at 100%
+        if (now - lastProgressUpdate >= PROGRESS_THROTTLE_MS || progress.percentage === 100) {
+          lastProgressUpdate = now;
+          sendMessage({
+            type: 'REPLACEMENT_PROGRESS',
+            payload: {
+              state: 'processing',
+              progress: progress.percentage,
+              currentBatch: progress.currentBatch,
+              totalBatches: progress.totalBatches,
+              currentBatchSize: progress.currentBatchSize,
+              layersProcessed: progress.layersProcessed,
+              failedLayers: progress.failedLayers,
+            },
+          });
+        }
       } else if (progress.state === 'creating_checkpoint' && progress.checkpointTitle) {
         sendMessage({
           type: 'REPLACEMENT_CHECKPOINT_CREATED',
@@ -504,6 +525,7 @@ async function handleReplaceStyle(
 
     // Clean up
     engine.dispose();
+    currentReplacementEngine = null;
 
     console.log('[Replacement] Style replacement complete:', {
       updated: result.layersUpdated,
@@ -512,16 +534,30 @@ async function handleReplaceStyle(
     });
   } catch (error) {
     console.error('[Replacement] Style replacement failed:', error);
-    sendMessage({
-      type: 'REPLACEMENT_ERROR',
-      payload: {
-        operationType: 'style',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        errorType: 'processing',
-        checkpointTitle: undefined,
-        canRollback: true,
-      },
-    });
+
+    // Check if this was a cancellation
+    if (error instanceof Error && error.message === 'Replacement cancelled by user') {
+      sendMessage({
+        type: 'REPLACEMENT_CANCELLED',
+        payload: {
+          operationType: 'style',
+          layersProcessed: 0, // TODO: track actual progress
+        },
+      });
+    } else {
+      sendMessage({
+        type: 'REPLACEMENT_ERROR',
+        payload: {
+          operationType: 'style',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          errorType: 'processing',
+          checkpointTitle: undefined,
+          canRollback: true,
+        },
+      });
+    }
+
+    currentReplacementEngine = null;
   }
 }
 
@@ -541,22 +577,32 @@ async function handleReplaceToken(
 
   try {
     const engine = new ReplacementEngine();
+    currentReplacementEngine = engine;
+
+    // Throttle progress updates to avoid UI blocking (max one update per 150ms)
+    let lastProgressUpdate = 0;
+    const PROGRESS_THROTTLE_MS = 150;
 
     // Setup progress callbacks
     engine.onProgress((progress) => {
       if (progress.state === 'processing') {
-        sendMessage({
-          type: 'REPLACEMENT_PROGRESS',
-          payload: {
-            state: 'processing',
-            progress: progress.percentage,
-            currentBatch: progress.currentBatch,
-            totalBatches: progress.totalBatches,
-            currentBatchSize: progress.currentBatchSize,
-            layersProcessed: progress.layersProcessed,
-            failedLayers: progress.failedLayers,
-          },
-        });
+        const now = Date.now();
+        // Only send progress updates if enough time has passed or if we're at 100%
+        if (now - lastProgressUpdate >= PROGRESS_THROTTLE_MS || progress.percentage === 100) {
+          lastProgressUpdate = now;
+          sendMessage({
+            type: 'REPLACEMENT_PROGRESS',
+            payload: {
+              state: 'processing',
+              progress: progress.percentage,
+              currentBatch: progress.currentBatch,
+              totalBatches: progress.totalBatches,
+              currentBatchSize: progress.currentBatchSize,
+              layersProcessed: progress.layersProcessed,
+              failedLayers: progress.failedLayers,
+            },
+          });
+        }
       } else if (progress.state === 'creating_checkpoint' && progress.checkpointTitle) {
         sendMessage({
           type: 'REPLACEMENT_CHECKPOINT_CREATED',
@@ -592,31 +638,55 @@ async function handleReplaceToken(
       type: 'REPLACEMENT_COMPLETE',
       payload: {
         operationType: 'token',
-        result: {
-          success: result.success,
-          layersUpdated: result.layersUpdated,
-          layersFailed: result.layersFailed,
-          failedLayers: result.failedLayers || [],
-          duration: result.duration,
-          checkpointTitle: result.checkpointTitle || 'Token Replacement',
-          canRollback: true,
-        },
+        layersUpdated: result.layersUpdated,
+        failedLayers: result.failedLayers || [],
+        duration: result.duration,
+        hasWarnings: result.hasWarnings,
       },
     });
 
     // Cleanup
     engine.dispose();
+    currentReplacementEngine = null;
   } catch (error) {
     console.error('[Replacement] Token replacement error:', error);
-    sendMessage({
-      type: 'REPLACEMENT_ERROR',
-      payload: {
-        operationType: 'token',
-        error: error instanceof Error ? error.message : String(error),
-        errorType: 'processing',
-        canRollback: true,
-      },
-    });
+
+    // Check if this was a cancellation
+    if (error instanceof Error && error.message === 'Replacement cancelled by user') {
+      sendMessage({
+        type: 'REPLACEMENT_CANCELLED',
+        payload: {
+          operationType: 'token',
+          layersProcessed: 0, // TODO: track actual progress
+        },
+      });
+    } else {
+      sendMessage({
+        type: 'REPLACEMENT_ERROR',
+        payload: {
+          operationType: 'token',
+          error: error instanceof Error ? error.message : String(error),
+          errorType: 'processing',
+          canRollback: true,
+        },
+      });
+    }
+
+    currentReplacementEngine = null;
+  }
+}
+
+/**
+ * Handle CANCEL_REPLACEMENT message
+ */
+function handleCancelReplacement(): void {
+  console.log('[Replacement] Cancel requested');
+
+  if (currentReplacementEngine) {
+    currentReplacementEngine.cancel();
+    console.log('[Replacement] Cancellation flag set');
+  } else {
+    console.warn('[Replacement] No active replacement to cancel');
   }
 }
 

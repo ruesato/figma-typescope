@@ -205,14 +205,11 @@ export default function App() {
         affectedLayerCount: affectedLayerIds.length,
       });
 
-      await replaceToken(sourceToken.id, targetToken.id, affectedLayerIds);
+      replaceToken(sourceToken.id, targetToken.id, affectedLayerIds);
 
-      // Reset replacement state
-      setReplacementState('idle');
-      setSourceToken(null);
-      setTargetToken(null);
-      setReplacementType(null);
-      setAffectedLayerIds([]);
+      // Don't reset state here - let the TokenReplacementPanel handle it
+      // based on replacement completion/error messages
+      // The panel will auto-close after showing completion
     } else {
       console.warn('[UI] Cannot confirm replacement - missing required state', {
         replacementType,
@@ -676,24 +673,31 @@ export default function App() {
       )}
 
       {/* Token Replacement Panel */}
-      {styleGovernanceResult && replacementState === 'picking-token' && sourceToken && (
+      {styleGovernanceResult && (replacementState === 'picking-token' || (replacementState === 'confirming' && replacementType === 'token')) && sourceToken && (
         <TokenReplacementPanel
-          isOpen={replacementState === 'picking-token'}
+          isOpen={true}
           sourceToken={sourceToken}
           availableTokens={styleGovernanceResult.tokens}
           allLayers={styleGovernanceResult.layers}
-          onClose={() => setReplacementState('idle')}
+          affectedLayerIds={affectedLayerIds}
+          onClose={handleCancelReplacement}
           onReplace={(source, target) => {
+            // Directly trigger replacement without separate confirmation dialog
+            console.log('[UI] Token replacement initiated from panel:', {
+              sourceTokenId: source.id,
+              targetTokenId: target.id,
+              affectedLayerCount: affectedLayerIds.length,
+            });
             setTargetToken(target);
-            setReplacementState('confirming');
+            replaceToken(source.id, target.id, affectedLayerIds);
+            // Panel will stay open to show progress
           }}
         />
       )}
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation Dialog - Only for style replacements */}
       {replacementState === 'confirming' &&
-        ((replacementType === 'style' && sourceStyle && targetStyle) ||
-          (replacementType === 'token' && sourceToken && targetToken)) && (
+        replacementType === 'style' && sourceStyle && targetStyle && (
           <ConfirmationDialog
             isOpen={replacementState === 'confirming'}
             title={`Replace ${replacementType === 'style' ? 'Style' : 'Token'}`}

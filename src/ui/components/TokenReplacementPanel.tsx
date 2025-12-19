@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import ReplacementPanel from './ReplacementPanel';
 import { TokenReplacementPreview } from './ReplacementPreview';
 import TokenView from './TokenView';
 import FilterToolbar from './FilterToolbar';
+import ProgressIndicator from './ProgressIndicator';
+import { useReplacementState } from '../hooks/useReplacementState';
 import type { DesignToken, TextLayer } from '@/shared/types';
 
 export interface TokenReplacementPanelProps {
@@ -14,6 +16,8 @@ export interface TokenReplacementPanelProps {
   availableTokens: DesignToken[];
   /** All text layers (for TokenView compatibility and coverage calculation) */
   allLayers: TextLayer[];
+  /** Layer IDs affected by this replacement (for progress tracking) */
+  affectedLayerIds: string[];
   /** Callback when panel should close */
   onClose: () => void;
   /** Callback when replacement is confirmed */
@@ -41,6 +45,7 @@ export default function TokenReplacementPanel({
   sourceToken,
   availableTokens,
   allLayers,
+  affectedLayerIds,
   onClose,
   onReplace,
   error,
@@ -51,6 +56,22 @@ export default function TokenReplacementPanel({
   const [typeFilter, setTypeFilter] = useState<'all' | 'color' | 'number' | 'string' | 'boolean'>('all');
   const [usageFilter, setUsageFilter] = useState<'all' | 'used' | 'unused'>('all');
   const [groupByLibrary, setGroupByLibrary] = useState(true);
+
+  // Get replacement state
+  const replacementState = useReplacementState();
+  const isReplacing = replacementState.isReplacing;
+
+  // Don't auto-close when complete - let user review and manually close
+  // useEffect(() => {
+  //   if (replacementState.replacementState === 'complete') {
+  //     // Auto-close panel after showing success briefly
+  //     const timer = setTimeout(() => {
+  //       replacementState.reset();
+  //       onClose();
+  //     }, 2000);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [replacementState.replacementState]);
 
   // Get available token types
   const availableTypes = useMemo(() => {
@@ -69,8 +90,17 @@ export default function TokenReplacementPanel({
     setSelectedTargetToken(null); // Reset selection
   };
 
-  // Handle close
+  // Handle close/cancel
   const handleClose = () => {
+    // If replacement is in progress, send cancel message
+    if (isReplacing) {
+      parent.postMessage(
+        { pluginMessage: { type: 'CANCEL_REPLACEMENT' } },
+        '*'
+      );
+      replacementState.reset();
+    }
+
     setSelectedTargetToken(null); // Reset selection
     setSearchQuery(''); // Reset filters
     setSourceFilter('all');
@@ -79,56 +109,172 @@ export default function TokenReplacementPanel({
     onClose();
   };
 
+  // Show different content based on replacement state
+  const isReplacingOrComplete = isReplacing || replacementState.replacementState === 'complete';
+
   return (
     <ReplacementPanel
       isOpen={isOpen}
       title={`Replace Token: ${sourceToken.name}`}
-      description="Select a target token from the list below"
+      description={
+        replacementState.replacementState === 'complete'
+          ? 'Replacement complete!'
+          : isReplacing
+          ? 'Replacement in progress...'
+          : 'Select a target token from the list below'
+      }
       error={error}
       previewSection={
-        <TokenReplacementPreview
-          source={sourceToken}
-          target={selectedTargetToken}
-        />
+        // Show preview during selection, hide during replacement/completion
+        !isReplacingOrComplete ? (
+          <TokenReplacementPreview source={sourceToken} target={selectedTargetToken} />
+        ) : undefined
       }
-      disableReplace={!selectedTargetToken}
+      disableReplace={!selectedTargetToken || isReplacing}
       onClose={handleClose}
       onReplace={handleReplace}
-      cancelLabel="Cancel"
-      replaceLabel="Replace"
+      cancelLabel={replacementState.replacementState === 'complete' ? 'Close' : 'Cancel'}
+      replaceLabel={isReplacing ? 'Replacing...' : 'Replace'}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <div style={{ padding: '0 16px' }}>
-          <FilterToolbar
-            type="tokens"
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchPlaceholder="Search tokens..."
-            sourceFilter={sourceFilter}
-            onSourceFilterChange={setSourceFilter}
-            typeFilter={typeFilter}
-            onTypeFilterChange={setTypeFilter}
-            availableTypes={availableTypes}
-            usageFilter={usageFilter}
-            onUsageFilterChange={setUsageFilter}
-            groupByLibrary={groupByLibrary}
-            onGroupByLibraryChange={setGroupByLibrary}
+      {isReplacingOrComplete ? (
+        // Show only progress indicator during replacement and after completion
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            padding: '48px 32px',
+          }}
+        >
+          <ProgressIndicator
+            progress={replacementState.progress}
+            current={replacementState.layersProcessed}
+            total={affectedLayerIds.length}
+            message={
+              replacementState.replacementState === 'validating'
+                ? 'Validating document...'
+                : replacementState.replacementState === 'creating_checkpoint'
+                ? 'Creating version checkpoint...'
+                : replacementState.replacementState === 'processing'
+                ? 'Replacing tokens...'
+                : replacementState.replacementState === 'complete'
+                ? 'Complete!'
+                : undefined
+            }
+            state={replacementState.replacementState}
           />
+
+          {/* Show summary stats when complete */}
+          {replacementState.replacementState === 'complete' && replacementState.result && (
+            <div
+              style={{
+                marginTop: '32px',
+                padding: '24px',
+                backgroundColor: 'var(--figma-color-bg-secondary)',
+                borderRadius: '8px',
+                width: '100%',
+                maxWidth: '500px',
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: 'var(--figma-color-text)',
+                  marginBottom: '16px',
+                }}
+              >
+                Summary
+              </h3>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  fontSize: '12px',
+                  color: 'var(--figma-color-text-secondary)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Layers updated:</span>
+                  <span style={{ fontWeight: 500, color: 'var(--figma-color-text)' }}>
+                    {replacementState.result.layersUpdated}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Layers failed:</span>
+                  <span
+                    style={{
+                      fontWeight: 500,
+                      color:
+                        replacementState.result.layersFailed > 0
+                          ? 'var(--figma-color-text-danger)'
+                          : 'var(--figma-color-text)',
+                    }}
+                  >
+                    {replacementState.result.layersFailed}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Duration:</span>
+                  <span style={{ fontWeight: 500, color: 'var(--figma-color-text)' }}>
+                    {(replacementState.result.duration / 1000).toFixed(1)}s
+                  </span>
+                </div>
+                {replacementState.result.checkpointTitle && (
+                  <div
+                    style={{
+                      marginTop: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid var(--figma-color-border)',
+                      fontSize: '11px',
+                    }}
+                  >
+                    <span>Version checkpoint: </span>
+                    <span style={{ fontWeight: 500 }}>{replacementState.result.checkpointTitle}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-          <TokenView
-            tokens={availableTokens}
-            allLayers={allLayers}
-            onTokenSelect={setSelectedTargetToken}
-            selectedTokenId={selectedTargetToken?.id}
-            searchQuery={searchQuery}
-            sourceFilter={sourceFilter}
-            typeFilter={typeFilter}
-            usageFilter={usageFilter}
-            groupByLibrary={groupByLibrary}
-          />
+      ) : (
+        // Show token selection UI when not replacing
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: '0 16px' }}>
+            <FilterToolbar
+              type="tokens"
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Search tokens..."
+              sourceFilter={sourceFilter}
+              onSourceFilterChange={setSourceFilter}
+              typeFilter={typeFilter}
+              onTypeFilterChange={setTypeFilter}
+              availableTypes={availableTypes}
+              usageFilter={usageFilter}
+              onUsageFilterChange={setUsageFilter}
+              groupByLibrary={groupByLibrary}
+              onGroupByLibraryChange={setGroupByLibrary}
+            />
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+            <TokenView
+              tokens={availableTokens}
+              allLayers={allLayers}
+              onTokenSelect={setSelectedTargetToken}
+              selectedTokenId={selectedTargetToken?.id}
+              searchQuery={searchQuery}
+              sourceFilter={sourceFilter}
+              typeFilter={typeFilter}
+              usageFilter={usageFilter}
+              groupByLibrary={groupByLibrary}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </ReplacementPanel>
   );
 }

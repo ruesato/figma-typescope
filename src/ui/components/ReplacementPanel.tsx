@@ -239,15 +239,15 @@ export default function ReplacementPanel({
             minHeight: 0,
           }}
         >
-          {/* Left Column - Selection List */}
+          {/* Left Column - Selection List (or full width if no preview) */}
           <div
             style={{
               flex: 1,
-              minWidth: '50%',
+              minWidth: previewSection ? '50%' : '100%',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              borderRight: '1px solid var(--figma-color-border)',
+              borderRight: previewSection ? '1px solid var(--figma-color-border)' : 'none',
             }}
           >
             {children}

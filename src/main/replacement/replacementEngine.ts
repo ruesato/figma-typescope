@@ -70,6 +70,7 @@ export class ReplacementEngine {
   private progressCallbacks: ReplacementProgressCallback[] = [];
   private stateChangeCallbacks: ReplacementStateChangeCallback[] = [];
   private checkpointTitle?: string;
+  private cancelRequested: boolean = false;
 
   /**
    * Get current state
@@ -84,6 +85,21 @@ export class ReplacementEngine {
    */
   canCancelReplacement(): boolean {
     return this.state === 'idle' || this.state === 'validating';
+  }
+
+  /**
+   * Request cancellation of the current replacement operation
+   * Sets a flag that will be checked during processing
+   */
+  cancel(): void {
+    this.cancelRequested = true;
+  }
+
+  /**
+   * Check if cancellation has been requested
+   */
+  isCancelled(): boolean {
+    return this.cancelRequested;
   }
 
   /**
@@ -151,6 +167,11 @@ export class ReplacementEngine {
     for await (const _batchResult of batchProcessor.processBatches(
       affectedLayerIds,
       async (layerId) => {
+        // Check for cancellation before processing each layer
+        if (this.cancelRequested) {
+          throw new Error('Replacement cancelled by user');
+        }
+
         // Apply style replacement with retry logic
         await retryWithBackoff(async () => {
           const node = await figma.getNodeByIdAsync(layerId);
@@ -497,6 +518,11 @@ export class ReplacementEngine {
 
     // Process layers with adaptive batching
     for await (const _ of batchProcessor.processBatches(affectedLayerIds, async (layerId) => {
+      // Check for cancellation before processing each layer
+      if (this.cancelRequested) {
+        throw new Error('Replacement cancelled by user');
+      }
+
       try {
         // Get the text node
         const node = await figma.getNodeByIdAsync(layerId);
