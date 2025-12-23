@@ -88,6 +88,11 @@ export function useMessageHandler() {
           // The UI has all layers/styles/tokens from STYLE_AUDIT_PARTIAL_RESULT messages
           auditState.finalizeAccumulatedResult();
 
+          // Use the accurate duration from the audit engine (not UI-calculated)
+          if (msg.payload.duration) {
+            auditState.setAuditDuration(msg.payload.duration);
+          }
+
           // Merge missing fonts data from the final result
           if (msg.payload.result && 'layers' in msg.payload.result) {
             auditState.mergeMissingFontsData({

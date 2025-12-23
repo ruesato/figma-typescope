@@ -207,11 +207,7 @@ export function useAuditState() {
 
       console.log('[AuditState] Finalizing accumulated result - calculating metrics...');
 
-      // Calculate audit duration
-      if (auditStartTime) {
-        styleGovernanceResult.auditDuration = Date.now() - auditStartTime;
-        console.log(`[AuditState] Audit duration: ${styleGovernanceResult.auditDuration}ms`);
-      }
+      // Note: Audit duration is set by setAuditDuration() from the engine for accuracy
 
       // Update totalTextLayers
       styleGovernanceResult.totalTextLayers = styleGovernanceResult.layers.length;
@@ -248,6 +244,19 @@ export function useAuditState() {
       styleGovernanceResult.layersWithMissingFonts = data.layersWithMissingFonts;
       styleGovernanceResult.missingFontLayerNames = data.missingFontLayerNames;
       styleGovernanceResult.missingFontLayerIds = data.missingFontLayerIds;
+
+      notifyListeners();
+    },
+
+    // Set audit duration from the main thread (more accurate than UI-calculated)
+    setAuditDuration: (duration: number) => {
+      if (!styleGovernanceResult) {
+        console.warn('[AuditState] Cannot set audit duration - no accumulated result');
+        return;
+      }
+
+      styleGovernanceResult.auditDuration = duration;
+      console.log(`[AuditState] Audit duration set from engine: ${duration}ms`);
 
       notifyListeners();
     },
