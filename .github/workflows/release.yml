@@ -39,6 +39,8 @@ jobs:
 
       - name: Build plugin
         run: pnpm build
+        env:
+          VITE_RELEASE_BUILD: 'true'
 
       - name: Run tests
         run: pnpm test || echo "Tests skipped (no test files found)"

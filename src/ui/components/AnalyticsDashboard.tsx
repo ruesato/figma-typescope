@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { AuditResult, StyleGovernanceAuditResult } from '@/shared/types';
+import packageJson from '../../../package.json';
 
 interface AnalyticsDashboardProps {
   auditResult: AuditResult | StyleGovernanceAuditResult;
@@ -1173,6 +1174,10 @@ export default function AnalyticsDashboard({
                   </>
                 );
               })()}
+            </p>
+            <p className="mt-1 text-figma-text-tertiary/60">
+              Typescope v{packageJson.version}
+              {import.meta.env.VITE_RELEASE_BUILD !== 'true' ? ' (DEV)' : ''}
             </p>
           </div>
         )}
