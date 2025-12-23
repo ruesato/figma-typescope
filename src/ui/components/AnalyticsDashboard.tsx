@@ -884,6 +884,60 @@ export default function AnalyticsDashboard({
           </p>
         </div>*/}
 
+        {/* Missing Fonts Warning Card */}
+        {'layers' in (auditResult || {}) &&
+          (auditResult as StyleGovernanceAuditResult).layersWithMissingFonts > 0 && (
+            <div
+              className="border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 animate-fadeInScale"
+              style={{
+                animation: 'fadeInScale 0.4s ease-out',
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                    Missing Fonts Detected
+                  </h3>
+                  <p className="text-xs text-yellow-800 dark:text-yellow-200 mb-3">
+                    {(auditResult as StyleGovernanceAuditResult).layersWithMissingFonts} of{' '}
+                    {totalLayers} text layers have missing fonts. Token and style replacements
+                    will fail on these layers.
+                  </p>
+
+                  {(auditResult as StyleGovernanceAuditResult).missingFontLayerNames.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-yellow-900 dark:text-yellow-100">
+                        Affected layers:
+                      </p>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {(auditResult as StyleGovernanceAuditResult).missingFontLayerNames
+                          .slice(0, 50)
+                          .map((name, index) => (
+                            <div
+                              key={index}
+                              className="text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40 px-2 py-1 rounded truncate font-mono"
+                              title={name}
+                            >
+                              {name}
+                            </div>
+                          ))}
+                        {(auditResult as StyleGovernanceAuditResult).layersWithMissingFonts > 50 && (
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300 italic pt-1">
+                            ... and{' '}
+                            {(auditResult as StyleGovernanceAuditResult).layersWithMissingFonts -
+                              50}{' '}
+                            more layers
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
         {/* Key Metrics Grid - 2 columns on desktop, 1 on mobile */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {isLoading ? (

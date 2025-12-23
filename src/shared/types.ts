@@ -750,6 +750,11 @@ export interface StyleGovernanceAuditResult {
   // Analytics
   metrics: AuditMetrics; // Computed metrics
 
+  // Missing Fonts (for warnings)
+  layersWithMissingFonts: number; // Count of layers with missing fonts
+  missingFontLayerNames: string[]; // Names of layers with missing fonts
+  missingFontLayerIds: string[]; // IDs of layers with missing fonts (for navigation)
+
   // Status
   isStale: boolean; // True if document modified since audit
   auditDuration: number; // Time taken in milliseconds

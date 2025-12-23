@@ -87,6 +87,16 @@ export function useMessageHandler() {
           // STREAMING: Calculate metrics on accumulated data before marking complete
           // The UI has all layers/styles/tokens from STYLE_AUDIT_PARTIAL_RESULT messages
           auditState.finalizeAccumulatedResult();
+
+          // Merge missing fonts data from the final result
+          if (msg.payload.result && 'layers' in msg.payload.result) {
+            auditState.mergeMissingFontsData({
+              layersWithMissingFonts: msg.payload.result.layersWithMissingFonts || 0,
+              missingFontLayerNames: msg.payload.result.missingFontLayerNames || [],
+              missingFontLayerIds: msg.payload.result.missingFontLayerIds || [],
+            });
+          }
+
           auditState.transitionTo('complete');
           auditState.setProgress(100);
           console.log('[StyleAudit] Audit completed successfully');

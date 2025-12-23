@@ -313,7 +313,12 @@ export class ReplacementEngine {
     try {
       await figma.loadFontAsync(sourceStyle.fontName);
     } catch (error) {
-      console.warn(`[StyleClone] Failed to load source font:`, error);
+      const fontInfo = `${sourceStyle.fontName.family} ${sourceStyle.fontName.style}`;
+      console.warn(`[StyleClone] Failed to load source font ${fontInfo}:`, error);
+      throw new Error(
+        `Cannot clone style - font "${fontInfo}" is not available. ` +
+        `This may be because the font is missing from your system.`
+      );
     }
 
     // Create new local text style
@@ -370,7 +375,17 @@ export class ReplacementEngine {
                         await figma.loadFontAsync({ family, style: 'Regular' });
                       } catch (fallbackError) {
                         console.warn(`[StyleClone] Failed to load font ${family} ${style}:`, fallbackError);
+                        throw new Error(
+                          `Cannot load font "${family} ${style}" or "${family} Regular". ` +
+                          `The font may be missing from your system.`
+                        );
                       }
+                    } else {
+                      console.warn(`[StyleClone] Failed to load font ${family} ${style}:`, error);
+                      throw new Error(
+                        `Cannot load font "${family} ${style}". ` +
+                        `The font may be missing from your system.`
+                      );
                     }
                   }
                 }
@@ -465,6 +480,11 @@ export class ReplacementEngine {
     const failedLayers: FailedLayer[] = [];
 
     const totalLayers = affectedLayerIds.length;
+
+    // Document-level check for missing fonts
+    if (figma.hasMissingFont) {
+      console.warn('[TokenReplacement] Document contains missing fonts - some layers may fail to process');
+    }
 
     // Create batch processor with adaptive sizing
     const batchProcessor = new BatchProcessor({
@@ -565,6 +585,11 @@ export class ReplacementEngine {
 
         const textNode = node as TextNode;
 
+        // Check for missing fonts before attempting any font operations
+        if (textNode.hasMissingFont) {
+          throw new Error('Text node has missing fonts - cannot modify typography properties');
+        }
+
         // DEBUG: Log layer info for investigation
 
         // Check if layer has direct token bindings
@@ -597,10 +622,26 @@ export class ReplacementEngine {
               // Found the source token - replace it with target token
               foundDirectToken = true;
 
-              // Load font if we're changing fontFamily
+              // Load fonts if we're changing fontFamily
               if (property === 'fontFamily' && node.type === 'TEXT') {
                 const textNode = node as TextNode;
-                // Get the font family from the target variable's value
+
+                // IMPORTANT: Load ALL current fonts in the text node first
+                // This is required before calling setBoundVariable per Figma best practices
+                try {
+                  await Promise.all(
+                    textNode.getRangeAllFontNames(0, textNode.characters.length)
+                      .map(figma.loadFontAsync)
+                  );
+                } catch (error) {
+                  console.warn(`[TokenReplacement] Failed to load current fonts:`, error);
+                  throw new Error(
+                    `Cannot load current fonts in text node. ` +
+                    `Some fonts may be missing from your system.`
+                  );
+                }
+
+                // Now load the target font
                 const targetValue = targetVariable.valuesByMode[Object.keys(targetVariable.valuesByMode)[0]];
                 if (typeof targetValue === 'string') {
                   // Variable contains just the family name (e.g., "Menlo")
@@ -617,7 +658,17 @@ export class ReplacementEngine {
                         await figma.loadFontAsync({ family, style: 'Regular' });
                       } catch (fallbackError) {
                         console.warn(`[TokenReplacement] Failed to load font ${family} ${style}:`, fallbackError);
+                        throw new Error(
+                          `Cannot load font "${family} ${style}" or "${family} Regular". ` +
+                          `The font may be missing from your system.`
+                        );
                       }
+                    } else {
+                      console.warn(`[TokenReplacement] Failed to load font ${family} ${style}:`, error);
+                      throw new Error(
+                        `Cannot load font "${family} ${style}". ` +
+                        `The font may be missing from your system.`
+                      );
                     }
                   }
                 }
@@ -665,6 +716,18 @@ export class ReplacementEngine {
           // Check if this style has already been cloned
           if (remoteToLocalStyleMap.has(textNode.textStyleId)) {
             const localStyleId = remoteToLocalStyleMap.get(textNode.textStyleId)!;
+
+            // Load the font from the cloned style before applying it
+            const clonedStyle = await figma.getStyleByIdAsync(localStyleId);
+            if (clonedStyle && clonedStyle.type === 'TEXT') {
+              try {
+                await figma.loadFontAsync(clonedStyle.fontName);
+              } catch (error) {
+                console.warn(`[TokenReplacement] Failed to load cloned style font:`, error);
+                // Continue anyway - font should already be loaded
+              }
+            }
+
             // Apply the existing cloned style
             await textNode.setTextStyleIdAsync(localStyleId);
 
@@ -719,6 +782,18 @@ export class ReplacementEngine {
               // Save the mapping from original style ID to cloned style ID
               remoteToLocalStyleMap.set(textNode.textStyleId, newLocalStyleId);
               processedStyles.add(textNode.textStyleId);
+
+              // Load the font from the cloned style before applying it
+              // Per Figma docs: "When setting .textStyleId, you do only need to load the new font"
+              const clonedStyle = await figma.getStyleByIdAsync(newLocalStyleId);
+              if (clonedStyle && clonedStyle.type === 'TEXT') {
+                try {
+                  await figma.loadFontAsync(clonedStyle.fontName);
+                } catch (error) {
+                  console.warn(`[TokenReplacement] Failed to load cloned style font:`, error);
+                  // Continue anyway - the font should have been loaded during cloning
+                }
+              }
 
               // Apply the new cloned style to this layer
               await textNode.setTextStyleIdAsync(newLocalStyleId);
@@ -815,6 +890,50 @@ export class ReplacementEngine {
     if (!options.affectedLayerIds || options.affectedLayerIds.length === 0) {
       throw new Error('No layers specified for replacement');
     }
+
+    // Check for missing fonts in the document and affected layers
+    if (figma.hasMissingFont) {
+      console.warn('[StyleReplacement] Document contains missing fonts');
+
+      // Scan affected layers to count how many have missing fonts
+      let layersWithMissingFonts = 0;
+      const missingFontLayers: string[] = [];
+
+      for (const layerId of options.affectedLayerIds) {
+        const node = await figma.getNodeByIdAsync(layerId);
+        if (node && node.type === 'TEXT') {
+          const textNode = node as TextNode;
+          if (textNode.hasMissingFont) {
+            layersWithMissingFonts++;
+            missingFontLayers.push(textNode.name);
+            // Only collect first 5 for the warning message
+            if (missingFontLayers.length >= 5) break;
+          }
+        }
+      }
+
+      if (layersWithMissingFonts > 0) {
+        // figma.notify has 100 char limit!
+        figma.notify(
+          `⚠️ ${layersWithMissingFonts} selected layers have missing fonts - will fail`,
+          {
+            error: true,
+            timeout: 8000  // Show for 8 seconds
+          }
+        );
+
+        console.warn(
+          `[StyleReplacement] ${layersWithMissingFonts} of ${options.affectedLayerIds.length} layers have missing fonts:`,
+          missingFontLayers
+        );
+      } else {
+        // Document has missing fonts, but not in affected layers
+        figma.notify(
+          'ℹ️ Document has missing fonts, but none in selected layers',
+          { timeout: 5000 }
+        );
+      }
+    }
   }
 
   /**
@@ -829,6 +948,50 @@ export class ReplacementEngine {
     // Check affected layers
     if (!options.affectedLayerIds || options.affectedLayerIds.length === 0) {
       throw new Error('No layers specified for replacement');
+    }
+
+    // Check for missing fonts in the document and affected layers
+    if (figma.hasMissingFont) {
+      console.warn('[TokenReplacement] Document contains missing fonts');
+
+      // Scan affected layers to count how many have missing fonts
+      let layersWithMissingFonts = 0;
+      const missingFontLayers: string[] = [];
+
+      for (const layerId of options.affectedLayerIds) {
+        const node = await figma.getNodeByIdAsync(layerId);
+        if (node && node.type === 'TEXT') {
+          const textNode = node as TextNode;
+          if (textNode.hasMissingFont) {
+            layersWithMissingFonts++;
+            missingFontLayers.push(textNode.name);
+            // Only collect first 5 for the warning message
+            if (missingFontLayers.length >= 5) break;
+          }
+        }
+      }
+
+      if (layersWithMissingFonts > 0) {
+        // figma.notify has 100 char limit!
+        figma.notify(
+          `⚠️ ${layersWithMissingFonts} selected layers have missing fonts - will fail`,
+          {
+            error: true,
+            timeout: 8000  // Show for 8 seconds
+          }
+        );
+
+        console.warn(
+          `[TokenReplacement] ${layersWithMissingFonts} of ${options.affectedLayerIds.length} layers have missing fonts:`,
+          missingFontLayers
+        );
+      } else {
+        // Document has missing fonts, but not in affected layers
+        figma.notify(
+          'ℹ️ Document has missing fonts, but none in selected layers',
+          { timeout: 5000 }
+        );
+      }
     }
 
     // TODO: Validate tokens exist (requires Variables API)

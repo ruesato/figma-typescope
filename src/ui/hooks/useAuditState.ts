@@ -232,6 +232,26 @@ export function useAuditState() {
       notifyListeners();
     },
 
+    // Merge missing fonts data from the final result into the accumulated result
+    mergeMissingFontsData: (data: {
+      layersWithMissingFonts: number;
+      missingFontLayerNames: string[];
+      missingFontLayerIds: string[];
+    }) => {
+      if (!styleGovernanceResult) {
+        console.warn('[AuditState] Cannot merge missing fonts data - no accumulated result');
+        return;
+      }
+
+      console.log('[AuditState] Merging missing fonts data:', data);
+
+      styleGovernanceResult.layersWithMissingFonts = data.layersWithMissingFonts;
+      styleGovernanceResult.missingFontLayerNames = data.missingFontLayerNames;
+      styleGovernanceResult.missingFontLayerIds = data.missingFontLayerIds;
+
+      notifyListeners();
+    },
+
     setProgress: (value: number, step?: string) => {
       progress = value;
       if (step !== undefined) {

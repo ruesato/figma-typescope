@@ -443,7 +443,14 @@ export class AuditEngine {
     let totalPages = 0;
     let pagesProcessed = 0;
     let totalLayersProcessed = 0;
+    let layersWithMissingFonts = 0;
+    const missingFontLayerNames: string[] = [];
+    const missingFontLayerIds: string[] = [];
     const processedStyleIds = new Set<string>(); // Just track IDs, not full objects
+
+    // OPTIMIZATION: Check document-level missing font flag first
+    // If false, we can skip per-node checks entirely
+    const documentHasMissingFonts = figma.hasMissingFont;
 
     try {
       // Get all pages
@@ -512,6 +519,18 @@ export class AuditEngine {
               continue;
             }
 
+            // Track layers with missing fonts (only if document has any)
+            // OPTIMIZATION: Skip check if documentHasMissingFonts is false
+            const hasMissingFont = documentHasMissingFonts ? (node.hasMissingFont || false) : false;
+            if (hasMissingFont) {
+              layersWithMissingFonts++;
+              // Collect layer names and IDs (limit to 50 for UI display)
+              if (missingFontLayerNames.length < 50) {
+                missingFontLayerNames.push(node.name);
+                missingFontLayerIds.push(node.id);
+              }
+            }
+
             pageLayers.push({
               id: node.id,
               name: node.name,
@@ -522,6 +541,7 @@ export class AuditEngine {
               visible: node.visible,
               opacity: node.opacity,
               textStyleId: node.textStyleId,
+              hasMissingFont, // Track missing font status
               _nodeRef: node, // Cache reference
             });
           } catch (nodeError) {
@@ -645,6 +665,9 @@ export class AuditEngine {
           documentName: figma.root ? figma.root.name : figma.currentPage.name || 'Untitled',
           documentId: figma.fileKey || 'unknown',
           totalPages,
+          layersWithMissingFonts,
+          missingFontLayerNames,
+          missingFontLayerIds,
         },
         Date.now() - this.startTime
       );
@@ -653,6 +676,30 @@ export class AuditEngine {
         `[Performance] Streaming complete: ${totalLayersProcessed} total layers ` +
         `from ${totalPages} pages processed. Main thread memory freed.`
       );
+
+      // Notify user about missing fonts if any were detected
+      if (layersWithMissingFonts > 0) {
+        // figma.notify has 100 char limit - keep it short!
+        figma.notify(
+          `⚠️ ${layersWithMissingFonts} layers have missing fonts - replacements will fail on these`,
+          {
+            error: true,  // Use error styling for visibility
+            timeout: 10000  // Show for 10 seconds
+          }
+        );
+
+        // Detailed info in console for debugging
+        console.warn(
+          `[Audit] ${layersWithMissingFonts} of ${totalLayersProcessed} layers with missing fonts:`,
+          missingFontLayerNames
+        );
+      } else if (documentHasMissingFonts) {
+        // Document has missing fonts, but not in scanned layers
+        figma.notify(
+          'ℹ️ Document has missing fonts, but none in scanned layers',
+          { timeout: 5000 }
+        );
+      }
 
       return minimalResult;
     } catch (error) {

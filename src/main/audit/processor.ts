@@ -827,6 +827,9 @@ export function createAuditResult(
     documentName: string;
     documentId: string;
     totalPages: number;
+    layersWithMissingFonts?: number;
+    missingFontLayerNames?: string[];
+    missingFontLayerIds?: string[];
   },
   duration: number
 ): StyleGovernanceAuditResult {
@@ -866,6 +869,11 @@ export function createAuditResult(
 
     // Analytics
     metrics: metrics,
+
+    // Missing Fonts
+    layersWithMissingFonts: documentInfo.layersWithMissingFonts || 0,
+    missingFontLayerNames: documentInfo.missingFontLayerNames || [],
+    missingFontLayerIds: documentInfo.missingFontLayerIds || [],
 
     // Status
     isStale: false,
