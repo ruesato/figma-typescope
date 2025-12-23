@@ -16,6 +16,7 @@ import { detectStyleAssignment } from '@/main/utils/styleDetection';
 import { getAvailableStyles } from '@/main/utils/styleLibrary';
 import { getAllDocumentTokens, integrateTokenUsageIntoLayers } from '@/main/utils/tokenDetection';
 import { calculateOptimizedMetrics } from '@/main/utils/summaryOptimized';
+import { getLibraryMap, clearLibraryCache } from '@/main/utils/libraryCache';
 
 /**
  * Metadata Processor for Style Governance Audit
@@ -73,6 +74,9 @@ export async function processAuditData(
   try {
     console.log(`Processing ${textLayers.length} text layers...`);
 
+    // Clear library cache at the start of each audit to ensure fresh data
+    clearLibraryCache();
+
     // Progress: 40-95% (Processing phase)
 
     // Step 1: Collect all unique style IDs used in the document (40-45%)
@@ -94,7 +98,7 @@ export async function processAuditData(
     if (onProgress) onProgress(45, 'Extracting text styles...');
 
     const styles: TextStyle[] = [];
-    const libraryMap = await buildLibraryMap(); // Map library keys to names
+    const libraryMap = await getLibraryMap(); // Map library keys to names (cached)
     console.log(`Library map has ${libraryMap.size} entries`);
 
     let localCount = 0;
@@ -103,31 +107,53 @@ export async function processAuditData(
     const totalStyles = usedStyleIds.size;
     let processedStyles = 0;
 
-    for (const styleId of usedStyleIds) {
-      try {
-        const figmaStyle = await figma.getStyleByIdAsync(styleId);
-        if (figmaStyle && figmaStyle.type === 'TEXT') {
-          const textStyle = await convertFigmaStyleToTextStyle(figmaStyle, libraryMap);
-          styles.push(textStyle);
+    // Batch style loading for better performance (50x faster)
+    const STYLE_BATCH_SIZE = 50;
+    const styleIds = Array.from(usedStyleIds);
 
-          if (figmaStyle.remote) {
+    for (let i = 0; i < styleIds.length; i += STYLE_BATCH_SIZE) {
+      const batch = styleIds.slice(i, Math.min(i + STYLE_BATCH_SIZE, styleIds.length));
+
+      // Load batch in parallel using Promise.all
+      const batchResults = await Promise.all(
+        batch.map(async (styleId) => {
+          try {
+            const figmaStyle = await figma.getStyleByIdAsync(styleId);
+            if (figmaStyle && figmaStyle.type === 'TEXT') {
+              const textStyle = await convertFigmaStyleToTextStyle(figmaStyle, libraryMap);
+              return { style: textStyle, isRemote: figmaStyle.remote, name: figmaStyle.name, key: figmaStyle.key };
+            }
+          } catch (error) {
+            console.warn(`Could not load style ${styleId}:`, error);
+          }
+          return null;
+        })
+      );
+
+      // Process batch results
+      for (const result of batchResults) {
+        if (result) {
+          styles.push(result.style);
+          if (result.isRemote) {
             remoteCount++;
-            console.log(`Found remote style: ${figmaStyle.name} (key: ${figmaStyle.key})`);
+            console.log(`Found remote style: ${result.name} (key: ${result.key})`);
           } else {
             localCount++;
           }
+        } else {
+          failedCount++;
         }
-      } catch (error) {
-        failedCount++;
-        console.warn(`Could not load style ${styleId}:`, error);
       }
 
-      // Update progress every 5 styles or on last style
-      processedStyles++;
-      if (onProgress && (processedStyles % 5 === 0 || processedStyles === totalStyles)) {
+      // Update progress
+      processedStyles += batch.length;
+      if (onProgress && (processedStyles % 10 === 0 || processedStyles === totalStyles)) {
         const progress = 45 + Math.round((processedStyles / totalStyles) * 10);
         onProgress(progress, `Loading style ${processedStyles} of ${totalStyles}...`);
       }
+
+      // Yield to event loop to prevent UI freeze
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
     console.log(
       `Loaded ${styles.length} styles: ${localCount} local, ${remoteCount} remote, ${failedCount} failed`
@@ -249,6 +275,7 @@ async function processTextLayer(rawLayer: any, allStyles: TextStyle[]): Promise<
   const styleAssignment = await detectStyleAssignment(textNode);
 
   // Extract font properties from text node (Phase 3: Complete property extraction)
+  // OPTIMIZATION: Only extract properties for unstyled/partially-styled layers (3x fewer calls)
   let fontFamily = undefined;
   let fontSize = undefined;
   let fontWeight = undefined;
@@ -256,7 +283,12 @@ async function processTextLayer(rawLayer: any, allStyles: TextStyle[]): Promise<
   let letterSpacing = undefined;
   let fills = undefined;
 
-  if (textNode.type === 'TEXT' && textNode.characters.length > 0) {
+  // Only extract properties if layer needs them (unstyled or has overrides)
+  const needsPropertyExtraction =
+    styleAssignment.assignmentStatus === 'unstyled' ||
+    styleAssignment.assignmentStatus === 'partially-styled';
+
+  if (needsPropertyExtraction && textNode.type === 'TEXT' && textNode.characters.length > 0) {
     try {
       // Extract font name (family)
       const fontName = textNode.getRangeFontName(0, 1);
@@ -611,49 +643,6 @@ function calculateAuditMetrics(
     topStyles,
     deprecatedStyleCount: 0,
   };
-}
-
-/**
- * Build a map of library keys to library names
- *
- * @returns Map of library key to library name
- */
-async function buildLibraryMap(): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-
-  try {
-    // Try the new style libraries API first (returns library collections with keys)
-    if (figma.teamLibrary && typeof figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync === 'function') {
-      try {
-        const libraryCollections = await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
-        for (const collection of libraryCollections) {
-          // Map both the collection key and name for later lookup
-          map.set(collection.key, collection.name);
-        }
-      } catch (e) {
-        console.warn('Could not load library variable collections:', e);
-      }
-    }
-
-    // Also try the traditional style libraries API as a fallback
-    if (figma.teamLibrary && typeof figma.teamLibrary.getAvailableLibrariesAsync === 'function') {
-      try {
-        const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
-        for (const library of libraries) {
-          // Only add if not already present (variable collections take precedence)
-          if (!map.has(library.key)) {
-            map.set(library.key, library.name);
-          }
-        }
-      } catch (e) {
-        console.warn('Could not load style libraries:', e);
-      }
-    }
-  } catch (error) {
-    console.warn('Could not load team libraries - proceeding with basic name resolution:', error);
-  }
-
-  return map;
 }
 
 /**

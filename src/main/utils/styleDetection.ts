@@ -1,4 +1,5 @@
 import type { StyleAssignment, PropertyMatchMap } from '@/shared/types';
+import { getLibraryList } from '@/main/utils/libraryCache';
 
 /**
  * Text style detection and comparison utilities
@@ -48,20 +49,14 @@ export async function detectStyleAssignment(node: TextNode): Promise<StyleAssign
   // Get library source if it's from a library
   let libraryName: string | undefined;
   if (textStyle.remote) {
-    // Resolve library name from key
-    // The processor.ts now handles full library resolution,
-    // but we provide basic resolution here for consistency
+    // Resolve library name from key using cached library list
     try {
-      if (figma.teamLibrary && typeof figma.teamLibrary.getAvailableLibrariesAsync === 'function') {
-        const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
-        const keyParts = textStyle.key.split('/');
-        if (keyParts.length >= 2) {
-          const libraryKey = keyParts[0];
-          const library = libraries.find((lib: any) => lib.key === libraryKey);
-          libraryName = library?.name || `Library (${libraryKey.substring(0, 8)}...)`;
-        } else {
-          libraryName = 'External Library';
-        }
+      const libraries = await getLibraryList(); // Uses cache!
+      const keyParts = textStyle.key.split('/');
+      if (keyParts.length >= 2) {
+        const libraryKey = keyParts[0];
+        const library = libraries.find((lib: any) => lib.key === libraryKey);
+        libraryName = library?.name || `Library (${libraryKey.substring(0, 8)}...)`;
       } else {
         libraryName = 'External Library';
       }
