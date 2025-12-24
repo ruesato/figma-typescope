@@ -49,6 +49,28 @@ export async function getLibraryMap(): Promise<Map<string, string>> {
         console.warn('[LibraryCache] Could not load style libraries:', e);
       }
     }
+
+    // Try component sets (may contain library metadata)
+    if (
+      figma.teamLibrary &&
+      typeof figma.teamLibrary.getAvailableLibraryComponentSetsAsync === 'function'
+    ) {
+      try {
+        const componentSets = await figma.teamLibrary.getAvailableLibraryComponentSetsAsync();
+        for (const compSet of componentSets) {
+          if (compSet.key && compSet.libraryName && !map.has(compSet.key)) {
+            // Extract library key from component set key (format: "libraryKey/componentId")
+            const keyParts = compSet.key.split('/');
+            if (keyParts.length >= 2) {
+              const libraryKey = keyParts[0];
+              map.set(libraryKey, compSet.libraryName);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[LibraryCache] Could not load library component sets:', e);
+      }
+    }
   } catch (error) {
     console.warn(
       '[LibraryCache] Could not load team libraries - proceeding with basic name resolution:',

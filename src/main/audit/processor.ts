@@ -83,16 +83,23 @@ export async function processAuditData(
     if (onProgress) onProgress(42, 'Collecting style IDs...');
 
     const usedStyleIds = new Set<string>();
+    const styleIdSamples: { layerName: string; styleId: string }[] = [];
     for (const layer of textLayers) {
       // Scanner stores style ID as 'textStyleId'
       const styleId = layer.textStyleId || layer.styleId;
       if (styleId && typeof styleId === 'string') {
         usedStyleIds.add(styleId);
+        // Sample first 10 for debugging
+        if (styleIdSamples.length < 10) {
+          styleIdSamples.push({ layerName: layer.name, styleId });
+        }
       }
     }
     console.log(
       `Found ${usedStyleIds.size} unique styles in use (from ${textLayers.length} layers)`
     );
+    console.log('Sample style IDs from layers:', styleIdSamples);
+    console.log('All unique style IDs:', Array.from(usedStyleIds));
 
     // Step 2: Fetch metadata for all used styles (45-55%)
     if (onProgress) onProgress(45, 'Extracting text styles...');
@@ -100,6 +107,9 @@ export async function processAuditData(
     const styles: TextStyle[] = [];
     const libraryMap = await getLibraryMap(); // Map library keys to names (cached)
     console.log(`Library map has ${libraryMap.size} entries`);
+    if (libraryMap.size > 0) {
+      console.log('Library map contents:', Array.from(libraryMap.entries()).slice(0, 10));
+    }
 
     let localCount = 0;
     let remoteCount = 0;
@@ -677,20 +687,23 @@ async function convertFigmaStyleToTextStyle(
       libraryId = libraryKey;
     } else {
       // Hash-based format: just the hash
-      // Try to find ANY library in the map and use that (typically there's only one library)
-      const libraryNames = Array.from(libraryMap.values());
-      if (libraryNames.length === 1) {
-        // Single library - use its name
-        libraryName = libraryNames[0];
-        libraryId = Array.from(libraryMap.keys())[0];
-      } else if (libraryNames.length > 1) {
-        // Multiple libraries - can't determine which one
-        libraryName = `Library (${figmaStyle.key.substring(0, 8)}...)`;
-        libraryId = figmaStyle.key;
+      // Try to match the hash against library keys in the map (exact or prefix match)
+      const matchedLibrary = Array.from(libraryMap.entries()).find(
+        ([key]) => key === figmaStyle.key || key.startsWith(figmaStyle.key.substring(0, 8))
+      );
+
+      if (matchedLibrary) {
+        // Found a matching library
+        libraryId = matchedLibrary[0];
+        libraryName = matchedLibrary[1];
       } else {
-        // No libraries in map - this is truly external
-        libraryName = 'External Library';
-        libraryId = 'external';
+        // No match - group all unknown remote styles together to prevent
+        // creating a separate "library" for each style
+        libraryId = 'remote-unknown';
+        libraryName = 'Remote Library';
+        console.log(
+          `Style "${figmaStyle.name}" (key: ${figmaStyle.key}) - no library match found, grouping as "Remote Library"`
+        );
       }
     }
   }
