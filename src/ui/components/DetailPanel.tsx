@@ -491,16 +491,54 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
     return (
       <div className="flex flex-col h-full bg-figma-bg">
         <div className="p-4 border-b border-figma-border flex-shrink-0">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <h2
-              className="text-sm font-semibold text-figma-text"
+              className="text-sm font-semibold text-figma-text flex-1 min-w-0 truncate"
               style={{ opacity: isStyleReplaced ? 0.6 : 1 }}
             >
               {selectedStyle ? selectedStyle.name : selectedToken?.name || 'Details'}
             </h2>
+
+            {/* Replace token button - show even when no layers use it */}
+            {selectedToken && onReplaceToken && (
+              <button
+                onClick={() => {
+                  console.log('[UI] Replace unused token clicked:', {
+                    tokenId: selectedToken.id,
+                    tokenName: selectedToken.name,
+                    tokenCollectionName: selectedToken.collectionName,
+                    affectedLayerCount: 0
+                  });
+                  onReplaceToken(selectedToken, []);
+                }}
+                style={{
+                  height: '28px',
+                  padding: '0 12px',
+                  border: '1px solid var(--figma-color-border)',
+                  borderRadius: '6px',
+                  backgroundColor: 'transparent',
+                  color: 'var(--figma-color-text)',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                Replace token
+              </button>
+            )}
+
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="text-figma-text-secondary hover:text-figma-text transition-colors"
+              className="text-figma-text-secondary hover:text-figma-text transition-colors flex-shrink-0"
             >
               {isExpanded ? '−' : '+'}
             </button>
@@ -630,7 +668,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
           </button>
         )}
 
-        {selectedToken && onReplaceToken && relevantLayers.length > 0 && (
+        {selectedToken && onReplaceToken && (
           <button
             onClick={() => {
               const affectedLayerIds = relevantLayers.map((l) => l.id);
