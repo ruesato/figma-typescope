@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.0.0",
+    "downshift": "^9.0.13",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.0",
     "lucide-react": "^0.554.0",

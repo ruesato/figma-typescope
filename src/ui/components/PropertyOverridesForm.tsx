@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { X } from 'lucide-react';
+import Combobox, { ComboboxOption } from './Combobox';
 import type { PropertyOverrideMap, PropertyOverrideValue, DesignToken } from '@/shared/types';
 
 export interface PropertyOverridesFormProps {
@@ -18,15 +18,13 @@ export interface PropertyOverridesFormProps {
  * - Manual values (text/number input)
  * - Design token bindings (variable selection)
  *
- * Each property has a combobox that filters tokens by compatible types.
+ * Each property uses a Combobox that supports both manual input and token selection.
  */
 export default function PropertyOverridesForm({
   tokens,
   overrides,
   onOverridesChange,
 }: PropertyOverridesFormProps) {
-  const [focusedProperty, setFocusedProperty] = useState<string | null>(null);
-
   // Update a specific property override
   const updateOverride = (property: keyof PropertyOverrideMap, value: PropertyOverrideValue | null) => {
     const newOverrides = { ...overrides };
@@ -57,6 +55,15 @@ export default function PropertyOverridesForm({
 
     const compatibleTypes = propertyTypeMap[property] || [];
     return tokens.filter((token) => compatibleTypes.includes(token.type));
+  };
+
+  // Convert tokens to combobox options
+  const getComboboxOptions = (tokens: DesignToken[]): ComboboxOption[] => {
+    return tokens.map((token) => ({
+      label: token.name,
+      value: `token:${token.id}`, // Prefix with 'token:' to distinguish from manual input
+      description: `${String(token.value)}`,
+    }));
   };
 
   return (
@@ -93,119 +100,95 @@ export default function PropertyOverridesForm({
       </div>
 
       {/* Font Family */}
-      <PropertyField
+      <ComboboxPropertyField
         label="Font Family"
-        property="fontFamily"
         value={overrides.fontFamily}
         tokens={getTokensForProperty('fontFamily')}
+        options={getComboboxOptions(getTokensForProperty('fontFamily'))}
         onUpdate={(value) => updateOverride('fontFamily', value)}
         onClear={() => clearOverride('fontFamily')}
         inputType="text"
-        placeholder="Enter font family..."
-        focused={focusedProperty === 'fontFamily'}
-        onFocus={() => setFocusedProperty('fontFamily')}
-        onBlur={() => setFocusedProperty(null)}
+        placeholder="Type or select font family..."
       />
 
       {/* Font Size */}
-      <PropertyField
+      <ComboboxPropertyField
         label="Font Size"
-        property="fontSize"
         value={overrides.fontSize}
         tokens={getTokensForProperty('fontSize')}
+        options={getComboboxOptions(getTokensForProperty('fontSize'))}
         onUpdate={(value) => updateOverride('fontSize', value)}
         onClear={() => clearOverride('fontSize')}
         inputType="number"
-        placeholder="Enter size in pixels..."
-        focused={focusedProperty === 'fontSize'}
-        onFocus={() => setFocusedProperty('fontSize')}
-        onBlur={() => setFocusedProperty(null)}
+        placeholder="Type or select font size..."
       />
 
       {/* Font Weight */}
-      <PropertyField
+      <ComboboxPropertyField
         label="Font Weight"
-        property="fontWeight"
         value={overrides.fontWeight}
         tokens={getTokensForProperty('fontWeight')}
+        options={getComboboxOptions(getTokensForProperty('fontWeight'))}
         onUpdate={(value) => updateOverride('fontWeight', value)}
         onClear={() => clearOverride('fontWeight')}
         inputType="number"
-        placeholder="100-900"
-        focused={focusedProperty === 'fontWeight'}
-        onFocus={() => setFocusedProperty('fontWeight')}
-        onBlur={() => setFocusedProperty(null)}
+        placeholder="100-900 or select token..."
       />
 
       {/* Line Height */}
-      <PropertyField
+      <ComboboxPropertyField
         label="Line Height"
-        property="lineHeight"
         value={overrides.lineHeight}
         tokens={getTokensForProperty('lineHeight')}
+        options={getComboboxOptions(getTokensForProperty('lineHeight'))}
         onUpdate={(value) => updateOverride('lineHeight', value)}
         onClear={() => clearOverride('lineHeight')}
         inputType="text"
-        placeholder="AUTO, 1.5, or 150%"
-        focused={focusedProperty === 'lineHeight'}
-        onFocus={() => setFocusedProperty('lineHeight')}
-        onBlur={() => setFocusedProperty(null)}
+        placeholder="AUTO, 1.5, 150%, or select token..."
       />
 
       {/* Letter Spacing */}
-      <PropertyField
+      <ComboboxPropertyField
         label="Letter Spacing"
-        property="letterSpacing"
         value={overrides.letterSpacing}
         tokens={getTokensForProperty('letterSpacing')}
+        options={getComboboxOptions(getTokensForProperty('letterSpacing'))}
         onUpdate={(value) => updateOverride('letterSpacing', value)}
         onClear={() => clearOverride('letterSpacing')}
         inputType="text"
-        placeholder="0, 1.5, or 5%"
-        focused={focusedProperty === 'letterSpacing'}
-        onFocus={() => setFocusedProperty('letterSpacing')}
-        onBlur={() => setFocusedProperty(null)}
+        placeholder="0, 1.5, 5%, or select token..."
       />
 
       {/* Color */}
-      <PropertyField
+      <ComboboxPropertyField
         label="Color"
-        property="color"
         value={overrides.color}
         tokens={getTokensForProperty('color')}
+        options={getComboboxOptions(getTokensForProperty('color'))}
         onUpdate={(value) => updateOverride('color', value)}
         onClear={() => clearOverride('color')}
         inputType="text"
-        placeholder="#000000 or rgb(0,0,0)"
-        focused={focusedProperty === 'color'}
-        onFocus={() => setFocusedProperty('color')}
-        onBlur={() => setFocusedProperty(null)}
+        placeholder="#000000, rgb(), or select token..."
       />
 
       {/* Paragraph Spacing */}
-      <PropertyField
+      <ComboboxPropertyField
         label="Paragraph Spacing"
-        property="paragraphSpacing"
         value={overrides.paragraphSpacing}
         tokens={getTokensForProperty('paragraphSpacing')}
+        options={getComboboxOptions(getTokensForProperty('paragraphSpacing'))}
         onUpdate={(value) => updateOverride('paragraphSpacing', value)}
         onClear={() => clearOverride('paragraphSpacing')}
         inputType="number"
-        placeholder="Enter spacing in pixels..."
-        focused={focusedProperty === 'paragraphSpacing'}
-        onFocus={() => setFocusedProperty('paragraphSpacing')}
-        onBlur={() => setFocusedProperty(null)}
+        placeholder="Type or select spacing..."
       />
 
-      {/* Text Case */}
-      <PropertyField
+      {/* Text Case (no tokens, use simple select) */}
+      <SelectPropertyField
         label="Text Case"
-        property="textCase"
         value={overrides.textCase}
-        tokens={[]}
         onUpdate={(value) => updateOverride('textCase', value)}
         onClear={() => clearOverride('textCase')}
-        inputType="select"
         placeholder="Select text case..."
         options={[
           { label: 'Original', value: 'ORIGINAL' },
@@ -213,75 +196,73 @@ export default function PropertyOverridesForm({
           { label: 'lowercase', value: 'LOWER' },
           { label: 'Title Case', value: 'TITLE' },
         ]}
-        focused={focusedProperty === 'textCase'}
-        onFocus={() => setFocusedProperty('textCase')}
-        onBlur={() => setFocusedProperty(null)}
       />
 
-      {/* Text Decoration */}
-      <PropertyField
+      {/* Text Decoration (no tokens, use simple select) */}
+      <SelectPropertyField
         label="Text Decoration"
-        property="textDecoration"
         value={overrides.textDecoration}
-        tokens={[]}
         onUpdate={(value) => updateOverride('textDecoration', value)}
         onClear={() => clearOverride('textDecoration')}
-        inputType="select"
         placeholder="Select decoration..."
         options={[
           { label: 'None', value: 'NONE' },
           { label: 'Underline', value: 'UNDERLINE' },
           { label: 'Strikethrough', value: 'STRIKETHROUGH' },
         ]}
-        focused={focusedProperty === 'textDecoration'}
-        onFocus={() => setFocusedProperty('textDecoration')}
-        onBlur={() => setFocusedProperty(null)}
       />
     </div>
   );
 }
 
-interface PropertyFieldProps {
+// ============================================================================
+// Combobox Property Field (for fields with token support)
+// ============================================================================
+
+interface ComboboxPropertyFieldProps {
   label: string;
-  property: string;
   value: PropertyOverrideValue | undefined;
   tokens: DesignToken[];
+  options: ComboboxOption[];
   onUpdate: (value: PropertyOverrideValue) => void;
   onClear: () => void;
-  inputType: 'text' | 'number' | 'select';
+  inputType: 'text' | 'number';
   placeholder: string;
-  options?: Array<{ label: string; value: string }>;
-  focused: boolean;
-  onFocus: () => void;
-  onBlur: () => void;
 }
 
-function PropertyField({
+function ComboboxPropertyField({
   label,
   value,
   tokens,
+  options,
   onUpdate,
   onClear,
   inputType,
   placeholder,
-  options,
-  focused,
-  onFocus,
-  onBlur,
-}: PropertyFieldProps) {
-  const [inputValue, setInputValue] = useState('');
-  const [mode, setMode] = useState<'manual' | 'token'>('manual');
-
-  // Get display value
-  const displayValue = value
+}: ComboboxPropertyFieldProps) {
+  // Get display value for combobox
+  const comboboxValue = value
     ? value.type === 'manual'
       ? String(value.value)
-      : value.tokenName
-    : inputValue;
+      : `token:${value.tokenId}`
+    : undefined;
 
-  const handleInputChange = (newValue: string) => {
-    setInputValue(newValue);
-    if (newValue.trim()) {
+  // Handle combobox change
+  const handleChange = (newValue: string | null) => {
+    if (!newValue) {
+      onClear();
+      return;
+    }
+
+    // Check if it's a token selection (prefixed with 'token:')
+    if (newValue.startsWith('token:')) {
+      const tokenId = newValue.substring(6); // Remove 'token:' prefix
+      const token = tokens.find((t) => t.id === tokenId);
+      if (token) {
+        onUpdate({ type: 'token', tokenId: token.id, tokenName: token.name });
+      }
+    } else {
+      // Manual input value
       const parsedValue = inputType === 'number' ? parseFloat(newValue) : newValue;
       if (inputType === 'number' && isNaN(parsedValue as number)) {
         return; // Don't update if invalid number
@@ -290,11 +271,66 @@ function PropertyField({
     }
   };
 
-  const handleTokenSelect = (tokenId: string) => {
-    const token = tokens.find((t) => t.id === tokenId);
-    if (token) {
-      onUpdate({ type: 'token', tokenId: token.id, tokenName: token.name });
-      setMode('token');
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '6px',
+        }}
+      >
+        <label
+          style={{
+            fontSize: '11px',
+            fontWeight: 500,
+            color: 'var(--figma-color-text)',
+          }}
+        >
+          {label}
+        </label>
+      </div>
+
+      <Combobox
+        options={options}
+        value={comboboxValue}
+        onChange={handleChange}
+        placeholder={placeholder}
+        inputType={inputType}
+        allowManualInput={true}
+        onClear={onClear}
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// Select Property Field (for fields without token support)
+// ============================================================================
+
+interface SelectPropertyFieldProps {
+  label: string;
+  value: PropertyOverrideValue | undefined;
+  onUpdate: (value: PropertyOverrideValue) => void;
+  onClear: () => void;
+  placeholder: string;
+  options: Array<{ label: string; value: string }>;
+}
+
+function SelectPropertyField({
+  label,
+  value,
+  onUpdate,
+  onClear,
+  placeholder,
+  options,
+}: SelectPropertyFieldProps) {
+  const displayValue = value?.type === 'manual' ? String(value.value) : '';
+
+  const handleChange = (newValue: string) => {
+    if (newValue) {
+      onUpdate({ type: 'manual', value: newValue });
     }
   };
 
@@ -338,120 +374,27 @@ function PropertyField({
         )}
       </div>
 
-      {/* Input/Select Field */}
-      {inputType === 'select' && options ? (
-        <select
-          value={displayValue}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          style={{
-            width: '100%',
-            padding: '6px 8px',
-            fontSize: '11px',
-            border: `1px solid ${
-              focused ? 'var(--figma-color-border-brand-strong)' : 'var(--figma-color-border)'
-            }`,
-            borderRadius: '4px',
-            backgroundColor: 'var(--figma-color-bg)',
-            color: 'var(--figma-color-text)',
-            outline: 'none',
-          }}
-        >
-          <option value="">{placeholder}</option>
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-          type={inputType}
-          value={displayValue}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          placeholder={placeholder}
-          style={{
-            width: '100%',
-            padding: '6px 8px',
-            fontSize: '11px',
-            border: `1px solid ${
-              focused ? 'var(--figma-color-border-brand-strong)' : 'var(--figma-color-border)'
-            }`,
-            borderRadius: '4px',
-            backgroundColor: 'var(--figma-color-bg)',
-            color: 'var(--figma-color-text)',
-            outline: 'none',
-          }}
-        />
-      )}
-
-      {/* Token Selection */}
-      {tokens.length > 0 && mode === 'manual' && (
-        <div style={{ marginTop: '6px' }}>
-          <button
-            onClick={() => setMode('token')}
-            style={{
-              fontSize: '10px',
-              color: 'var(--figma-color-text-brand)',
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              textDecoration: 'underline',
-            }}
-          >
-            Or select a token
-          </button>
-        </div>
-      )}
-
-      {mode === 'token' && tokens.length > 0 && (
-        <div style={{ marginTop: '6px' }}>
-          <select
-            value={value?.type === 'token' ? value.tokenId : ''}
-            onChange={(e) => {
-              if (e.target.value) {
-                handleTokenSelect(e.target.value);
-              } else {
-                setMode('manual');
-              }
-            }}
-            style={{
-              width: '100%',
-              padding: '6px 8px',
-              fontSize: '11px',
-              border: '1px solid var(--figma-color-border)',
-              borderRadius: '4px',
-              backgroundColor: 'var(--figma-color-bg)',
-              color: 'var(--figma-color-text)',
-            }}
-          >
-            <option value="">Select a token...</option>
-            {tokens.map((token) => (
-              <option key={token.id} value={token.id}>
-                {token.name} ({String(token.value)})
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => setMode('manual')}
-            style={{
-              fontSize: '10px',
-              color: 'var(--figma-color-text-secondary)',
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              marginTop: '4px',
-            }}
-          >
-            Use manual value instead
-          </button>
-        </div>
-      )}
+      <select
+        value={displayValue}
+        onChange={(e) => handleChange(e.target.value)}
+        style={{
+          width: '100%',
+          padding: '6px 8px',
+          fontSize: '11px',
+          border: '1px solid var(--figma-color-border)',
+          borderRadius: '4px',
+          backgroundColor: 'var(--figma-color-bg)',
+          color: 'var(--figma-color-text)',
+          outline: 'none',
+        }}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
