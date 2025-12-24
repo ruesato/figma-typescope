@@ -90,7 +90,7 @@ export default function PropertyOverridesForm({
         </h3>
         <p
           style={{
-            fontSize: '11px',
+            fontSize: '13px',
             color: 'var(--figma-color-text-secondary)',
             margin: 0,
           }}
@@ -283,7 +283,7 @@ function ComboboxPropertyField({
       >
         <label
           style={{
-            fontSize: '11px',
+            fontSize: '13px',
             fontWeight: 500,
             color: 'var(--figma-color-text)',
           }}
@@ -346,7 +346,7 @@ function SelectPropertyField({
       >
         <label
           style={{
-            fontSize: '11px',
+            fontSize: '13px',
             fontWeight: 500,
             color: 'var(--figma-color-text)',
           }}

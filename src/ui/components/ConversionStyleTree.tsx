@@ -134,7 +134,7 @@ export default function ConversionStyleTree({
               margin: 0,
             }}
           >
-            Select Styles to Convert
+            Select Styles
           </h3>
           <div style={{ fontSize: '11px', color: 'var(--figma-color-text-secondary)' }}>
             {selectedStyleIds.size} of {filteredStyles.length} selected
