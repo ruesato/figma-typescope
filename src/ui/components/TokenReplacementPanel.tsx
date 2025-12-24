@@ -98,8 +98,10 @@ export default function TokenReplacementPanel({
         { pluginMessage: { type: 'CANCEL_REPLACEMENT' } },
         '*'
       );
-      replacementState.reset();
     }
+
+    // Always reset replacement state when closing panel (whether in progress or complete)
+    replacementState.reset();
 
     setSelectedTargetToken(null); // Reset selection
     setSearchQuery(''); // Reset filters
