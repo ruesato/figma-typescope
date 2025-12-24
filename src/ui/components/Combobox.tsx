@@ -81,6 +81,18 @@ export default function Combobox({
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
+      <style>{`
+        /* Hide number input spinners */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        input[type="number"] {
+          -moz-appearance: textfield;
+        }
+      `}</style>
+
       {/* Input with dropdown toggle button */}
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <input
@@ -90,7 +102,7 @@ export default function Combobox({
           style={{
             width: '100%',
             padding: '6px 60px 6px 8px',
-            fontSize: '11px',
+            fontSize: '13px',
             border: `1px solid ${isOpen ? 'var(--figma-color-border-brand-strong)' : 'var(--figma-color-border)'}`,
             borderRadius: '4px',
             backgroundColor: 'var(--figma-color-bg)',
