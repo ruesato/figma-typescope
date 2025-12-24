@@ -34,6 +34,7 @@ interface StyleTreeViewProps {
     string,
     { targetStyleId: string; targetStyleName: string; count: number }
   >; // Track original styles that were replaced
+  highlightedStyleIds?: Set<string>; // Styles to highlight (newly created local styles)
   className?: string;
   // Filter props (controlled from parent)
   searchQuery?: string;
@@ -55,6 +56,7 @@ export default function StyleTreeView({
   disabledStyleId,
   replacedStyleIds,
   replacementHistory,
+  highlightedStyleIds,
   className = '',
   searchQuery = '',
   sourceFilter = 'all',
@@ -272,6 +274,7 @@ export default function StyleTreeView({
     const receivedReplacements = node.type === 'style' && node.metadata?.receivedReplacements;
     const usageCount = node.metadata?.usageCount ?? 0;
     const isDisabled = node.type === 'style' && node.data?.id === disabledStyleId;
+    const isHighlighted = node.type === 'style' && highlightedStyleIds?.has(node.data?.id || '');
 
     // Calculate replacement count for this style as target
     const replacementCount = Array.from(replacementHistory?.values() || [])
@@ -298,6 +301,9 @@ export default function StyleTreeView({
           onClick={options.handleSelect}
           isSelected={options.isSelected}
           isDisabled={isDisabled || isReplacedStyle}
+          style={{
+            animation: isHighlighted ? 'highlight-flash 2s ease-in-out' : undefined,
+          }}
           leftContent={
             <div className="flex items-center gap-2" style={{ marginLeft: `${options.level * 20}px` }}>
               {isReplacedStyle && (
@@ -420,7 +426,17 @@ export default function StyleTreeView({
     );
   };
 
-  return <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>{renderTreeContent()}</div>;
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        @keyframes highlight-flash {
+          0%, 100% { background-color: transparent; }
+          50% { background-color: var(--figma-color-bg-success-tertiary); }
+        }
+      `}</style>
+      {renderTreeContent()}
+    </div>
+  );
 }
 
 /**

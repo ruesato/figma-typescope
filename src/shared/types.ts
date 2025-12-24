@@ -201,7 +201,16 @@ export type UIToMainMessage =
 
   // UI preference messages
   | { type: 'GET_GROUP_BY_LIBRARY' }
-  | { type: 'SAVE_GROUP_BY_LIBRARY'; payload: { enabled: boolean } };
+  | { type: 'SAVE_GROUP_BY_LIBRARY'; payload: { enabled: boolean } }
+
+  // Conversion messages
+  | {
+      type: 'CONVERT_TO_LOCAL_STYLES';
+      payload: {
+        sourceStyleIds: string[];
+        propertyOverrides: PropertyOverrideMap;
+      };
+    };
 
 /**
  * Messages sent from main context to UI context (audit status updates and results)
@@ -369,7 +378,27 @@ export type MainToUIMessage =
   | { type: 'GROUP_BY_LIBRARY_SAVED'; payload: { success: boolean } }
 
   // Page selection messages
-  | { type: 'PAGES_LIST'; payload: { pages: Array<{ id: string; name: string }> } };
+  | { type: 'PAGES_LIST'; payload: { pages: Array<{ id: string; name: string }> } }
+
+  // Conversion messages
+  | {
+      type: 'CONVERSION_COMPLETE';
+      payload: {
+        newLocalStyles: TextStyle[];
+        stylesMapped: ConversionMapping[];
+        totalConverted: number;
+        totalFailed: number;
+        errors: string[];
+        duration: number;
+      };
+    }
+  | {
+      type: 'CONVERSION_ERROR';
+      payload: {
+        error: string;
+        details?: string;
+      };
+    };
 
 // ============================================================================
 // Export Format Types
@@ -796,6 +825,62 @@ export interface BatchProcessorState {
   totalLayersProcessed: number; // Total layers updated so far
   totalLayersToProcess: number; // Total layers in operation
   failedLayers: FailedLayer[]; // Layers that failed to update
+}
+
+// ----------------------------------------------------------------------------
+// Conversion Types
+// ----------------------------------------------------------------------------
+
+/**
+ * Property override value - can be manual value or token binding
+ */
+export type PropertyOverrideValue =
+  | { type: 'manual'; value: string | number }
+  | { type: 'token'; tokenId: string; tokenName: string };
+
+/**
+ * Map of property overrides for style conversion
+ */
+export interface PropertyOverrideMap {
+  fontFamily?: PropertyOverrideValue;
+  fontSize?: PropertyOverrideValue;
+  fontWeight?: PropertyOverrideValue;
+  lineHeight?: PropertyOverrideValue;
+  letterSpacing?: PropertyOverrideValue;
+  color?: PropertyOverrideValue;
+  paragraphSpacing?: PropertyOverrideValue;
+  textCase?: PropertyOverrideValue;
+  textDecoration?: PropertyOverrideValue;
+}
+
+/**
+ * Mapping between source style and created local style
+ */
+export interface ConversionMapping {
+  sourceStyleId: string;
+  sourceStyleName: string;
+  newStyleId: string;
+  newStyleName: string;
+}
+
+/**
+ * Conversion request payload
+ */
+export interface ConversionRequest {
+  sourceStyleIds: string[];
+  propertyOverrides: PropertyOverrideMap;
+}
+
+/**
+ * Conversion result payload
+ */
+export interface ConversionResult {
+  newLocalStyles: TextStyle[];
+  stylesMapped: ConversionMapping[];
+  totalConverted: number;
+  totalFailed: number;
+  errors: string[];
+  duration: number;
 }
 
 // ----------------------------------------------------------------------------

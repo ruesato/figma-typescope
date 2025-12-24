@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import './styles/globals.css';
 import { useMessageHandler } from './hooks/useMessageHandler';
 import { useAuditState } from './hooks/useAuditState';
@@ -14,6 +14,7 @@ import StyleTreeView from './components/StyleTreeView';
 import StylePicker from './components/StylePicker';
 import StyleReplacementPanel from './components/StyleReplacementPanel';
 import TokenReplacementPanel from './components/TokenReplacementPanel';
+import ConversionPanel from './components/ConversionPanel';
 import FilterToolbar from './components/FilterToolbar';
 import Toast from './components/Toast';
 import ConfirmationDialog from './components/ConfirmationDialog';
@@ -65,6 +66,11 @@ export default function App() {
     Map<string, { targetStyleId: string; targetStyleName: string; count: number }>
   >(new Map());
 
+  // Conversion panel state
+  const [showConversionPanel, setShowConversionPanel] = useState(false);
+  const [conversionError, setConversionError] = useState<string | undefined>();
+  const [newLocalStyleIds, setNewLocalStyleIds] = useState<Set<string>>(new Set());
+
   // Toast notification state
   const [toast, setToast] = useState<{
     message: string;
@@ -94,6 +100,11 @@ export default function App() {
   const styleBadgeCount = styleGovernanceResult?.styles.length ?? 0;
   const tokenBadgeCount = styleGovernanceResult?.tokens.length ?? 0;
 
+  // Check if there are remote styles
+  const hasRemoteStyles = useMemo(() => {
+    return styleGovernanceResult?.styles.some((s) => s.sourceType !== 'local') ?? false;
+  }, [styleGovernanceResult]);
+
   // DEBUG: Log badge counts whenever they change
   useEffect(() => {
     console.log('[App] Badge counts updated:', {
@@ -119,6 +130,53 @@ export default function App() {
       setSelectedStyle(styleGovernanceResult.styles[0]);
     }
   }, [activeTab, styleGovernanceResult, selectedStyle]);
+
+  // Listen for conversion complete/error messages
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const msg = event.data.pluginMessage;
+      if (!msg || !msg.type) return;
+
+      switch (msg.type) {
+        case 'CONVERSION_COMPLETE':
+          console.log('[App] Conversion complete:', msg.payload);
+
+          // Update audit results with new local styles
+          if (styleGovernanceResult) {
+            const updatedResult = {
+              ...styleGovernanceResult,
+              styles: [...styleGovernanceResult.styles, ...msg.payload.newLocalStyles],
+            };
+            setStyleGovernanceResult(updatedResult);
+
+            // Mark new styles for highlighting
+            setNewLocalStyleIds(new Set(msg.payload.newLocalStyles.map((s: any) => s.id)));
+
+            // Show success toast
+            setToast({
+              message: `Converted ${msg.payload.totalConverted} style${msg.payload.totalConverted !== 1 ? 's' : ''} successfully`,
+              type: 'success',
+            });
+
+            // Close panel after short delay
+            setTimeout(() => {
+              setShowConversionPanel(false);
+              setConversionError(undefined);
+            }, 1500);
+          }
+          break;
+
+        case 'CONVERSION_ERROR':
+          console.error('[App] Conversion error:', msg.payload);
+          setConversionError(msg.payload.error);
+          setToast({ message: msg.payload.error, type: 'error' });
+          break;
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [styleGovernanceResult, setStyleGovernanceResult]);
 
   // ============================================================================
   // Event Handlers
@@ -368,6 +426,41 @@ export default function App() {
     }
   };
 
+  // Conversion handlers
+  const handleOpenConversionPanel = () => {
+    setShowConversionPanel(true);
+    setConversionError(undefined);
+    setNewLocalStyleIds(new Set());
+  };
+
+  const handleConvert = (sourceStyleIds: string[], propertyOverrides: any) => {
+    console.log('[UI] Conversion initiated:', {
+      sourceStyleIds,
+      propertyOverrides,
+      styleCount: sourceStyleIds.length,
+    });
+
+    // Send conversion request to main context
+    parent.postMessage(
+      {
+        pluginMessage: {
+          type: 'CONVERT_TO_LOCAL_STYLES',
+          payload: { sourceStyleIds, propertyOverrides },
+        },
+      },
+      '*'
+    );
+
+    // Show loading toast
+    setToast({ message: 'Converting styles...', type: 'loading' });
+  };
+
+  const handleConversionPanelClose = () => {
+    setShowConversionPanel(false);
+    setConversionError(undefined);
+    setNewLocalStyleIds(new Set());
+  };
+
   // ============================================================================
   // Render
   // ============================================================================
@@ -407,6 +500,8 @@ export default function App() {
           activeTab={activeTab}
           showActions={!!styleGovernanceResult && !isAuditing}
           onNewAnalysis={handleNewAnalysis}
+          hasRemoteStyles={hasRemoteStyles}
+          onConvertToLocal={handleOpenConversionPanel}
         />
 
         {/* Content */}
@@ -517,6 +612,7 @@ export default function App() {
                           selectedStyleId={selectedStyle?.id}
                           replacedStyleIds={replacedStyleIds}
                           replacementHistory={replacementHistory}
+                          highlightedStyleIds={newLocalStyleIds}
                           searchQuery={stylesSearchQuery}
                           sourceFilter={stylesSourceFilter}
                           groupByLibrary={stylesGroupByLibrary}
@@ -725,6 +821,19 @@ export default function App() {
           onReplace={handleReplacementPanelReplace}
           error={replacementPanelError}
           replacedStyleIds={replacedStyleIds}
+        />
+      )}
+
+      {/* Conversion Panel */}
+      {styleGovernanceResult && (
+        <ConversionPanel
+          isOpen={showConversionPanel}
+          styles={styleGovernanceResult.styles}
+          libraries={styleGovernanceResult.libraries}
+          tokens={styleGovernanceResult.tokens}
+          onClose={handleConversionPanelClose}
+          onConvert={handleConvert}
+          error={conversionError}
         />
       )}
 

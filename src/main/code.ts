@@ -5,6 +5,7 @@ import { detectStyleAssignment } from './utils/styleDetection';
 import { calculateSummary } from './utils/summary';
 import { AuditEngine } from './audit/auditEngine';
 import { ReplacementEngine } from './replacement/replacementEngine';
+import { convertStylesToLocal } from './conversion/conversionEngine';
 
 // ============================================================================
 // Main Entry Point (Figma Sandbox Context)
@@ -112,9 +113,12 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
         handleCancelReplacement();
         break;
 
-      // case 'ROLLBACK_TO_CHECKPOINT':
-      //   await handleRollbackToCheckpoint(msg.payload.checkpointId);
-      //   break;
+      // ==================================================================
+      // Conversion Operations
+      // ==================================================================
+      case 'CONVERT_TO_LOCAL_STYLES':
+        await handleConvertToLocalStyles(msg.payload.sourceStyleIds, msg.payload.propertyOverrides);
+        break;
 
       // ==================================================================
       // Export Operations
@@ -690,16 +694,59 @@ function handleCancelReplacement(): void {
   }
 }
 
+// ============================================================================
+// Conversion Handler
+// ============================================================================
+
 /**
- * Handle ROLLBACK_TO_CHECKPOINT message
- * PLACEHOLDER: Will be implemented in Phase 5
- * Currently commented out - route not yet active
+ * Handle CONVERT_TO_LOCAL_STYLES message
+ * Converts remote text styles to local styles with optional property overrides
  */
-// async function handleRollbackToCheckpoint(checkpointId: string): Promise<void> {
-//   console.log('[Replacement] Rollback placeholder:', checkpointId);
-//   // Note: Rollback uses version history API, not custom implementation
-//   figma.notify('Rollback not yet implemented (Phase 5)', { error: true });
-// }
+async function handleConvertToLocalStyles(
+  sourceStyleIds: string[],
+  propertyOverrides: any
+): Promise<void> {
+  console.log('[Conversion] Starting conversion:', {
+    sourceStyleIds,
+    propertyOverrides,
+    styleCount: sourceStyleIds.length,
+  });
+
+  try {
+    const result = await convertStylesToLocal({ sourceStyleIds, propertyOverrides });
+
+    console.log('[Conversion] Conversion complete:', {
+      totalConverted: result.totalConverted,
+      totalFailed: result.totalFailed,
+      duration: result.duration,
+    });
+
+    sendMessage({
+      type: 'CONVERSION_COMPLETE',
+      payload: result,
+    });
+
+    // Show success notification
+    const message =
+      result.totalFailed > 0
+        ? `Converted ${result.totalConverted} style(s). ${result.totalFailed} failed.`
+        : `Converted ${result.totalConverted} style(s) successfully`;
+    figma.notify(message);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[Conversion] Error:', errorMessage);
+
+    sendMessage({
+      type: 'CONVERSION_ERROR',
+      payload: {
+        error: errorMessage,
+        details: error instanceof Error ? error.stack : undefined,
+      },
+    });
+
+    figma.notify(`Conversion failed: ${errorMessage}`, { error: true });
+  }
+}
 
 // ============================================================================
 // Export Handler (Feature 002 - Phase 4)
