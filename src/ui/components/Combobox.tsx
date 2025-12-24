@@ -205,7 +205,7 @@ export default function Combobox({
               {...getItemProps({ item: option, index })}
               style={{
                 padding: '6px 8px',
-                fontSize: '11px',
+                fontSize: '13px',
                 cursor: 'pointer',
                 borderRadius: '3px',
                 backgroundColor:
@@ -220,7 +220,7 @@ export default function Combobox({
               {option.description && (
                 <div
                   style={{
-                    fontSize: '10px',
+                    fontSize: '13px',
                     color: 'var(--figma-color-text-tertiary)',
                     marginTop: '2px',
                   }}
@@ -245,7 +245,7 @@ export default function Combobox({
             border: '1px solid var(--figma-color-border)',
             borderRadius: '4px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-            fontSize: '11px',
+            fontSize: '13px',
             color: 'var(--figma-color-text-secondary)',
             textAlign: 'center',
             zIndex: 1000,
