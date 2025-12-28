@@ -79,6 +79,21 @@ export default function PageSelector({ isOpen, onClose, onConfirm }: PageSelecto
     onClose();
   };
 
+  // Handle ENTER key to trigger primary action (Analyze N Pages)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        handleConfirm();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, selectedPageIds]);
+
   if (!isOpen) return null;
 
   return (

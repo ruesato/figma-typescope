@@ -1,4 +1,4 @@
-import { useState, useMemo, ReactNode } from 'react';
+import { useState, useMemo, ReactNode, useRef, useEffect } from 'react';
 import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 
 // ============================================================================
@@ -133,6 +133,11 @@ export default function TreeView<T = any>({
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Keyboard navigation state
+  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const nodeRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Expansion state (uncontrolled if not provided)
   const [uncontrolledExpandedIds, setUncontrolledExpandedIds] = useState<Set<string>>(
     defaultExpandedIds
@@ -153,6 +158,21 @@ export default function TreeView<T = any>({
   const flattenedNodes = useMemo(() => {
     return flattenTree(nodes, expandedIds);
   }, [nodes, expandedIds]);
+
+  // Reset focused index when nodes change
+  useEffect(() => {
+    if (focusedIndex >= flattenedNodes.length && flattenedNodes.length > 0) {
+      setFocusedIndex(0);
+    }
+  }, [flattenedNodes.length, focusedIndex]);
+
+  // Focus the highlighted row
+  useEffect(() => {
+    const nodeElement = nodeRefs.current.get(focusedIndex);
+    if (nodeElement) {
+      nodeElement.focus();
+    }
+  }, [focusedIndex]);
 
   // Handle search input
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -175,6 +195,57 @@ export default function TreeView<T = any>({
   // Handle node selection
   const handleNodeSelect = (node: TreeNode<T>) => {
     onNodeSelect?.(node);
+  };
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (flattenedNodes.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedIndex((prev) => Math.min(prev + 1, flattenedNodes.length - 1));
+        break;
+
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedIndex((prev) => Math.max(prev - 1, 0));
+        break;
+
+      case 'Enter':
+        e.preventDefault();
+        if (flattenedNodes[focusedIndex]) {
+          handleNodeSelect(flattenedNodes[focusedIndex]);
+        }
+        break;
+
+      case ' ':
+        e.preventDefault();
+        if (flattenedNodes[focusedIndex]) {
+          toggleExpansion(flattenedNodes[focusedIndex].id);
+        }
+        break;
+
+      case 'ArrowRight':
+        e.preventDefault();
+        if (flattenedNodes[focusedIndex]) {
+          const node = flattenedNodes[focusedIndex];
+          if (node.children.length > 0 && !expandedIds.has(node.id)) {
+            toggleExpansion(node.id);
+          }
+        }
+        break;
+
+      case 'ArrowLeft':
+        e.preventDefault();
+        if (flattenedNodes[focusedIndex]) {
+          const node = flattenedNodes[focusedIndex];
+          if (node.children.length > 0 && expandedIds.has(node.id)) {
+            toggleExpansion(node.id);
+          }
+        }
+        break;
+    }
   };
 
   return (
@@ -206,7 +277,13 @@ export default function TreeView<T = any>({
       )}
 
       {/* Tree Content */}
-      <div className={`flex-1 overflow-auto ${className}`}>
+      <div
+        ref={containerRef}
+        className={`flex-1 overflow-auto ${className}`}
+        onKeyDown={handleKeyDown}
+        role="tree"
+        aria-label="Tree view"
+      >
         {flattenedNodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center">
             <p className="text-sm text-figma-text-secondary">
@@ -214,13 +291,37 @@ export default function TreeView<T = any>({
             </p>
           </div>
         ) : (
-          flattenedNodes.map((node) => {
+          flattenedNodes.map((node, index) => {
             const isExpanded = expandedIds.has(node.id);
             const isSelected = node.id === selectedId;
+            const isFocused = index === focusedIndex;
             const hasChildren = node.children.length > 0;
 
             return (
-              <div key={node.id}>
+              <div
+                key={node.id}
+                ref={(el) => {
+                  if (el) {
+                    nodeRefs.current.set(index, el);
+                  } else {
+                    nodeRefs.current.delete(index);
+                  }
+                }}
+                tabIndex={isFocused ? 0 : -1}
+                role="treeitem"
+                aria-expanded={hasChildren ? isExpanded : undefined}
+                aria-selected={isSelected}
+                aria-level={node.level + 1}
+                onFocus={() => setFocusedIndex(index)}
+                onClick={() => {
+                  setFocusedIndex(index);
+                  handleNodeSelect(node);
+                }}
+                style={{
+                  outline: isFocused ? '2px solid var(--figma-color-border-brand-strong)' : 'none',
+                  outlineOffset: '-2px',
+                }}
+              >
                 {renderNode(node, {
                   isExpanded,
                   isSelected,

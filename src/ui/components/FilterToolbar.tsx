@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
 
 // ============================================================================
@@ -65,6 +65,12 @@ export default function FilterToolbar(props: FilterToolbarProps) {
   } = props;
 
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus search input when component mounts
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   // Count active filters (excluding 'all' values)
   const activeFilterCount = [
@@ -97,6 +103,7 @@ export default function FilterToolbar(props: FilterToolbarProps) {
             }}
           />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder={searchPlaceholder}
             value={searchQuery}

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import packageJson from '../../../package.json';
 
 interface EmptyStateProps {
@@ -11,6 +12,21 @@ export default function EmptyState({
   onAnalyzeFile,
   onAnalyzeSelection,
 }: EmptyStateProps) {
+  // Handle ENTER key to trigger primary action (Analyze File)
+  useEffect(() => {
+    if (!onAnalyzeFile) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        onAnalyzeFile();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onAnalyzeFile]);
+
   return (
     <div
       className="flex flex-col items-center justify-between"
