@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useCombobox } from 'downshift';
 import { ChevronDown, X } from 'lucide-react';
 
@@ -40,6 +40,7 @@ export default function Combobox({
   onClear,
 }: ComboboxProps) {
   const [inputValue, setInputValue] = useState(value || '');
+  const isSelectingRef = useRef(false);
 
   // Filter options based on input
   const filteredOptions = options.filter((option) =>
@@ -61,14 +62,23 @@ export default function Combobox({
     itemToString: (item) => (item ? item.label : ''),
     onInputValueChange: ({ inputValue: newInputValue }) => {
       setInputValue(newInputValue || '');
-      if (allowManualInput && newInputValue) {
+      // Only call onChange if we're not in the middle of a selection
+      // and manual input is allowed
+      if (!isSelectingRef.current && allowManualInput && newInputValue) {
         onChange(newInputValue);
       }
     },
     onSelectedItemChange: ({ selectedItem: newSelectedItem }) => {
       if (newSelectedItem) {
+        // Mark that we're handling a selection to prevent onInputValueChange
+        // from firing when we update the input value
+        isSelectingRef.current = true;
         setInputValue(newSelectedItem.label);
         onChange(newSelectedItem.value);
+        // Reset the flag after a short delay
+        setTimeout(() => {
+          isSelectingRef.current = false;
+        }, 0);
       }
     },
   });

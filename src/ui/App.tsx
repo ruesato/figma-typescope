@@ -141,29 +141,36 @@ export default function App() {
         case 'CONVERSION_COMPLETE':
           console.log('[App] Conversion complete:', msg.payload);
 
-          // Update audit results with new local styles
-          if (styleGovernanceResult) {
-            const updatedResult = {
-              ...styleGovernanceResult,
-              styles: [...styleGovernanceResult.styles, ...msg.payload.newLocalStyles],
-            };
-            setStyleGovernanceResult(updatedResult);
+          // Mark new styles for highlighting
+          setNewLocalStyleIds(new Set(msg.payload.newLocalStyles.map((s: any) => s.id)));
 
-            // Mark new styles for highlighting
-            setNewLocalStyleIds(new Set(msg.payload.newLocalStyles.map((s: any) => s.id)));
-
-            // Show success toast
-            setToast({
-              message: `Converted ${msg.payload.totalConverted} style${msg.payload.totalConverted !== 1 ? 's' : ''} successfully`,
-              type: 'success',
-            });
-
-            // Close panel after short delay
-            setTimeout(() => {
-              setShowConversionPanel(false);
-              setConversionError(undefined);
-            }, 1500);
+          // Show success toast with layer info if applicable
+          let successMessage = `Converted ${msg.payload.totalConverted} style${msg.payload.totalConverted !== 1 ? 's' : ''} successfully`;
+          if (msg.payload.layersAffected !== undefined && msg.payload.layersAffected > 0) {
+            successMessage += ` and applied to ${msg.payload.layersAffected} layer${msg.payload.layersAffected !== 1 ? 's' : ''}`;
           }
+          setToast({
+            message: successMessage,
+            type: 'success',
+          });
+
+          // Auto-refresh audit to show updated usage counts
+          console.log('[App] Auto-refreshing audit after conversion');
+          parent.postMessage(
+            {
+              pluginMessage: {
+                type: 'RUN_STYLE_AUDIT',
+                payload: { triggeredBy: 'conversion-complete' },
+              },
+            },
+            '*'
+          );
+
+          // Close panel after short delay
+          setTimeout(() => {
+            setShowConversionPanel(false);
+            setConversionError(undefined);
+          }, 1500);
           break;
 
         case 'CONVERSION_ERROR':
@@ -433,10 +440,11 @@ export default function App() {
     setNewLocalStyleIds(new Set());
   };
 
-  const handleConvert = (sourceStyleIds: string[], propertyOverrides: any) => {
+  const handleConvert = (sourceStyleIds: string[], propertyOverrides: any, applyToLayers: boolean) => {
     console.log('[UI] Conversion initiated:', {
       sourceStyleIds,
       propertyOverrides,
+      applyToLayers,
       styleCount: sourceStyleIds.length,
     });
 
@@ -445,14 +453,15 @@ export default function App() {
       {
         pluginMessage: {
           type: 'CONVERT_TO_LOCAL_STYLES',
-          payload: { sourceStyleIds, propertyOverrides },
+          payload: { sourceStyleIds, propertyOverrides, applyToLayers },
         },
       },
       '*'
     );
 
     // Show loading toast
-    setToast({ message: 'Converting styles...', type: 'loading' });
+    const message = applyToLayers ? 'Converting and applying styles...' : 'Converting styles...';
+    setToast({ message, type: 'loading' });
   };
 
   const handleConversionPanelClose = () => {

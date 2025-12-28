@@ -16,7 +16,7 @@ export interface ConversionPanelProps {
   /** Callback when panel should close */
   onClose: () => void;
   /** Callback when conversion is confirmed */
-  onConvert: (sourceStyleIds: string[], propertyOverrides: PropertyOverrideMap) => void;
+  onConvert: (sourceStyleIds: string[], propertyOverrides: PropertyOverrideMap, applyToLayers: boolean) => void;
   /** Optional error message to display at top */
   error?: string;
 }
@@ -51,19 +51,21 @@ export default function ConversionPanel({
 
   const [selectedStyleIds, setSelectedStyleIds] = useState<Set<string>>(remoteStyleIds);
   const [propertyOverrides, setPropertyOverrides] = useState<PropertyOverrideMap>({});
+  const [applyToLayers, setApplyToLayers] = useState(true);
 
   // Reset selections when panel opens
   useState(() => {
     if (isOpen) {
       setSelectedStyleIds(remoteStyleIds);
       setPropertyOverrides({});
+      setApplyToLayers(true);
     }
   });
 
   // Handle conversion
   const handleConvert = () => {
     if (selectedStyleIds.size === 0) return;
-    onConvert(Array.from(selectedStyleIds), propertyOverrides);
+    onConvert(Array.from(selectedStyleIds), propertyOverrides, applyToLayers);
   };
 
   // Handle close
@@ -130,6 +132,48 @@ export default function ConversionPanel({
             flexDirection: 'column',
           }}
         >
+          {/* Apply to Layers Checkbox */}
+          <div
+            style={{
+              padding: '16px',
+              borderBottom: '1px solid var(--figma-color-border)',
+            }}
+          >
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: 'var(--figma-color-text)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={applyToLayers}
+                onChange={(e) => setApplyToLayers(e.target.checked)}
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  cursor: 'pointer',
+                }}
+              />
+              <div>
+                <div style={{ fontWeight: 500 }}>Apply converted styles to layers</div>
+                <div
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--figma-color-text-secondary)',
+                    marginTop: '4px',
+                  }}
+                >
+                  Automatically replace remote styles with new local styles on all text layers
+                </div>
+              </div>
+            </label>
+          </div>
+
           <PropertyOverridesForm
             tokens={tokens}
             overrides={propertyOverrides}

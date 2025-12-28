@@ -117,7 +117,11 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
       // Conversion Operations
       // ==================================================================
       case 'CONVERT_TO_LOCAL_STYLES':
-        await handleConvertToLocalStyles(msg.payload.sourceStyleIds, msg.payload.propertyOverrides);
+        await handleConvertToLocalStyles(
+          msg.payload.sourceStyleIds,
+          msg.payload.propertyOverrides,
+          msg.payload.applyToLayers
+        );
         break;
 
       // ==================================================================
@@ -704,20 +708,23 @@ function handleCancelReplacement(): void {
  */
 async function handleConvertToLocalStyles(
   sourceStyleIds: string[],
-  propertyOverrides: any
+  propertyOverrides: any,
+  applyToLayers: boolean = true
 ): Promise<void> {
   console.log('[Conversion] Starting conversion:', {
     sourceStyleIds,
     propertyOverrides,
+    applyToLayers,
     styleCount: sourceStyleIds.length,
   });
 
   try {
-    const result = await convertStylesToLocal({ sourceStyleIds, propertyOverrides });
+    const result = await convertStylesToLocal({ sourceStyleIds, propertyOverrides, applyToLayers });
 
     console.log('[Conversion] Conversion complete:', {
       totalConverted: result.totalConverted,
       totalFailed: result.totalFailed,
+      layersAffected: result.layersAffected,
       duration: result.duration,
     });
 
@@ -727,10 +734,15 @@ async function handleConvertToLocalStyles(
     });
 
     // Show success notification
-    const message =
-      result.totalFailed > 0
-        ? `Converted ${result.totalConverted} style(s). ${result.totalFailed} failed.`
-        : `Converted ${result.totalConverted} style(s) successfully`;
+    let message = '';
+    if (result.totalFailed > 0) {
+      message = `Converted ${result.totalConverted} style(s). ${result.totalFailed} failed.`;
+    } else {
+      message = `Converted ${result.totalConverted} style(s) successfully`;
+      if (result.layersAffected !== undefined && result.layersAffected > 0) {
+        message += ` and applied to ${result.layersAffected} layer(s)`;
+      }
+    }
     figma.notify(message);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

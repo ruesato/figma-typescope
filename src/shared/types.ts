@@ -869,6 +869,7 @@ export interface ConversionMapping {
 export interface ConversionRequest {
   sourceStyleIds: string[];
   propertyOverrides: PropertyOverrideMap;
+  applyToLayers?: boolean; // If true, automatically apply new local styles to layers using the source styles
 }
 
 /**
@@ -881,6 +882,8 @@ export interface ConversionResult {
   totalFailed: number;
   errors: string[];
   duration: number;
+  layersAffected?: number; // Number of text layers that had styles applied
+  checkpointCreated?: boolean; // Whether a version history checkpoint was created
 }
 
 // ----------------------------------------------------------------------------
