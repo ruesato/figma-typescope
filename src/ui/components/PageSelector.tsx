@@ -117,8 +117,8 @@ export default function PageSelector({ isOpen, onClose, onConfirm }: PageSelecto
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: '480px',
-          maxHeight: '600px',
+          width: '640px',
+          maxHeight: '640px',
           backgroundColor: 'var(--figma-color-bg)',
           border: '1px solid var(--figma-color-border)',
           borderRadius: '8px',
@@ -134,7 +134,7 @@ export default function PageSelector({ isOpen, onClose, onConfirm }: PageSelecto
         <div
           style={{
             padding: 'var(--figma-space-md)',
-            borderBottom: '1px solid var(--figma-color-border)',
+            // borderBottom: '1px solid var(--figma-color-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -179,8 +179,8 @@ export default function PageSelector({ isOpen, onClose, onConfirm }: PageSelecto
         {/* Controls */}
         <div
           style={{
-            padding: 'var(--figma-space-md)',
-            borderBottom: '1px solid var(--figma-color-border)',
+            padding: 'var(--figma-space-sm) var(--figma-space-md)',
+            // borderBottom: '1px solid var(--figma-color-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -202,7 +202,7 @@ export default function PageSelector({ isOpen, onClose, onConfirm }: PageSelecto
                 padding: '4px 8px',
                 fontSize: '11px',
                 fontWeight: 500,
-                border: '1px solid var(--figma-color-border)',
+                // border: '1px solid var(--figma-color-border)',
                 borderRadius: '4px',
                 backgroundColor: 'transparent',
                 color: 'var(--figma-color-text)',
@@ -227,7 +227,7 @@ export default function PageSelector({ isOpen, onClose, onConfirm }: PageSelecto
                 padding: '4px 8px',
                 fontSize: '11px',
                 fontWeight: 500,
-                border: '1px solid var(--figma-color-border)',
+                // border: '1px solid var(--figma-color-border)',
                 borderRadius: '4px',
                 backgroundColor: 'transparent',
                 color: 'var(--figma-color-text)',

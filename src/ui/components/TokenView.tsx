@@ -355,6 +355,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
           return (
             <DefaultNodeRow
               onClick={options.toggleExpansion}
+              isFocused={options.isFocused}
               leftContent={
                 <div className="flex items-center gap-2">
                   <ExpandIcon isExpanded={options.isExpanded} />
@@ -395,6 +396,7 @@ export const TokenView: React.FC<TokenViewProps> = ({
             <DefaultNodeRow
               onClick={options.handleSelect}
               isSelected={options.isSelected}
+              isFocused={options.isFocused}
               className="animate-in fade-in slide-in-from-left-4 duration-150"
               leftContent={
                 <div style={{ marginLeft: `${(node.level) * 20}px` }} />

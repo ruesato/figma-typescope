@@ -286,6 +286,7 @@ export default function StyleTreeView({
       return (
         <DefaultNodeRow
           onClick={options.toggleExpansion}
+          isFocused={options.isFocused}
           leftContent={<ExpandIcon isExpanded={options.isExpanded} />}
           rightContent={<UsageBadge count={usageCount} />}
         >
@@ -300,6 +301,7 @@ export default function StyleTreeView({
         <DefaultNodeRow
           onClick={options.handleSelect}
           isSelected={options.isSelected}
+          isFocused={options.isFocused}
           isDisabled={isDisabled || isReplacedStyle}
           style={{
             animation: isHighlighted ? 'highlight-flash 2s ease-in-out' : undefined,
@@ -339,7 +341,7 @@ export default function StyleTreeView({
     // Unstyled node
     if (node.type === 'unstyled') {
       return (
-        <DefaultNodeRow onClick={options.handleSelect}>
+        <DefaultNodeRow onClick={options.handleSelect} isFocused={options.isFocused}>
           <span className="text-sm font-medium">Needs Styling</span>
           <UsageBadge count={usageCount} variant="brand" />
         </DefaultNodeRow>

@@ -46,6 +46,7 @@ export interface TreeViewProps<T = any> {
 export interface RenderNodeOptions {
   isExpanded: boolean;
   isSelected: boolean;
+  isFocused: boolean;
   hasChildren: boolean;
   toggleExpansion: () => void;
   handleSelect: () => void;
@@ -318,13 +319,13 @@ export default function TreeView<T = any>({
                   handleNodeSelect(node);
                 }}
                 style={{
-                  outline: isFocused ? '2px solid var(--figma-color-border-brand-strong)' : 'none',
-                  outlineOffset: '-2px',
+                  outline: 'none',
                 }}
               >
                 {renderNode(node, {
                   isExpanded,
                   isSelected,
+                  isFocused,
                   hasChildren,
                   toggleExpansion: () => toggleExpansion(node.id),
                   handleSelect: () => handleNodeSelect(node),
@@ -361,6 +362,7 @@ interface DefaultNodeRowProps {
   onClick?: () => void;
   /** Styling */
   isSelected?: boolean;
+  isFocused?: boolean;
   isDisabled?: boolean;
   className?: string;
 }
@@ -374,9 +376,17 @@ export function DefaultNodeRow({
   rightContent,
   onClick,
   isSelected = false,
+  isFocused = false,
   isDisabled = false,
   className = '',
 }: DefaultNodeRowProps) {
+  // Determine background color based on state priority: selected > focused > transparent
+  const getBackgroundColor = () => {
+    if (isSelected) return 'var(--figma-color-bg-brand)';
+    if (isFocused) return 'color-mix(in srgb, var(--figma-color-bg-brand) 50%, transparent)';
+    return 'transparent';
+  };
+
   return (
     <div
       onClick={onClick}
@@ -386,19 +396,19 @@ export function DefaultNodeRow({
         gap: '8px',
         padding: '6px 8px',
         cursor: isDisabled ? 'not-allowed' : 'pointer',
-        backgroundColor: isSelected ? 'var(--figma-color-bg-brand)' : 'transparent',
+        backgroundColor: getBackgroundColor(),
         color: isSelected ? 'var(--figma-color-text-onbrand)' : 'var(--figma-color-text)',
         borderRadius: '0',
         opacity: isDisabled ? 0.6 : 1,
         transition: 'background-color 0.15s ease',
       }}
       onMouseEnter={(e) => {
-        if (!isSelected && !isDisabled) {
+        if (!isSelected && !isFocused && !isDisabled) {
           e.currentTarget.style.backgroundColor = 'var(--figma-color-bg-secondary)';
         }
       }}
       onMouseLeave={(e) => {
-        if (!isSelected && !isDisabled) {
+        if (!isSelected && !isFocused && !isDisabled) {
           e.currentTarget.style.backgroundColor = 'transparent';
         }
       }}
