@@ -146,9 +146,11 @@ export async function processAuditData(
           styles.push(result.style);
           if (result.isRemote) {
             remoteCount++;
-            console.log(`Found remote style: ${result.name} (key: ${result.key})`);
+            console.log(`[REMOTE STYLE DETECTED] ${result.name} (key: ${result.key})`);
           } else {
             localCount++;
+            // Log local styles to help diagnose detection issues
+            console.log(`[LOCAL STYLE] ${result.name} (key: ${result.key}, remote: ${result.isRemote})`);
           }
         } else {
           failedCount++;
@@ -671,40 +673,56 @@ async function convertFigmaStyleToTextStyle(
   let libraryName = 'Local';
   let libraryId = 'local';
 
+  // DEBUG: Log style properties for diagnosis
+  console.log(`[STYLE DETECTION] "${figmaStyle.name}" - remote: ${figmaStyle.remote}, key: ${figmaStyle.key}, id: ${figmaStyle.id}`);
+
+  // Determine if style is from a library using multiple signals
+  // Primary signal: figmaStyle.remote property
+  // Fallback signals: key format (contains '/'), library map lookup
+  let isRemoteStyle = figmaStyle.remote;
+
+  // Fallback detection: check if key format indicates library style
+  // Library styles typically have keys like "libraryKey/styleKey"
+  const keyParts = figmaStyle.key.split('/');
+  const hasLibraryKeyFormat = keyParts.length >= 2;
+
+  // Fallback detection: check if key matches any library in the map
+  const matchedLibrary = hasLibraryKeyFormat
+    ? libraryMap.get(keyParts[0])
+    : Array.from(libraryMap.entries()).find(
+        ([key]) => key === figmaStyle.key || key.startsWith(figmaStyle.key.substring(0, 8))
+      );
+
+  // If we found a library match but remote is false, it's likely a detection bug
+  if (!isRemoteStyle && (hasLibraryKeyFormat || matchedLibrary)) {
+    console.warn(
+      `[STYLE DETECTION FIX] Style "${figmaStyle.name}" has remote=false but appears to be from a library based on key format. Treating as remote.`
+    );
+    isRemoteStyle = true;
+  }
+
   // Resolve library information for remote styles
-  if (figmaStyle.remote) {
+  if (isRemoteStyle) {
     sourceType = 'team_library';
 
-    // Try to extract library key from style key
-    // Format could be "libraryKey/styleKey" or just a hash
-    const keyParts = figmaStyle.key.split('/');
-
-    if (keyParts.length >= 2) {
+    if (hasLibraryKeyFormat) {
       // Standard format: "libraryKey/styleKey"
       const libraryKey = keyParts[0];
       const resolvedName = libraryMap.get(libraryKey);
       libraryName = resolvedName || `Library (${libraryKey.substring(0, 8)}...)`;
       libraryId = libraryKey;
+    } else if (matchedLibrary) {
+      // Found a matching library via hash
+      libraryId = matchedLibrary[0];
+      libraryName = matchedLibrary[1];
     } else {
-      // Hash-based format: just the hash
-      // Try to match the hash against library keys in the map (exact or prefix match)
-      const matchedLibrary = Array.from(libraryMap.entries()).find(
-        ([key]) => key === figmaStyle.key || key.startsWith(figmaStyle.key.substring(0, 8))
+      // No match - group all unknown remote styles together to prevent
+      // creating a separate "library" for each style
+      libraryId = 'remote-unknown';
+      libraryName = 'Remote Library';
+      console.log(
+        `Style "${figmaStyle.name}" (key: ${figmaStyle.key}) - no library match found, grouping as "Remote Library"`
       );
-
-      if (matchedLibrary) {
-        // Found a matching library
-        libraryId = matchedLibrary[0];
-        libraryName = matchedLibrary[1];
-      } else {
-        // No match - group all unknown remote styles together to prevent
-        // creating a separate "library" for each style
-        libraryId = 'remote-unknown';
-        libraryName = 'Remote Library';
-        console.log(
-          `Style "${figmaStyle.name}" (key: ${figmaStyle.key}) - no library match found, grouping as "Remote Library"`
-        );
-      }
     }
   }
 
