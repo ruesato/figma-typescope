@@ -17,8 +17,126 @@ import type {
   RGBA,
 } from '@/shared/types';
 
+import { traverseTextNodes } from '@/main/utils/traversal';
+import { BatchProcessor } from '@/main/replacement/batchProcessor';
+
+/**
+ * Build a map of style IDs to text layers using a single document traversal
+ *
+ * PERFORMANCE: This is 10-100x faster than calling findLayersUsingStyle() for each style
+ * because it traverses the document only ONCE instead of N times.
+ *
+ * @param styleIds - Array of style IDs to find layers for
+ * @param cancelFn - Optional function that returns true if operation should be cancelled
+ * @returns Map of style ID to array of text nodes using that style
+ */
+async function buildStyleToLayersMap(
+  styleIds: string[],
+  cancelFn?: () => boolean
+): Promise<{ [styleId: string]: TextNode[] }> {
+  console.log(`[ConversionEngine] Building style-to-layers map for ${styleIds.length} styles...`);
+
+  const map: { [styleId: string]: TextNode[] } = {};
+  const styleIdSet = new Set(styleIds);
+
+  // Initialize map with empty arrays
+  for (const styleId of styleIds) {
+    map[styleId] = [];
+  }
+
+  // Single traversal using optimized API (10-100x faster than recursive traversal)
+  const allTextNodes = await traverseTextNodes(figma.root, cancelFn);
+  console.log(`[ConversionEngine] Found ${allTextNodes.length} text nodes in document`);
+
+  // Build map in single pass
+  for (const node of allTextNodes) {
+    if (node.textStyleId && styleIdSet.has(node.textStyleId)) {
+      map[node.textStyleId].push(node);
+    }
+  }
+
+  // Log statistics
+  const totalLayers = Object.values(map).reduce((sum, layers) => sum + layers.length, 0);
+  console.log(`[ConversionEngine] Mapped ${totalLayers} layers to ${styleIds.length} styles`);
+
+  return map;
+}
+
+/**
+ * Apply a style to layers in batches with progress callbacks
+ *
+ * PERFORMANCE: Uses adaptive batching (100→25→100) to:
+ * - Prevent memory accumulation
+ * - Yield to event loop (prevent "Plugin not responding")
+ * - Recover from errors gracefully
+ *
+ * @param layers - Array of text nodes to update
+ * @param newStyleId - ID of the style to apply
+ * @param progressCallback - Optional callback for progress updates
+ * @param cancelFn - Optional function that returns true if operation should be cancelled
+ * @returns Statistics about the operation
+ */
+async function applyStyleToLayersInBatches(
+  layers: TextNode[],
+  newStyleId: string,
+  progressCallback?: (updated: number, total: number) => void,
+  cancelFn?: () => boolean
+): Promise<{ updated: number; failed: number; errors: string[] }> {
+  const batchProcessor = new BatchProcessor({
+    initialBatchSize: 100,
+    minBatchSize: 25,
+    maxBatchSize: 100,
+    successThreshold: 5,
+  });
+
+  let updated = 0;
+  let failed = 0;
+  const errors: string[] = [];
+  const total = layers.length;
+
+  console.log(`[ConversionEngine] Applying style to ${total} layers in batches...`);
+
+  for await (const result of batchProcessor.processBatches(
+    layers,
+    async (layer) => {
+      // Check for cancellation
+      if (cancelFn?.()) {
+        throw new Error('Conversion cancelled by user');
+      }
+
+      // Apply the new style
+      layer.textStyleId = newStyleId;
+    }
+  )) {
+    updated += result.layersProcessed;
+    failed += result.layersFailed;
+
+    // Collect errors
+    for (const error of result.errors) {
+      errors.push(`Layer ${error.layerName}: ${error.error.message}`);
+    }
+
+    // Emit progress callback
+    if (progressCallback) {
+      progressCallback(updated, total);
+    }
+
+    // Log batch completion
+    console.log(
+      `[ConversionEngine] Batch ${result.batchNumber}: ${result.layersProcessed} layers processed, ${result.layersFailed} failed`
+    );
+  }
+
+  console.log(`[ConversionEngine] Applied style to ${updated}/${total} layers (${failed} failed)`);
+
+  return { updated, failed, errors };
+}
+
 /**
  * Scan document to find all text nodes using a specific style
+ *
+ * DEPRECATED: Use buildStyleToLayersMap() for better performance when processing multiple styles.
+ * This function is kept for backward compatibility.
  */
 function findLayersUsingStyle(styleId: string): TextNode[] {
   const affectedLayers: TextNode[] = [];
@@ -53,7 +171,13 @@ export async function convertStylesToLocal(
   request: ConversionRequest
 ): Promise<ConversionResult> {
   const startTime = Date.now();
-  const { sourceStyleIds, propertyOverrides, applyToLayers = true } = request;
+  const {
+    sourceStyleIds,
+    propertyOverrides,
+    applyToLayers = true,
+    progressCallback,
+    cancelFn,
+  } = request as any; // Cast to any to access optional new properties
 
   console.log(`[ConversionEngine] Converting ${sourceStyleIds.length} styles with overrides:`, propertyOverrides);
   console.log(`[ConversionEngine] Apply to layers: ${applyToLayers}`);
@@ -64,8 +188,26 @@ export async function convertStylesToLocal(
   let layersAffected = 0;
   let checkpointCreated = false;
 
-  // Create version history checkpoint if applying to layers
+  // Phase 1: Validation (0-5%)
+  if (progressCallback) {
+    progressCallback({
+      state: 'validating',
+      phase: 'styles',
+      percentage: 0,
+      totalStyles: sourceStyleIds.length,
+    });
+  }
+
+  // Create version history checkpoint if applying to layers (5-10%)
   if (applyToLayers) {
+    if (progressCallback) {
+      progressCallback({
+        state: 'creating_checkpoint',
+        phase: 'styles',
+        percentage: 5,
+      });
+    }
+
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
       await figma.saveVersionHistoryAsync(`Convert to Local Styles - ${timestamp}`);
@@ -77,11 +219,40 @@ export async function convertStylesToLocal(
     }
   }
 
+  // Phase 2: Scan document ONCE to build style-to-layers map (10-20%)
+  let styleToLayersMap: { [styleId: string]: TextNode[] } = {};
+  if (applyToLayers) {
+    if (progressCallback) {
+      progressCallback({
+        state: 'scanning',
+        phase: 'layers',
+        percentage: 10,
+      });
+    }
+
+    styleToLayersMap = await buildStyleToLayersMap(sourceStyleIds, cancelFn);
+
+    if (progressCallback) {
+      progressCallback({
+        state: 'scanning',
+        phase: 'layers',
+        percentage: 20,
+      });
+    }
+  }
+
   // Get existing local style names to avoid conflicts
   const existingNames = new Set(figma.getLocalTextStyles().map(s => s.name));
 
+  // Phase 3: Create local styles with overrides (20-50%)
+  let styleIndex = 0;
   for (const styleId of sourceStyleIds) {
     try {
+      // Check for cancellation
+      if (cancelFn && cancelFn()) {
+        throw new Error('Conversion cancelled by user');
+      }
+
       // Get source style
       const sourceStyle = await figma.getStyleByIdAsync(styleId);
       if (!sourceStyle || sourceStyle.type !== 'TEXT') {
@@ -113,30 +284,87 @@ export async function convertStylesToLocal(
 
       console.log(`[ConversionEngine] Created local style: ${newStyleName} (from ${sourceStyle.name})`);
 
-      // Apply new local style to layers currently using the source style
-      if (applyToLayers) {
-        const affectedLayers = findLayersUsingStyle(styleId);
-        console.log(`[ConversionEngine] Found ${affectedLayers.length} layers using style ${sourceStyle.name}`);
-
-        for (const layer of affectedLayers) {
-          try {
-            // Simply apply the new local style - no font loading needed
-            // The style itself already has fonts loaded or variable bindings
-            layer.textStyleId = newFigmaStyle.id;
-            layersAffected++;
-            console.log(`[ConversionEngine] Applied style to layer: ${layer.name}`);
-          } catch (applyError) {
-            console.error(`[ConversionEngine] Failed to apply style to layer ${layer.name}:`, applyError);
-            // Continue with other layers
-          }
-        }
-
-        console.log(`[ConversionEngine] Successfully applied local style to ${layersAffected} layers`);
+      // Report progress
+      styleIndex++;
+      if (progressCallback) {
+        const percentage = 20 + Math.round((styleIndex / sourceStyleIds.length) * 30); // 20-50%
+        progressCallback({
+          state: 'converting',
+          phase: 'styles',
+          percentage,
+          stylesCreated: styleIndex,
+          totalStyles: sourceStyleIds.length,
+          currentStyleName: newStyleName,
+        });
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       errors.push(`Failed to convert style ${styleId}: ${errorMsg}`);
       console.error(`[ConversionEngine] Error converting style ${styleId}:`, error);
+    }
+  }
+
+  // Phase 4: Apply styles to layers in batches (50-100%)
+  if (applyToLayers && stylesMapped.length > 0) {
+    let totalLayersProcessed = 0;
+    const totalLayersToProcess = Object.values(styleToLayersMap).reduce(
+      (sum, layers) => sum + layers.length,
+      0
+    );
+
+    for (const mapping of stylesMapped) {
+      const layers = styleToLayersMap[mapping.sourceStyleId] || [];
+
+      if (layers.length === 0) {
+        console.log(`[ConversionEngine] No layers found for style ${mapping.sourceStyleName}`);
+        continue;
+      }
+
+      console.log(
+        `[ConversionEngine] Applying style ${mapping.newStyleName} to ${layers.length} layers...`
+      );
+
+      try {
+        const result = await applyStyleToLayersInBatches(
+          layers,
+          mapping.newStyleId,
+          (updated, total) => {
+            // Calculate overall progress (50-100%)
+            const phaseProgress = (totalLayersProcessed + updated) / totalLayersToProcess;
+            const percentage = 50 + Math.round(phaseProgress * 50);
+
+            if (progressCallback) {
+              progressCallback({
+                state: 'applying',
+                phase: 'layers',
+                percentage,
+                layersProcessed: totalLayersProcessed + updated,
+                totalLayers: totalLayersToProcess,
+              });
+            }
+          },
+          cancelFn
+        );
+
+        layersAffected += result.updated;
+        totalLayersProcessed += layers.length;
+
+        // Collect errors from batch processing
+        if (result.errors.length > 0) {
+          errors.push(...result.errors);
+        }
+
+        console.log(
+          `[ConversionEngine] Applied style ${mapping.newStyleName} to ${result.updated}/${layers.length} layers`
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`Failed to apply style ${mapping.newStyleName}: ${errorMsg}`);
+        console.error(
+          `[ConversionEngine] Error applying style ${mapping.newStyleName}:`,
+          error
+        );
+      }
     }
   }
 

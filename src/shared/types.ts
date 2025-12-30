@@ -210,7 +210,8 @@ export type UIToMainMessage =
         sourceStyleIds: string[];
         propertyOverrides: PropertyOverrideMap;
       };
-    };
+    }
+  | { type: 'CANCEL_CONVERSION' };
 
 /**
  * Messages sent from main context to UI context (audit status updates and results)
@@ -381,6 +382,18 @@ export type MainToUIMessage =
   | { type: 'PAGES_LIST'; payload: { pages: Array<{ id: string; name: string }> } }
 
   // Conversion messages
+  | {
+      type: 'CONVERSION_STARTED';
+      payload: {
+        totalStyles: number;
+        estimatedLayers: number;
+        willApplyToLayers: boolean;
+      };
+    }
+  | {
+      type: 'CONVERSION_PROGRESS';
+      payload: ConversionProgress;
+    }
   | {
       type: 'CONVERSION_COMPLETE';
       payload: {
@@ -870,6 +883,27 @@ export interface ConversionRequest {
   sourceStyleIds: string[];
   propertyOverrides: PropertyOverrideMap;
   applyToLayers?: boolean; // If true, automatically apply new local styles to layers using the source styles
+  progressCallback?: (progress: ConversionProgress) => void; // NEW: Progress updates during conversion
+  cancelFn?: () => boolean; // NEW: Function that returns true if conversion should be cancelled
+}
+
+/**
+ * Progress information during conversion
+ * NEW: Added for memory-efficient batch processing
+ */
+export interface ConversionProgress {
+  state: 'validating' | 'creating_checkpoint' | 'scanning' | 'converting' | 'applying';
+  phase: 'styles' | 'layers';
+  percentage: number; // 0-100
+
+  // Style creation phase
+  stylesCreated?: number;
+  totalStyles?: number;
+  currentStyleName?: string;
+
+  // Layer application phase
+  layersProcessed?: number;
+  totalLayers?: number;
 }
 
 /**

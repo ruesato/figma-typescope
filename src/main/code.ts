@@ -124,6 +124,10 @@ figma.ui.onmessage = async (msg: UIToMainMessage) => {
         );
         break;
 
+      case 'CANCEL_CONVERSION':
+        handleCancelConversion();
+        break;
+
       // ==================================================================
       // Export Operations
       // ==================================================================
@@ -702,6 +706,9 @@ function handleCancelReplacement(): void {
 // Conversion Handler
 // ============================================================================
 
+// Cancellation flag for conversion operation
+let conversionCancelFlag = false;
+
 /**
  * Handle CONVERT_TO_LOCAL_STYLES message
  * Converts remote text styles to local styles with optional property overrides
@@ -718,8 +725,34 @@ async function handleConvertToLocalStyles(
     styleCount: sourceStyleIds.length,
   });
 
+  // Reset cancellation flag
+  conversionCancelFlag = false;
+
   try {
-    const result = await convertStylesToLocal({ sourceStyleIds, propertyOverrides, applyToLayers });
+    // Send start message
+    sendMessage({
+      type: 'CONVERSION_STARTED',
+      payload: {
+        totalStyles: sourceStyleIds.length,
+        estimatedLayers: 0, // Could estimate from quick scan if needed
+        willApplyToLayers: applyToLayers,
+      },
+    });
+
+    const result = await convertStylesToLocal({
+      sourceStyleIds,
+      propertyOverrides,
+      applyToLayers,
+      // Progress callback
+      progressCallback: (progress) => {
+        sendMessage({
+          type: 'CONVERSION_PROGRESS',
+          payload: progress,
+        });
+      },
+      // Cancellation check
+      cancelFn: () => conversionCancelFlag,
+    });
 
     console.log('[Conversion] Conversion complete:', {
       totalConverted: result.totalConverted,
@@ -748,6 +781,12 @@ async function handleConvertToLocalStyles(
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[Conversion] Error:', errorMessage);
 
+    // Check if error was due to cancellation
+    if (errorMessage.includes('cancelled') || errorMessage.includes('Cancelled')) {
+      figma.notify('Conversion cancelled');
+      return;
+    }
+
     sendMessage({
       type: 'CONVERSION_ERROR',
       payload: {
@@ -758,6 +797,14 @@ async function handleConvertToLocalStyles(
 
     figma.notify(`Conversion failed: ${errorMessage}`, { error: true });
   }
+}
+
+/**
+ * Handle CANCEL_CONVERSION message
+ */
+function handleCancelConversion(): void {
+  console.log('[Conversion] Cancellation requested');
+  conversionCancelFlag = true;
 }
 
 // ============================================================================
