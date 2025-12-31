@@ -204,16 +204,19 @@ export default function StyleTreeView({
     return tree;
   }, [styles, libraries, unstyledLayers, groupByLibrary, replacementHistory, replacedStyleIds]);
 
-  // Update expansion state when tree structure changes to expand top-level nodes
+  // Initialize expansion state to expand top-level nodes (only on first render or major data change)
   useEffect(() => {
-    const expanded = new Set<string>();
-    treeData.forEach((node) => {
-      if (node.type === 'library' || node.type === 'unstyled') {
-        expanded.add(node.id);
-      }
-    });
-    setExpandedNodeIds(expanded);
-  }, [treeData]);
+    // Only auto-expand if we have no expansion state yet (first load or major reset)
+    if (expandedNodeIds.size === 0) {
+      const expanded = new Set<string>();
+      treeData.forEach((node) => {
+        if (node.type === 'library' || node.type === 'unstyled') {
+          expanded.add(node.id);
+        }
+      });
+      setExpandedNodeIds(expanded);
+    }
+  }, [treeData, expandedNodeIds.size]);
 
   // Apply search filtering using fuzzy search
   const searchFilteredStyles = useFuzzySearch(

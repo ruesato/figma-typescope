@@ -1034,23 +1034,47 @@ function buildLibrarySources(styles: TextStyle[], libraryMap: Map<string, string
   });
 
   // Add all remote libraries from the enhanced library map
+  // Group library keys by library name to avoid duplicates (e.g., multiple remote style keys mapping to "Published Libraries")
+  const libraryNameToKeys = new Map<string, string[]>();
   for (const [libraryKey, libraryName] of libraryMap.entries()) {
-    // Skip local (already added) and remote-unknown (handled separately)
     if (libraryKey === 'local') continue;
 
-    const libraryStyles = stylesByLibrary.get(libraryKey) || [];
+    if (!libraryNameToKeys.has(libraryName)) {
+      libraryNameToKeys.set(libraryName, []);
+    }
+    libraryNameToKeys.get(libraryName)!.push(libraryKey);
+  }
+
+  // Create one library object per unique name (consolidating all keys that map to the same name)
+  for (const [libraryName, libraryKeys] of libraryNameToKeys.entries()) {
+    // Collect all styles from all keys that map to this library name
+    const allLibraryStyles: TextStyle[] = [];
+    for (const libraryKey of libraryKeys) {
+      const libraryStyles = stylesByLibrary.get(libraryKey) || [];
+      allLibraryStyles.push(...libraryStyles);
+    }
+
+    // Skip if no styles found
+    if (allLibraryStyles.length === 0) continue;
+
+    // Use the first library key as the ID (for backward compatibility)
+    const libraryId = libraryKeys[0];
 
     libraries.push({
-      id: libraryKey,
+      id: libraryId,
       name: libraryName,
       type: 'team_library',
       isEnabled: true,
       isAvailable: true,
-      styleCount: libraryStyles.length,
-      styleIds: libraryStyles.map((s) => s.id),
+      styleCount: allLibraryStyles.length,
+      styleIds: allLibraryStyles.map((s) => s.id),
       totalUsageCount: 0,
       usagePercentage: 0,
     });
+
+    console.log(
+      `[BUILD LIBRARIES] Consolidated library "${libraryName}": ${libraryKeys.length} keys → ${allLibraryStyles.length} styles`
+    );
   }
 
   // Add any styles from unknown remote libraries (styles that didn't match any library)
