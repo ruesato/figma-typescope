@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import TreeView, { TreeNode, DefaultNodeRow, ExpandIcon, UsageBadge } from './TreeView';
 import { useFuzzySearch } from '@/ui/hooks/useFuzzySearch';
 import type { TextStyle, TextLayer, LibrarySource } from '@/shared/types';
@@ -71,6 +71,9 @@ export default function StyleTreeView({
 
   // Expansion state
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+
+  // Track if we've initialized expansion for current tree (to avoid re-expanding on every render)
+  const lastTreeDataRef = useRef<TreeNode<TextStyle>[]>([]);
 
   // Sync prop changes to internal state
   useEffect(() => {
@@ -204,10 +207,15 @@ export default function StyleTreeView({
     return tree;
   }, [styles, libraries, unstyledLayers, groupByLibrary, replacementHistory, replacedStyleIds]);
 
-  // Initialize expansion state to expand top-level nodes (only on first render or major data change)
+  // Initialize expansion state when tree data changes (new audit or structure change)
   useEffect(() => {
-    // Only auto-expand if we have no expansion state yet (first load or major reset)
-    if (expandedNodeIds.size === 0) {
+    // Check if tree data has actually changed (by comparing top-level node IDs)
+    const currentTreeNodeIds = treeData.map(n => n.id).join(',');
+    const lastTreeNodeIds = lastTreeDataRef.current.map(n => n.id).join(',');
+
+    // Only auto-expand if this is genuinely new tree data
+    if (currentTreeNodeIds !== lastTreeNodeIds) {
+      console.log('[STYLE TREE VIEW] Tree structure changed, initializing expansion state');
       const expanded = new Set<string>();
       treeData.forEach((node) => {
         if (node.type === 'library' || node.type === 'unstyled') {
@@ -215,8 +223,9 @@ export default function StyleTreeView({
         }
       });
       setExpandedNodeIds(expanded);
+      lastTreeDataRef.current = treeData;
     }
-  }, [treeData, expandedNodeIds.size]);
+  }, [treeData]);
 
   // Apply search filtering using fuzzy search
   const searchFilteredStyles = useFuzzySearch(
