@@ -1,446 +1,192 @@
-import React, { useMemo } from 'react';
-import type { AuditResult, StyleGovernanceAuditResult } from '@/shared/types';
-import packageJson from '../../../package.json';
+/**
+ * Analytics Dashboard - Displays text style and token usage metrics
+ *
+ * Layout:
+ * - Row 1: 3 stat cards (Text Styles, Tokens, Unstyled Layers)
+ * - Row 2: 2 columns
+ *   - Left: Style Usage by Library, Top 10 Text Styles
+ *   - Right: Token Coverage, Top 10 Type Tokens
+ */
+
+import { useMemo } from 'react';
+import type { StyleGovernanceAuditResult } from '@/shared/types';
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface AnalyticsDashboardProps {
-  auditResult: AuditResult | StyleGovernanceAuditResult;
+  auditResult: StyleGovernanceAuditResult | null;
   isLoading?: boolean;
-  error?: string;
+  error?: string | null;
 }
 
-/**
- * Animated Counter Component
- * Animates numeric values from 0 to final value using CSS animation
- */
-function AnimatedCounter({
-  value,
-  suffix = '',
-  decimals = 0,
-}: {
-  value: number;
-  suffix?: string;
-  decimals?: number;
-}) {
-  const displayValue = value.toFixed(decimals);
-
-  return (
-    <span
-      className="inline-block animate-fadeInUp"
-      style={{
-        animation: 'fadeInUp 0.6s ease-out',
-      }}
-    >
-      {displayValue}
-      {suffix}
-    </span>
-  );
-}
-
-/**
- * Metric Card Component
- * Displays a single metric with animated counter
- */
-function MetricCard({
-  label,
-  value,
-  suffix = '',
-  decimals = 0,
-  icon,
-  variant = 'default',
-}: {
+interface StatCardProps {
   label: string;
+  used: number;
+  total: number;
+  variant: 'styles' | 'tokens' | 'neutral';
+}
+
+interface DataListItem {
+  id: string;
+  name: string;
   value: number;
-  suffix?: string;
-  decimals?: number;
-  icon?: string;
-  variant?: 'default' | 'success' | 'warning' | 'danger';
-}) {
-  const variantClasses = {
-    default: 'border-figma-border',
-    success: 'border-green-400',
-    warning: 'border-yellow-400',
-    danger: 'border-red-400',
-  };
+}
+
+interface DataListProps {
+  title: string;
+  items: DataListItem[];
+  variant: 'styles' | 'tokens';
+  emptyMessage?: string;
+}
+
+interface UsageCardProps {
+  title: string;
+  items: Array<{ name: string; value: number }>;
+  variant: 'styles' | 'tokens';
+}
+
+// ============================================================================
+// Color Utilities
+// ============================================================================
+
+const variantColors = {
+  styles: {
+    bg: 'bg-[#0c1b33]',
+    border: 'border-blue-800/30',
+    accent: 'text-blue-400',
+    bar: 'bg-blue-500',
+    barBg: 'bg-blue-900/50',
+  },
+  tokens: {
+    bg: 'bg-[#120522]',
+    border: 'border-purple-800/30',
+    accent: 'text-purple-400',
+    bar: 'bg-purple-500',
+    barBg: 'bg-purple-900/50',
+  },
+  neutral: {
+    bg: 'bg-[#0a0a0a]',
+    border: 'border-zinc-800/50',
+    accent: 'text-zinc-400',
+    bar: 'bg-zinc-500',
+    barBg: 'bg-zinc-800/50',
+  },
+};
+
+// ============================================================================
+// Components
+// ============================================================================
+
+/**
+ * Stat Card - Displays a single metric with used/total count
+ */
+function StatCard({ label, used, total, variant }: StatCardProps) {
+  const colors = variantColors[variant];
+  const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
 
   return (
     <div
-      className={`border rounded-lg p-4 bg-figma-bg-secondary ${variantClasses[variant]} animate-fadeInScale`}
-      style={{
-        animation: 'fadeInScale 0.4s ease-out',
-      }}
+      className={`rounded-lg p-4 ${colors.bg} border ${colors.border} flex flex-col gap-2`}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-figma-text-secondary text-xs font-medium mb-2">{label}</p>
-          <p className="text-2xl font-bold text-figma-text">
-            <AnimatedCounter value={value} suffix={suffix} decimals={decimals} />
-          </p>
-        </div>
-        {icon && <span className="text-2xl ml-2">{icon}</span>}
+      <div className="text-xs text-zinc-400 uppercase tracking-wide">
+        {label}
+      </div>
+      <div className="text-2xl font-semibold text-white">
+        {used.toLocaleString()}{' '}
+        <span className="text-sm font-normal text-zinc-500">
+          of {total.toLocaleString()}
+        </span>
+      </div>
+      <div className={`h-1 rounded-full ${colors.barBg} overflow-hidden`}>
+        <div
+          className={`h-full ${colors.bar} rounded-full transition-all duration-300`}
+          style={{ width: `${percentage}%` }}
+        />
       </div>
     </div>
   );
 }
 
 /**
- * Skeleton Loader Component
- * Displays loading state for metric cards
+ * Usage Card - Displays breakdown with horizontal bars
  */
-function MetricSkeleton() {
+function UsageCard({ title, items, variant }: UsageCardProps) {
+  const colors = variantColors[variant];
+  const maxValue = Math.max(...items.map((i) => i.value), 1);
+
   return (
-    <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="h-3 bg-figma-border rounded w-20 mb-3"></div>
-          <div className="h-8 bg-figma-border rounded w-16"></div>
-        </div>
-        <div className="h-8 w-8 bg-figma-border rounded"></div>
+    <div
+      className={`rounded-lg p-4 ${colors.bg} border ${colors.border} flex flex-col gap-3`}
+    >
+      <div className="text-sm font-medium text-white">{title}</div>
+      <div className="flex flex-col gap-2">
+        {items.length === 0 ? (
+          <div className="text-xs text-zinc-500 italic">No data available</div>
+        ) : (
+          items.map((item, idx) => (
+            <div key={idx} className="flex flex-col gap-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-zinc-300 truncate max-w-[180px]">
+                  {item.name}
+                </span>
+                <span className={colors.accent}>
+                  {item.value.toLocaleString()}
+                </span>
+              </div>
+              <div
+                className={`h-1.5 rounded-full ${colors.barBg} overflow-hidden`}
+              >
+                <div
+                  className={`h-full ${colors.bar} rounded-full transition-all duration-300`}
+                  style={{ width: `${(item.value / maxValue) * 100}%` }}
+                />
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
 /**
- * Top Styles Table Component
- * Shows the 10 most used styles with adoption metrics
+ * Data List - Displays a ranked list of items with counts
  */
-function TopStylesTable({
-  styles,
-  totalLayers,
-  isLoading = false,
-}: {
-  styles: Array<{
-    styleName: string;
-    libraryName: string;
-    usageCount: number;
-  }>;
-  totalLayers: number;
-  isLoading?: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-10 bg-figma-border rounded animate-pulse"></div>
-        ))}
-      </div>
-    );
-  }
+function DataList({
+  title,
+  items,
+  variant,
+  emptyMessage = 'No items found',
+}: DataListProps) {
+  const colors = variantColors[variant];
 
   return (
     <div
-      className="overflow-x-auto animate-fadeIn"
-      style={{
-        animation: 'fadeIn 0.5s ease-out 0.2s forwards',
-        opacity: 0,
-      }}
+      className={`rounded-lg p-4 ${colors.bg} border ${colors.border} flex flex-col gap-3 flex-1`}
     >
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-figma-border">
-            <th className="text-left py-2 px-2 text-figma-text-secondary font-semibold text-xs">
-              Style Name
-            </th>
-            <th className="text-left py-2 px-2 text-figma-text-secondary font-semibold text-xs">
-              Library
-            </th>
-            <th className="text-right py-2 px-2 text-figma-text-secondary font-semibold text-xs">
-              Usage
-            </th>
-            <th className="text-right py-2 px-2 text-figma-text-secondary font-semibold text-xs">
-              Adoption
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {styles.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="text-center py-4 text-figma-text-tertiary text-xs">
-                No styles found
-              </td>
-            </tr>
-          ) : (
-            styles.slice(0, 10).map((style, index) => {
-              const adoptionPercent = totalLayers
-                ? ((style.usageCount / totalLayers) * 100).toFixed(1)
-                : '0';
-
-              return (
-                <tr
-                  key={`${style.styleName}-${index}`}
-                  className="border-b border-figma-border hover:bg-figma-bg-tertiary transition-colors animate-fadeInLeft"
-                  style={{
-                    animation: `fadeInLeft 0.3s ease-out ${index * 0.05}s forwards`,
-                    opacity: 0,
-                  }}
-                >
-                  <td className="py-2 px-2 text-figma-text truncate">{style.styleName}</td>
-                  <td className="py-2 px-2 text-figma-text-secondary text-xs truncate">
-                    {style.libraryName}
-                  </td>
-                  <td className="py-2 px-2 text-right text-figma-text font-medium">
-                    {style.usageCount}
-                  </td>
-                  <td className="py-2 px-2 text-right text-figma-text font-medium">
-                    {adoptionPercent}%
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/**
- * Library Distribution Card Component
- * Shows breakdown of styles by library
- */
-function LibraryDistributionCard({
-  distribution,
-  isLoading = false,
-}: {
-  distribution: Record<string, number>;
-  isLoading?: boolean;
-}) {
-  const total = Object.values(distribution).reduce((sum, count) => sum + count, 0);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between p-2 bg-figma-border rounded animate-pulse"
-          >
-            <div className="h-4 bg-figma-bg-tertiary rounded w-24"></div>
-            <div className="h-4 bg-figma-bg-tertiary rounded w-12"></div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const entries = Object.entries(distribution).sort(([, a], [, b]) => b - a);
-
-  return (
-    <div
-      className="space-y-3 animate-fadeIn"
-      style={{
-        animation: 'fadeIn 0.5s ease-out 0.1s forwards',
-        opacity: 0,
-      }}
-    >
-      {entries.length === 0 ? (
-        <p className="text-figma-text-tertiary text-xs text-center py-4">
-          No library data available
-        </p>
-      ) : (
-        entries.map(([libraryName, count], index) => {
-          const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : '0';
-          const barWidth = total > 0 ? (count / total) * 100 : 0;
-
-          return (
+      <div className="text-sm font-medium text-white">{title}</div>
+      <div className="flex flex-col gap-1 overflow-auto max-h-[240px]">
+        {items.length === 0 ? (
+          <div className="text-xs text-zinc-500 italic">{emptyMessage}</div>
+        ) : (
+          items.map((item, idx) => (
             <div
-              key={libraryName}
-              className="animate-fadeInLeft"
-              style={{
-                animation: `fadeInLeft 0.3s ease-out ${index * 0.05}s forwards`,
-                opacity: 0,
-              }}
+              key={item.id}
+              className="flex items-center gap-2 py-1.5 border-b border-zinc-800/30 last:border-b-0"
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-figma-text text-xs font-medium truncate">{libraryName}</span>
-                <span className="text-figma-text-secondary text-xs ml-2">{percentage}%</span>
-              </div>
-              <div className="w-full h-2 bg-figma-border rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-all duration-600"
-                  style={{
-                    width: `${barWidth}%`,
-                    animation: `slideInRight 0.6s ease-out ${index * 0.05}s forwards`,
-                  }}
-                ></div>
-              </div>
+              <span className="text-xs text-zinc-500 w-5 text-right">
+                {idx + 1}.
+              </span>
+              <span className="text-xs text-zinc-300 truncate flex-1">
+                {item.name}
+              </span>
+              <span className={`text-xs ${colors.accent} tabular-nums`}>
+                {item.value.toLocaleString()}
+              </span>
             </div>
-          );
-        })
-      )}
-    </div>
-  );
-}
-
-/**
- * Usage Comparison Card Component
- * Displays token vs style usage visualization
- */
-function UsageComparisonCard({
-  styleAdoptionRate,
-  tokenCoverageRate,
-  mixedUsageCount,
-  totalLayers,
-  isLoading = false,
-}: {
-  styleAdoptionRate: number;
-  tokenCoverageRate: number;
-  mixedUsageCount: number;
-  totalLayers: number;
-  isLoading?: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="h-6 bg-figma-border rounded animate-pulse"></div>
-        <div className="h-6 bg-figma-border rounded animate-pulse"></div>
-        <div className="h-6 bg-figma-border rounded animate-pulse"></div>
-      </div>
-    );
-  }
-
-  const mixedUsagePercent =
-    totalLayers > 0 ? ((mixedUsageCount / totalLayers) * 100).toFixed(1) : '0';
-
-  return (
-    <div
-      className="space-y-4 animate-fadeIn"
-      style={{
-        animation: 'fadeIn 0.5s ease-out 0.15s forwards',
-        opacity: 0,
-      }}
-    >
-      {/* Style Usage Bar */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-figma-text text-sm font-medium">Style Usage</span>
-          <span className="text-figma-text font-semibold">{styleAdoptionRate.toFixed(1)}%</span>
-        </div>
-        <div className="w-full h-3 bg-figma-border rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-green-400 to-green-500 rounded-full transition-all duration-600"
-            style={{
-              width: `${styleAdoptionRate}%`,
-              animation: 'slideInRight 0.6s ease-out forwards',
-            }}
-          ></div>
-        </div>
-      </div>
-
-      {/* Token Usage Bar */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-figma-text text-sm font-medium">Token Coverage</span>
-          <span className="text-figma-text font-semibold">{tokenCoverageRate.toFixed(1)}%</span>
-        </div>
-        <div className="w-full h-3 bg-figma-border rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-purple-400 to-purple-500 rounded-full transition-all duration-600"
-            style={{
-              width: `${tokenCoverageRate}%`,
-              animation: 'slideInRight 0.6s ease-out 0.1s forwards',
-            }}
-          ></div>
-        </div>
-      </div>
-
-      {/* Mixed Usage */}
-      <div className="pt-2 border-t border-figma-border">
-        <div className="flex items-center justify-between">
-          <span className="text-figma-text-secondary text-sm">Mixed Usage</span>
-          <span className="text-figma-text font-semibold">
-            {mixedUsageCount} ({mixedUsagePercent}%)
-          </span>
-        </div>
-        <p className="text-figma-text-tertiary text-xs mt-1">Layers using both styles and tokens</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Analytics Dashboard Component
- *
- * Displays key metrics and usage analytics for design system adoption.
- * Includes:
- * - 4 key metric cards with animated counters
- * - Top 10 most used styles table
- * - Library distribution breakdown
- * - Token vs style usage comparison
- *
- * @example
- * ```tsx
- * <AnalyticsDashboard
- *   auditResult={result}
- *   isLoading={false}
- * />
- * ```
- */
-
-/**
- * Token Inventory Section Component
- * Displays total token count and breakdown by collection
- */
-function TokenInventorySection({
-  totalTokenCount,
-  tokensByCollection,
-  isLoading = false,
-}: {
-  totalTokenCount: number;
-  tokensByCollection: Record<string, number>;
-  isLoading?: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
-        <div className="h-6 bg-figma-border rounded w-32 mb-4"></div>
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-4 bg-figma-border rounded w-40"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const collections = Object.entries(tokensByCollection).sort((a, b) => b[1] - a[1]);
-
-  return (
-    <div
-      className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
-      style={{
-        animation: 'fadeInScale 0.4s ease-out 0.2s forwards',
-        opacity: 0,
-      }}
-    >
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xl">🎨</span>
-        <h3 className="text-sm font-semibold text-figma-text">Token Inventory</h3>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
-          <span className="text-xs text-figma-text-secondary">Total Tokens:</span>
-          <span className="text-sm font-semibold text-figma-text">{totalTokenCount}</span>
-        </div>
-
-        {collections.length > 0 && (
-          <>
-            <div className="text-xs text-figma-text-secondary font-medium mt-3 mb-2">
-              By Collection:
-            </div>
-            <div className="space-y-2">
-              {collections.map(([collectionName, count]) => (
-                <div
-                  key={collectionName}
-                  className="flex justify-between items-center p-2 bg-figma-bg rounded text-xs"
-                >
-                  <span className="text-figma-text-secondary">{collectionName}</span>
-                  <span className="text-figma-text font-medium">{count}</span>
-                </div>
-              ))}
-            </div>
-          </>
+          ))
         )}
       </div>
     </div>
@@ -448,116 +194,26 @@ function TokenInventorySection({
 }
 
 /**
- * Token Coverage Breakdown Section Component
- * Shows layers categorized by token property coverage (full, partial, none)
+ * Loading State
  */
-function TokenCoverageBreakdownSection({
-  elementCount,
-  fullTokenCoverageCount,
-  fullTokenCoverageRate,
-  partialTokenCoverageCount,
-  partialTokenCoverageRate,
-  noTokenCoverageCount,
-  noTokenCoverageRate,
-  isLoading = false,
-}: {
-  elementCount: number;
-  fullTokenCoverageCount: number;
-  fullTokenCoverageRate: number;
-  partialTokenCoverageCount: number;
-  partialTokenCoverageRate: number;
-  noTokenCoverageCount: number;
-  noTokenCoverageRate: number;
-  isLoading?: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
-        <div className="h-6 bg-figma-border rounded w-32 mb-4"></div>
-        <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-4 bg-figma-border rounded w-40"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
+function LoadingState() {
   return (
-    <div
-      className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
-      style={{
-        animation: 'fadeInScale 0.4s ease-out 0.3s forwards',
-        opacity: 0,
-      }}
-    >
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xl">📊</span>
-        <h3 className="text-sm font-semibold text-figma-text">Token Coverage by Layer</h3>
+    <div className="flex flex-col gap-4 p-4 animate-pulse">
+      {/* Stat cards skeleton */}
+      <div className="grid grid-cols-3 gap-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-24 bg-zinc-800/50 rounded-lg" />
+        ))}
       </div>
-
-      <div className="space-y-3">
-        <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
-          <span className="text-xs text-figma-text-secondary">Total Text Layers:</span>
-          <span className="text-sm font-semibold text-figma-text">
-            {elementCount.toLocaleString()}
-          </span>
+      {/* Content skeleton */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-3">
+          <div className="h-40 bg-zinc-800/50 rounded-lg" />
+          <div className="h-64 bg-zinc-800/50 rounded-lg" />
         </div>
-
-        <div className="flex justify-between items-center p-2 bg-green-500/10 rounded border border-green-500/20">
-          <div className="flex flex-col">
-            <span className="text-xs text-figma-text-secondary">Full Coverage</span>
-            <span className="text-[10px] text-figma-text-tertiary">All 5 properties</span>
-          </div>
-          <span className="text-sm font-semibold text-green-600">
-            {fullTokenCoverageCount.toLocaleString()} ({fullTokenCoverageRate.toFixed(2)}%)
-          </span>
-        </div>
-
-        <div className="flex justify-between items-center p-2 bg-yellow-500/10 rounded border border-yellow-500/20">
-          <div className="flex flex-col">
-            <span className="text-xs text-figma-text-secondary">Partial Coverage</span>
-            <span className="text-[10px] text-figma-text-tertiary">1-4 properties</span>
-          </div>
-          <span className="text-sm font-semibold text-yellow-600">
-            {partialTokenCoverageCount.toLocaleString()} ({partialTokenCoverageRate.toFixed(2)}%)
-          </span>
-        </div>
-
-        <div className="flex justify-between items-center p-2 bg-red-500/10 rounded border border-red-500/20">
-          <div className="flex flex-col">
-            <span className="text-xs text-figma-text-secondary">No Coverage</span>
-            <span className="text-[10px] text-figma-text-tertiary">0 properties</span>
-          </div>
-          <span className="text-sm font-semibold text-red-600">
-            {noTokenCoverageCount.toLocaleString()} ({noTokenCoverageRate.toFixed(2)}%)
-          </span>
-        </div>
-
-        {/* Stacked bar visualization */}
-        <div className="mt-3 pt-3 border-t border-figma-border">
-          <div className="flex h-2 rounded overflow-hidden gap-0.5 bg-figma-bg">
-            <div
-              className="bg-green-500 transition-all duration-300"
-              style={{ width: `${fullTokenCoverageRate}%` }}
-              title={`Full coverage: ${fullTokenCoverageRate}%`}
-            ></div>
-            <div
-              className="bg-yellow-500 transition-all duration-300"
-              style={{ width: `${partialTokenCoverageRate}%` }}
-              title={`Partial coverage: ${partialTokenCoverageRate}%`}
-            ></div>
-            <div
-              className="bg-red-500 transition-all duration-300"
-              style={{ width: `${noTokenCoverageRate}%` }}
-              title={`No coverage: ${noTokenCoverageRate}%`}
-            ></div>
-          </div>
-          <div className="flex justify-between mt-2 text-[10px] text-figma-text-tertiary">
-            <span>Full</span>
-            <span>Partial</span>
-            <span>None</span>
-          </div>
+        <div className="flex flex-col gap-3">
+          <div className="h-40 bg-zinc-800/50 rounded-lg" />
+          <div className="h-64 bg-zinc-800/50 rounded-lg" />
         </div>
       </div>
     </div>
@@ -565,623 +221,209 @@ function TokenCoverageBreakdownSection({
 }
 
 /**
- * Token Usage Depth Section Component
- * Displays token binding counts and unused tokens
+ * Error State
  */
-function TokenUsageDepthSection({
-  totalTokenBindings,
-  elementsWithTokens,
-  uniqueTokensUsed,
-  totalTokenCount,
-  unusedTokenCount,
-  isLoading = false,
-}: {
-  totalTokenBindings: number;
-  elementsWithTokens: number;
-  uniqueTokensUsed: number;
-  totalTokenCount: number;
-  unusedTokenCount: number;
-  isLoading?: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <div className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-pulse">
-        <div className="h-6 bg-figma-border rounded w-32 mb-4"></div>
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-4 bg-figma-border rounded w-40"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const avgBindingsPerLayer =
-    elementsWithTokens > 0 ? (totalTokenBindings / elementsWithTokens).toFixed(1) : '0';
-  const coveragePercent =
-    totalTokenCount > 0 ? ((uniqueTokensUsed / totalTokenCount) * 100).toFixed(1) : '0';
-
+function ErrorState({ message }: { message: string }) {
   return (
-    <div
-      className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
-      style={{
-        animation: 'fadeInScale 0.4s ease-out 0.4s forwards',
-        opacity: 0,
-      }}
-    >
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xl">🔗</span>
-        <h3 className="text-sm font-semibold text-figma-text">Token Usage Depth</h3>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
-          <span className="text-xs text-figma-text-secondary">Total Bindings:</span>
-          <span className="text-sm font-semibold text-figma-text">
-            {totalTokenBindings.toLocaleString()}
-            <span className="text-xs text-figma-text-tertiary ml-1">
-              ({avgBindingsPerLayer} per layer w/ tokens)
-            </span>
-          </span>
+    <div className="flex items-center justify-center p-8">
+      <div className="text-center">
+        <div className="text-red-400 text-sm font-medium mb-1">
+          Error loading analytics
         </div>
-
-        <div className="flex justify-between items-center p-2 bg-figma-bg rounded">
-          <span className="text-xs text-figma-text-secondary">Unique Tokens Used:</span>
-          <span className="text-sm font-semibold text-figma-text">
-            {uniqueTokensUsed} of {totalTokenCount} ({coveragePercent}%)
-          </span>
-        </div>
-
-        {unusedTokenCount > 0 && (
-          <div className="flex justify-between items-center p-2 bg-yellow-500/10 rounded border border-yellow-500/20">
-            <span className="text-xs text-figma-text-secondary">Unused Tokens:</span>
-            <span className="text-sm font-semibold text-yellow-700">{unusedTokenCount}</span>
-          </div>
-        )}
+        <div className="text-zinc-500 text-xs">{message}</div>
       </div>
     </div>
   );
 }
+
+/**
+ * Empty State
+ */
+function EmptyState() {
+  return (
+    <div className="flex items-center justify-center p-8">
+      <div className="text-center">
+        <div className="text-zinc-400 text-sm font-medium mb-1">
+          No audit data available
+        </div>
+        <div className="text-zinc-500 text-xs">
+          Run an audit to see analytics
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
 
 export default function AnalyticsDashboard({
   auditResult,
   isLoading = false,
-  error,
+  error = null,
 }: AnalyticsDashboardProps) {
-  // Calculate metrics from audit result
-  const metrics = useMemo(() => {
-    if (!auditResult) {
-      return {
-        styleAdoptionRate: 0,
-        tokenAdoptionRate: 0,
-        tokenCoverageRate: 0,
-        libraryDistribution: {},
-        topStyles: [],
-        mixedUsageCount: 0,
-        totalTokenCount: 0,
-        uniqueTokensUsed: 0,
-        unusedTokenCount: 0,
-        totalTokenBindings: 0,
-        tokensByCollection: {},
-        elementCount: 0,
-        elementsWithTokens: 0,
-        elementsWithoutTokens: 0,
-      };
-    }
+  // Compute derived metrics
+  const computedMetrics = useMemo(() => {
+    if (!auditResult) return null;
 
-    // Handle both AuditResult and StyleGovernanceAuditResult types
-    const isStyleGovernanceResult = 'metrics' in auditResult && 'layers' in auditResult;
+    const { styles, tokens, metrics, totalTextLayers } = auditResult;
 
-    if (isStyleGovernanceResult) {
-      // StyleGovernanceAuditResult format
-      const result = auditResult as StyleGovernanceAuditResult;
-      const metrics = result.metrics as any;
-      const styleAdoptionRate = metrics.styleAdoptionRate || 0;
-      const tokenAdoptionRate = metrics.tokenAdoptionRate || 0;
-      const tokenCoverageRate = metrics.tokenCoverageRate || 0;
-      const totalTokenCount = metrics.totalTokenCount || 0;
-      const uniqueTokensUsed = metrics.uniqueTokensUsed || 0;
-      const unusedTokenCount = metrics.unusedTokenCount || 0;
-      const totalTokenBindings = metrics.totalTokenBindings || 0;
-      const tokensByCollection = metrics.tokensByCollection || {};
-      const elementCount = metrics.elementCount || 0;
-      const elementsWithTokens = metrics.elementsWithTokens || 0;
-      const elementsWithoutTokens = metrics.elementsWithoutTokens || 0;
+    // DEBUG: Log what data the UI received
+    console.log('[DASHBOARD UI] Received audit result:', {
+      totalStyles: styles.length,
+      totalTokens: tokens.length,
+      totalLayers: totalTextLayers,
+      libraryDistribution: metrics.libraryDistribution,
+    });
 
-      // Build library distribution from libraries array
-      const libraryDistribution: Record<string, number> = {};
-      result.libraries?.forEach((lib) => {
-        libraryDistribution[lib.name] = lib.totalUsageCount || 0;
-      });
+    // Text styles: count styles with at least one usage
+    const usedStylesCount = styles.filter((s) => s.usageCount > 0).length;
+    const totalStylesCount = styles.length;
 
-      // Get top styles from metrics
-      const topStyles = (result.metrics.topStyles || [])
-        .map((s: any) => ({
-          styleName: s.styleName || 'Unknown',
-          libraryName: 'Local', // TODO: Get from styles array
-          usageCount: s.usageCount || 0,
-        }))
-        .slice(0, 10);
+    console.log('[DASHBOARD UI] Style counts:', {
+      usedStylesCount,
+      totalStylesCount,
+      stylesWithUsage: styles.filter((s) => s.usageCount > 0).map(s => ({
+        name: s.name,
+        usageCount: s.usageCount,
+      })).slice(0, 5),
+    });
 
-      const mixedUsageCount = result.metrics.mixedUsageCount || 0;
+    // Tokens: from metrics
+    const usedTokensCount = metrics.uniqueTokensUsed;
+    const totalTokensCount = metrics.totalTokenCount;
 
-      return {
-        styleAdoptionRate,
-        tokenAdoptionRate,
-        tokenCoverageRate,
-        libraryDistribution,
-        topStyles,
-        mixedUsageCount,
-        totalTokenCount,
-        uniqueTokensUsed,
-        unusedTokenCount,
-        totalTokenBindings,
-        tokensByCollection,
-        elementCount,
-        elementsWithTokens,
-        elementsWithoutTokens,
-        fullTokenCoverageCount: metrics.fullTokenCoverageCount || 0,
-        fullTokenCoverageRate: metrics.fullTokenCoverageRate || 0,
-        partialTokenCoverageCount: metrics.partialTokenCoverageCount || 0,
-        partialTokenCoverageRate: metrics.partialTokenCoverageRate || 0,
-        noTokenCoverageCount: metrics.noTokenCoverageCount || 0,
-        noTokenCoverageRate: metrics.noTokenCoverageRate || 0,
-      };
-    } else {
-      // Legacy AuditResult format
-      const result = auditResult as AuditResult;
-      const textLayers = result.textLayers || [];
+    // Unstyled layers
+    const unstyledCount = metrics.unstyledCount;
 
-      const styledLayers = textLayers.filter(
-        (layer: any) => layer.styleAssignment?.assignmentStatus !== 'unstyled'
-      );
-      const styleAdoptionRate =
-        textLayers.length > 0 ? (styledLayers.length / textLayers.length) * 100 : 0;
+    // Library distribution - convert to array and sort by value
+    const libraryUsage = Object.entries(metrics.libraryDistribution)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
 
-      const tokenAdoptionRate = result.tokenAdoptionRate || 0;
-      // Note: Legacy format doesn't have tokenCoverageRate, use 0 as default
-      const tokenCoverageRate = 0;
+    // Token coverage breakdown
+    const tokenCoverage = [
+      { name: 'Full coverage', value: metrics.fullTokenCoverageCount },
+      { name: 'Partial coverage', value: metrics.partialTokenCoverageCount },
+      { name: 'No tokens', value: metrics.noTokenCoverageCount },
+    ].filter((item) => item.value > 0);
 
-      const libraryDistribution: Record<string, number> = {};
-      textLayers.forEach((layer: any) => {
-        const library = layer.styleAssignment?.libraryName || 'Local';
-        libraryDistribution[library] = (libraryDistribution[library] || 0) + 1;
-      });
+    // Top 10 text styles
+    const topStyles: DataListItem[] = metrics.topStyles
+      .slice(0, 10)
+      .map((s) => ({
+        id: s.styleId,
+        name: s.styleName,
+        value: s.usageCount,
+      }));
 
-      const styleUsageMap = new Map<string, { name: string; library: string; count: number }>();
-      textLayers.forEach((layer: any) => {
-        if (layer.styleAssignment?.styleName) {
-          const key = layer.styleAssignment.styleName;
-          const existing = styleUsageMap.get(key);
-          styleUsageMap.set(key, {
-            name: layer.styleAssignment.styleName,
-            library: layer.styleAssignment.libraryName || 'Local',
-            count: (existing?.count || 0) + 1,
-          });
-        }
-      });
+    // Top 10 type-related tokens (sorted by usage count)
+    const topTokens: DataListItem[] = [...tokens]
+      .sort((a, b) => b.usageCount - a.usageCount)
+      .slice(0, 10)
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        value: t.usageCount,
+      }));
 
-      const topStyles = Array.from(styleUsageMap.values())
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10)
-        .map((style) => ({
-          styleName: style.name,
-          libraryName: style.library,
-          usageCount: style.count,
-        }));
-
-      const mixedUsageCount = textLayers.filter((layer: any) => {
-        const hasStyle = layer.styleAssignment?.assignmentStatus !== 'unstyled';
-        const layerTokens = layer.tokens;
-        const hasToken = layerTokens && layerTokens.length > 0;
-        return hasStyle && hasToken;
-      }).length;
-
-      return {
-        styleAdoptionRate,
-        tokenAdoptionRate,
-        tokenCoverageRate,
-        libraryDistribution,
-        topStyles,
-        mixedUsageCount,
-        totalTokenCount: 0,
-        uniqueTokensUsed: 0,
-        unusedTokenCount: 0,
-        totalTokenBindings: 0,
-        tokensByCollection: {},
-        elementCount: textLayers.length,
-        elementsWithTokens: textLayers.filter(
-          (layer: any) => layer.tokens && layer.tokens.length > 0
-        ).length,
-        elementsWithoutTokens: textLayers.filter(
-          (layer: any) => !layer.tokens || layer.tokens.length === 0
-        ).length,
-      };
-    }
+    return {
+      usedStylesCount,
+      totalStylesCount,
+      usedTokensCount,
+      totalTokensCount,
+      unstyledCount,
+      totalTextLayers,
+      libraryUsage,
+      tokenCoverage,
+      topStyles,
+      topTokens,
+    };
   }, [auditResult]);
 
-  if (error) {
-    return (
-      <div
-        className="p-4 bg-red-50 border border-red-200 rounded-lg animate-fadeIn"
-        style={{
-          animation: 'fadeIn 0.3s ease-out',
-        }}
-      >
-        <p className="text-red-700 text-sm font-medium">Error loading analytics</p>
-        <p className="text-red-600 text-xs mt-1">{error}</p>
-      </div>
-    );
+  // Handle states
+  if (isLoading) {
+    return <LoadingState />;
   }
 
-  const totalLayers =
-    'textLayers' in (auditResult || {})
-      ? (auditResult as AuditResult).textLayers?.length || 0
-      : 'layers' in (auditResult || {})
-        ? (auditResult as StyleGovernanceAuditResult).layers?.length || 0
-        : 0;
+  if (error) {
+    return <ErrorState message={error} />;
+  }
+
+  if (!auditResult || !computedMetrics) {
+    return <EmptyState />;
+  }
+
+  const {
+    usedStylesCount,
+    totalStylesCount,
+    usedTokensCount,
+    totalTokensCount,
+    unstyledCount,
+    totalTextLayers,
+    libraryUsage,
+    tokenCoverage,
+    topStyles,
+    topTokens,
+  } = computedMetrics;
 
   return (
-    <>
-      <style>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes fadeInScale {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        @keyframes fadeInLeft {
-          from {
-            opacity: 0;
-            transform: translateX(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes slideInRight {
-          from {
-            width: 0;
-          }
-          to {
-            width: var(--target-width, 100%);
-          }
-        }
-      `}</style>
-
-      <div className="space-y-2 p-2 h-full overflow-auto">
-        {/* Header */}
-        {/*<div className="pb-3">
-          <h2 className="text-lg font-semibold text-figma-text">Analytics Dashboard</h2>
-          <p className="text-figma-text-tertiary text-xs mt-1">
-            Design system adoption and token usage metrics
-          </p>
-        </div>*/}
-
-        {/* Missing Fonts Warning Card */}
-        {'layers' in (auditResult || {}) &&
-          (auditResult as StyleGovernanceAuditResult).layersWithMissingFonts > 0 && (
-            <div
-              className="border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 animate-fadeInScale"
-              style={{
-                animation: 'fadeInScale 0.4s ease-out',
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">⚠️</span>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
-                    Missing Fonts Detected
-                  </h3>
-                  <p className="text-xs text-yellow-800 dark:text-yellow-200 mb-3">
-                    {(auditResult as StyleGovernanceAuditResult).layersWithMissingFonts} of{' '}
-                    {totalLayers} text layers have missing fonts. Token and style replacements
-                    will fail on these layers.
-                  </p>
-
-                  {(auditResult as StyleGovernanceAuditResult).missingFontLayerNames.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-yellow-900 dark:text-yellow-100">
-                        Affected layers:
-                      </p>
-                      <div className="max-h-32 overflow-y-auto space-y-1">
-                        {(auditResult as StyleGovernanceAuditResult).missingFontLayerNames
-                          .slice(0, 50)
-                          .map((name, index) => (
-                            <div
-                              key={index}
-                              className="text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40 px-2 py-1 rounded truncate font-mono"
-                              title={name}
-                            >
-                              {name}
-                            </div>
-                          ))}
-                        {(auditResult as StyleGovernanceAuditResult).layersWithMissingFonts > 50 && (
-                          <p className="text-xs text-yellow-700 dark:text-yellow-300 italic pt-1">
-                            ... and{' '}
-                            {(auditResult as StyleGovernanceAuditResult).layersWithMissingFonts -
-                              50}{' '}
-                            more layers
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-        {/* Key Metrics Grid - 2 columns on desktop, 1 on mobile */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {isLoading ? (
-            <>
-              <MetricSkeleton />
-              <MetricSkeleton />
-              <MetricSkeleton />
-              <MetricSkeleton />
-            </>
-          ) : (
-            <>
-              {/* Style Adoption Rate */}
-              <MetricCard
-                label="Style Adoption Rate"
-                value={metrics.styleAdoptionRate}
-                suffix="%"
-                decimals={1}
-                icon="✨"
-                variant={
-                  metrics.styleAdoptionRate >= 80
-                    ? 'success'
-                    : metrics.styleAdoptionRate >= 50
-                      ? 'warning'
-                      : 'danger'
-                }
-              />
-
-              {/* Token Adoption Rate
-               * Definition: Percentage of text layers in the document that use design tokens
-               * Formula: (Number of layers using tokens / Total text layers) × 100%
-               * Example: If 40 of 100 text layers use tokens, Token Adoption = 40%
-               *
-               * NOTE: This is different from "Token Coverage" which measures which tokens are used
-               * - Token Adoption (layer-centric): "Of the layers we have, how many use tokens?"
-               * - Token Coverage (token-centric): "Of the tokens we have, how many are used?"
-               *
-               * Health indicators:
-               * - 80%+ (success): Excellent token integration across document
-               * - 40-80% (warning): Moderate adoption, opportunity for more token usage
-               * - <40% (danger): Low adoption, token system under-utilized
-               *
-               * See spec.md "Metrics Definitions" section for full documentation
-               */}
-              <MetricCard
-                label="Token Adoption Rate"
-                value={metrics.tokenAdoptionRate}
-                suffix="%"
-                decimals={1}
-                icon="🏷️"
-                variant={
-                  metrics.tokenAdoptionRate >= 80
-                    ? 'success'
-                    : metrics.tokenAdoptionRate >= 40
-                      ? 'warning'
-                      : 'danger'
-                }
-              />
-
-              {/* Token Coverage
-               * Definition: Percentage of available design tokens that are actively used in at least one text layer
-               * Formula: (Number of unique tokens used / Total number of tokens) × 100%
-               * Example: If 30 of your 50 design tokens are used, Token Coverage = 60%
-               *
-               * NOTE: This is different from "Token Adoption" which measures % of layers using tokens
-               * - Token Coverage (token-centric): "Of the tokens we have, how many are used?"
-               * - Token Adoption (layer-centric): "Of the layers we have, how many use tokens?"
-               *
-               * Health indicators:
-               * - 60%+ (success): Good token utilization, system is well-integrated
-               * - 30-60% (warning): Moderate coverage, consider consolidating unused tokens
-               * - <30% (danger): Low coverage, token system may need review
-               *
-               * See spec.md "Metrics Definitions" section for full documentation
-               */}
-              <MetricCard
-                label="Token Coverage"
-                value={metrics.tokenCoverageRate}
-                suffix="%"
-                decimals={1}
-                icon="🎯"
-                variant={
-                  metrics.tokenCoverageRate >= 60
-                    ? 'success'
-                    : metrics.tokenCoverageRate >= 30
-                      ? 'warning'
-                      : 'danger'
-                }
-              />
-
-              {/* Total Styled Layers */}
-              <MetricCard
-                label="Styled Text Layers"
-                value={Math.round((metrics.styleAdoptionRate / 100) * totalLayers)}
-                icon="📄"
-                variant="default"
-              />
-
-              {/* Mixed Usage */}
-              <MetricCard
-                label="Mixed Usage Layers"
-                value={metrics.mixedUsageCount}
-                icon="🔀"
-                variant="default"
-              />
-            </>
-          )}
-        </div>
-
-        {/* Content Grid - 2 columns on desktop, 1 on mobile */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Left Column: Top Styles Table */}
-          <div
-            className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
-            style={{
-              animation: 'fadeInScale 0.4s ease-out 0.1s forwards',
-              opacity: 0,
-            }}
-          >
-            <h3 className="text-sm font-semibold text-figma-text mb-4">Top 10 Most Used Styles</h3>
-            <TopStylesTable
-              styles={metrics.topStyles}
-              totalLayers={totalLayers}
-              isLoading={isLoading}
-            />
-          </div>
-
-          {/* Right Column: Distribution & Comparison */}
-          <div className="space-y-6">
-            {/* Library Distribution */}
-            <div
-              className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
-              style={{
-                animation: 'fadeInScale 0.4s ease-out 0.15s forwards',
-                opacity: 0,
-              }}
-            >
-              <h3 className="text-sm font-semibold text-figma-text mb-4">Library Distribution</h3>
-              <LibraryDistributionCard
-                distribution={metrics.libraryDistribution}
-                isLoading={isLoading}
-              />
-            </div>
-
-            {/* Usage Comparison */}
-            <div
-              className="border border-figma-border rounded-lg p-4 bg-figma-bg-secondary animate-fadeInScale"
-              style={{
-                animation: 'fadeInScale 0.4s ease-out 0.2s forwards',
-                opacity: 0,
-              }}
-            >
-              <h3 className="text-sm font-semibold text-figma-text mb-4">Token vs Style Usage</h3>
-              <UsageComparisonCard
-                styleAdoptionRate={metrics.styleAdoptionRate}
-                tokenCoverageRate={metrics.tokenCoverageRate}
-                mixedUsageCount={metrics.mixedUsageCount}
-                totalLayers={totalLayers}
-                isLoading={isLoading}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Token Metrics Details - New Sections */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Token Inventory */}
-          <TokenInventorySection
-            totalTokenCount={metrics.totalTokenCount}
-            tokensByCollection={metrics.tokensByCollection}
-            isLoading={isLoading}
-          />
-
-          {/* Token Coverage Breakdown */}
-          <TokenCoverageBreakdownSection
-            elementCount={metrics.elementCount}
-            fullTokenCoverageCount={(metrics as any).fullTokenCoverageCount || 0}
-            fullTokenCoverageRate={(metrics as any).fullTokenCoverageRate || 0}
-            partialTokenCoverageCount={(metrics as any).partialTokenCoverageCount || 0}
-            partialTokenCoverageRate={(metrics as any).partialTokenCoverageRate || 0}
-            noTokenCoverageCount={
-              (metrics as any).noTokenCoverageCount || metrics.elementsWithoutTokens || 0
-            }
-            noTokenCoverageRate={(metrics as any).noTokenCoverageRate || 0}
-            isLoading={isLoading}
-          />
-
-          {/* Token Usage Depth */}
-          <TokenUsageDepthSection
-            totalTokenBindings={metrics.totalTokenBindings}
-            elementsWithTokens={metrics.elementsWithTokens}
-            uniqueTokensUsed={metrics.uniqueTokensUsed}
-            totalTokenCount={metrics.totalTokenCount}
-            unusedTokenCount={metrics.unusedTokenCount}
-            isLoading={isLoading}
-          />
-        </div>
-
-        {/* Footer Info */}
-        {!isLoading && auditResult && (
-          <div
-            className="border-t border-figma-border pt-3 text-xs text-figma-text-tertiary animate-fadeIn"
-            style={{
-              animation: 'fadeIn 0.4s ease-out 0.3s forwards',
-              opacity: 0,
-            }}
-          >
-            <p>
-              {(() => {
-                // Handle timestamp - could be Date object or string
-                let timestamp: Date;
-                if (auditResult.timestamp instanceof Date) {
-                  timestamp = auditResult.timestamp;
-                } else if (auditResult.timestamp) {
-                  timestamp = new Date(auditResult.timestamp);
-                } else {
-                  timestamp = new Date();
-                }
-
-                // Check if valid date
-                if (isNaN(timestamp.getTime())) {
-                  return 'Audit completed';
-                }
-
-                // Format duration in seconds
-                const durationSeconds = auditResult.auditDuration
-                  ? (auditResult.auditDuration / 1000).toFixed(2)
-                  : '0';
-
-                return (
-                  <>
-                    Audit performed on {timestamp.toLocaleDateString()} at{' '}
-                    {timestamp.toLocaleTimeString()} • Completed in {durationSeconds}s
-                  </>
-                );
-              })()}
-            </p>
-            <p className="mt-1 text-figma-text-tertiary/60">
-              Typescope v{packageJson.version}
-              {import.meta.env.VITE_RELEASE_BUILD !== 'true' ? ' (DEV)' : ''}
-            </p>
-          </div>
-        )}
+    <div className="flex flex-col gap-4 p-4">
+      {/* Row 1: Stat Cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard
+          label="Text styles used"
+          used={usedStylesCount}
+          total={totalStylesCount}
+          variant="styles"
+        />
+        <StatCard
+          label="Tokens used"
+          used={usedTokensCount}
+          total={totalTokensCount}
+          variant="tokens"
+        />
+        <StatCard
+          label="Unstyled text layers"
+          used={unstyledCount}
+          total={totalTextLayers}
+          variant="neutral"
+        />
       </div>
-    </>
+
+      {/* Row 2: Two Columns */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Left Column: Styles */}
+        <div className="flex flex-col gap-3">
+          <UsageCard
+            title="Style Usage"
+            items={libraryUsage}
+            variant="styles"
+          />
+          <DataList
+            title="Top 10 Text Styles"
+            items={topStyles}
+            variant="styles"
+            emptyMessage="No styles found"
+          />
+        </div>
+
+        {/* Right Column: Tokens */}
+        <div className="flex flex-col gap-3">
+          <UsageCard
+            title="Token Coverage"
+            items={tokenCoverage}
+            variant="tokens"
+          />
+          <DataList
+            title="Top 10 Type Tokens"
+            items={topTokens}
+            variant="tokens"
+            emptyMessage="No tokens found"
+          />
+        </div>
+      </div>
+    </div>
   );
 }

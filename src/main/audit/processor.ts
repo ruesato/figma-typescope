@@ -25,6 +25,128 @@ import { getLibraryMap, clearLibraryCache } from '@/main/utils/libraryCache';
  * Simplified implementation to avoid conflicts.
  */
 
+/**
+ * Build enhanced library map from used style IDs
+ * Uses the already-collected styleIds to discover published component libraries
+ *
+ * This handles the case where published component libraries don't appear in
+ * getAvailableLibrariesAsync() results.
+ */
+async function buildEnhancedLibraryMap(
+  baseLibraryMap: Map<string, string>,
+  usedStyleIds: Set<string>
+): Promise<Map<string, string>> {
+  const enhancedMap = new Map(baseLibraryMap);
+
+  try {
+    console.log(`[LIBRARY DISCOVERY] Discovering libraries from ${usedStyleIds.size} styles...`);
+    console.log(`[LIBRARY DISCOVERY] Base map keys (first 10):`,
+      Array.from(baseLibraryMap.keys()).slice(0, 10)
+    );
+
+    // Track discovered library keys to their names
+    const discoveredLibraries = new Map<string, { name: string; styleCount: number }>();
+    let stylesProcessed = 0;
+    let stylesWithLibraryKeyFormat = 0;
+    let stylesSkippedAlreadyInMap = 0;
+
+    // Process styles in small batches to avoid overwhelming the API
+    const styleIdsArray = Array.from(usedStyleIds);
+    const BATCH_SIZE = 10;
+
+    for (let i = 0; i < styleIdsArray.length; i += BATCH_SIZE) {
+      const batch = styleIdsArray.slice(i, Math.min(i + BATCH_SIZE, styleIdsArray.length));
+
+      await Promise.all(
+        batch.map(async (styleId) => {
+          try {
+            const style = await figma.getStyleByIdAsync(styleId);
+            stylesProcessed++;
+
+            if (!style || style.type !== 'TEXT' || !style.remote || !style.key) {
+              console.log(`[LIBRARY DISCOVERY] Skipping style - not remote text style`);
+              return;
+            }
+
+            // Extract library key from style key
+            // Format can be either "libraryKey/styleKey" or just "styleKeyHash"
+            const keyParts = style.key.split('/');
+            let libraryKey: string;
+
+            if (keyParts.length >= 2) {
+              // Standard format: "libraryKey/styleKey"
+              libraryKey = keyParts[0];
+              stylesWithLibraryKeyFormat++;
+              console.log(`[LIBRARY DISCOVERY] Style "${style.name}": has libraryKey format, key="${libraryKey.substring(0, 12)}..."`);
+            } else {
+              // Hash-only format - the key IS the library identifier
+              libraryKey = style.key;
+              console.log(`[LIBRARY DISCOVERY] Style "${style.name}": hash-only format, key="${libraryKey.substring(0, 12)}..."`);
+            }
+
+            // Skip if we already have this library
+            if (enhancedMap.has(libraryKey)) {
+              stylesSkippedAlreadyInMap++;
+              console.log(`  → Already in map as: "${enhancedMap.get(libraryKey)}"`);
+              return;
+            }
+
+            console.log(`  → Not in map, grouping as "Published Libraries"`);
+
+            // For hash-only keys (published component libraries), we can't reliably resolve
+            // the library name via the Plugin API. Group them all together.
+            // This is a known Figma API limitation for published component libraries.
+
+            // Map this specific style's key to the grouped library name
+            enhancedMap.set(libraryKey, 'Published Libraries');
+
+            // Track discovery stats
+            if (!discoveredLibraries.has('remote-published')) {
+              discoveredLibraries.set('remote-published', {
+                name: 'Published Libraries',
+                styleCount: 1,
+              });
+            } else {
+              const existing = discoveredLibraries.get('remote-published');
+              if (existing) {
+                existing.styleCount++;
+              }
+            }
+          } catch (error) {
+            // Style fetch failed - skip silently
+          }
+        })
+      );
+
+      // Yield to event loop
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    console.log(`[LIBRARY DISCOVERY] Summary:`);
+    console.log(`  - Styles processed: ${stylesProcessed}`);
+    console.log(`  - Styles with libraryKey format: ${stylesWithLibraryKeyFormat}`);
+    console.log(`  - Styles skipped (already in map): ${stylesSkippedAlreadyInMap}`);
+    console.log(`  - Base library map: ${baseLibraryMap.size} libraries`);
+    console.log(`  - Newly discovered: ${discoveredLibraries.size} libraries`);
+    console.log(`  - Enhanced map total: ${enhancedMap.size} libraries`);
+
+    if (discoveredLibraries.size > 0) {
+      console.log(`[LIBRARY DISCOVERY] Discovered libraries:`,
+        Array.from(discoveredLibraries.entries()).map(([key, info]) => ({
+          name: info.name,
+          styles: info.styleCount,
+        }))
+      );
+    }
+  } catch (error) {
+    console.error('[LIBRARY DISCOVERY] Fatal error during discovery:', error);
+    // Return base map if discovery fails completely
+    return baseLibraryMap;
+  }
+
+  return enhancedMap;
+}
+
 export interface ProcessorInput {
   textLayers: any[]; // Raw output from scanner
   totalPages: number;
@@ -101,15 +223,27 @@ export async function processAuditData(
     console.log('Sample style IDs from layers:', styleIdSamples);
     console.log('All unique style IDs:', Array.from(usedStyleIds));
 
-    // Step 2: Fetch metadata for all used styles (45-55%)
-    if (onProgress) onProgress(45, 'Extracting text styles...');
+    if (usedStyleIds.size === 0) {
+      console.warn('[PROCESSOR] No style IDs found - this will result in no styles being loaded!');
+    }
+
+    // Step 2: Get library map and enhance it by discovering libraries from styles (45-50%)
+    if (onProgress) onProgress(45, 'Discovering libraries...');
+
+    // Get base library map from Figma API
+    const baseLibraryMap = await getLibraryMap();
+    console.log(`[LIBRARY DISCOVERY] Base library map has ${baseLibraryMap.size} entries`);
+
+    // Enhance library map by discovering libraries from actual style usage
+    const enhancedLibraryMap = await buildEnhancedLibraryMap(baseLibraryMap, usedStyleIds);
+    const libraryMap = enhancedLibraryMap;
+    console.log(`[LIBRARY MAP] Enhanced library map has ${libraryMap.size} entries`);
+
+    // Step 3: Load style metadata (50-55%)
+    if (onProgress) onProgress(50, 'Loading text styles...');
 
     const styles: TextStyle[] = [];
-    const libraryMap = await getLibraryMap(); // Map library keys to names (cached)
-    console.log(`Library map has ${libraryMap.size} entries`);
-    if (libraryMap.size > 0) {
-      console.log('Library map contents:', Array.from(libraryMap.entries()).slice(0, 10));
-    }
+    console.log(`[STYLE LOADING] Starting to load ${usedStyleIds.size} styles...`);
 
     let localCount = 0;
     let remoteCount = 0;
@@ -170,11 +304,21 @@ export async function processAuditData(
     console.log(
       `Loaded ${styles.length} styles: ${localCount} local, ${remoteCount} remote, ${failedCount} failed`
     );
+    console.log('[STYLE DEBUG] Sample styles with library info:',
+      styles.slice(0, 5).map(s => ({
+        name: s.name,
+        libraryId: s.libraryId,
+        libraryName: s.libraryName,
+        sourceType: s.sourceType
+      }))
+    );
     output.styles = styles;
 
-    // Step 3: Build library sources (55-60%)
+    // Step 4: Build library sources (55-60%)
     if (onProgress) onProgress(57, 'Resolving library sources...');
-    output.libraries = buildLibrarySources(styles);
+    console.log(`[BUILD LIBRARIES] Building library sources from ${styles.length} styles and library map with ${libraryMap.size} entries...`);
+    output.libraries = buildLibrarySources(styles, libraryMap);
+    console.log(`[BUILD LIBRARIES] Created ${output.libraries.length} library sources`);
 
     // Step 4: Get all available tokens (60-65%)
     if (options.includeTokens) {
@@ -242,6 +386,39 @@ export async function processAuditData(
     output.styledLayers = styled;
     output.unstyledLayers = unstyled;
 
+    // DEBUG: Log layer categorization summary
+    console.log(`[LAYER SUMMARY] Total layers: ${output.layers.length}`);
+    console.log(`[LAYER SUMMARY] Styled layers: ${styled.length}`);
+    console.log(`[LAYER SUMMARY] Unstyled layers: ${unstyled.length}`);
+
+    // Sample first few styled layers
+    const styledSample = styled.slice(0, 5);
+    console.log(`[LAYER SUMMARY] Sample styled layers:`, styledSample.map(l => ({
+      name: l.name,
+      assignmentStatus: l.assignmentStatus,
+      styleId: l.styleId,
+      styleName: l.styleName,
+      styleSource: l.styleSource,
+    })));
+
+    // Step 7.5: Calculate usage counts for styles (from layer assignments)
+    console.log('[USAGE CALCULATION] Calculating style usage counts...');
+    const styleUsageCountMap = new Map<string, number>();
+    for (const layer of output.layers) {
+      if (layer.styleId) {
+        styleUsageCountMap.set(layer.styleId, (styleUsageCountMap.get(layer.styleId) || 0) + 1);
+      }
+    }
+
+    // Update each style's usageCount field
+    for (const style of output.styles) {
+      style.usageCount = styleUsageCountMap.get(style.id) || 0;
+    }
+
+    console.log('[USAGE CALCULATION] Style usage counts updated:',
+      output.styles.map(s => ({ name: s.name, usageCount: s.usageCount })).slice(0, 5)
+    );
+
     // Step 8: Build hierarchy (90-93%)
     if (onProgress) onProgress(90, 'Building style hierarchy...');
     output.styleHierarchy = buildSimpleHierarchy(output.styles);
@@ -285,6 +462,16 @@ async function processTextLayer(rawLayer: any, allStyles: TextStyle[]): Promise<
 
   // Detect style assignment
   const styleAssignment = await detectStyleAssignment(textNode);
+
+  // DEBUG: Log first 10 style assignments for diagnosis
+  if (Math.random() < 0.01) { // Log ~1% of layers to avoid spam
+    console.log(`[STYLE DETECTION] Layer "${rawLayer.name}":`, {
+      assignmentStatus: styleAssignment.assignmentStatus,
+      styleId: styleAssignment.styleId,
+      styleName: styleAssignment.styleName,
+      libraryName: styleAssignment.libraryName,
+    });
+  }
 
   // Extract font properties from text node (Phase 3: Complete property extraction)
   // OPTIMIZATION: Only extract properties for unstyled/partially-styled layers (3x fewer calls)
@@ -608,6 +795,22 @@ function calculateAuditMetrics(
     tokensByCollection[collectionName] = (tokensByCollection[collectionName] || 0) + 1;
   }
 
+  // Calculate library distribution by grouping styles by library name
+  // Use styles' libraryName (already resolved by library resolution code) instead of layer.styleSource
+  const libraryDistribution: Record<string, number> = {};
+  for (const style of styles) {
+    const libraryName = style.libraryName || 'Unknown';
+    const usageCount = style.usageCount || 0;
+    libraryDistribution[libraryName] = (libraryDistribution[libraryName] || 0) + usageCount;
+  }
+
+  console.log(`[LIBRARY DISTRIBUTION] Calculated from styles (using resolved libraryName):`);
+  console.log(`[LIBRARY DISTRIBUTION] Total styles: ${styles.length}`);
+  console.log(`[LIBRARY DISTRIBUTION] Distribution:`, libraryDistribution);
+  console.log(`[LIBRARY DISTRIBUTION] Sample styles with library names:`,
+    styles.slice(0, 5).map(s => ({ name: s.name, libraryName: s.libraryName, usageCount: s.usageCount }))
+  );
+
   // Calculate top styles by usage (from layer assignments)
   const styleUsageMap = new Map<string, number>();
   for (const layer of layers) {
@@ -633,7 +836,7 @@ function calculateAuditMetrics(
     fullyStyledCount,
     partiallyStyledCount,
     unstyledCount,
-    libraryDistribution: { Local: styledCount }, // Simplified
+    libraryDistribution,
     tokenAdoptionRate,
     tokenCoverageRate,
     totalTokenCount,
@@ -713,15 +916,23 @@ async function convertFigmaStyleToTextStyle(
       libraryId = libraryKey;
     } else if (matchedLibrary) {
       // Found a matching library via hash
-      libraryId = matchedLibrary[0];
       libraryName = matchedLibrary[1];
+
+      // If this is a published library (name is 'Published Libraries'), use a consistent ID
+      // so all published library styles are grouped together
+      if (libraryName === 'Published Libraries') {
+        libraryId = 'remote-published';
+      } else {
+        libraryId = matchedLibrary[0];
+      }
     } else {
-      // No match - group all unknown remote styles together to prevent
-      // creating a separate "library" for each style
+      // No match in library map - group all unknown remote styles together
+      // This prevents creating a separate library for each style (fix from commit 7096791)
       libraryId = 'remote-unknown';
       libraryName = 'Remote Library';
+
       console.log(
-        `Style "${figmaStyle.name}" (key: ${figmaStyle.key}) - no library match found, grouping as "Remote Library"`
+        `[LIBRARY RESOLUTION] Style "${figmaStyle.name}" (key: ${figmaStyle.key}) not in library map, grouping as "Remote Library"`
       );
     }
   }
@@ -788,12 +999,13 @@ async function convertFigmaStyleToTextStyle(
 }
 
 /**
- * Build LibrarySource objects from detected styles
+ * Build LibrarySource objects from all available libraries
  *
  * @param styles - All text styles (local + remote)
- * @returns Array of LibrarySource objects, one per library
+ * @param libraryMap - Enhanced library map with all discovered libraries
+ * @returns Array of LibrarySource objects, one per library (including libraries with 0 styles)
  */
-function buildLibrarySources(styles: TextStyle[]): LibrarySource[] {
+function buildLibrarySources(styles: TextStyle[], libraryMap: Map<string, string>): LibrarySource[] {
   // Group styles by library
   const stylesByLibrary = new Map<string, TextStyle[]>();
 
@@ -805,24 +1017,88 @@ function buildLibrarySources(styles: TextStyle[]): LibrarySource[] {
     stylesByLibrary.get(libraryKey)!.push(style);
   }
 
-  // Create LibrarySource for each library
   const libraries: LibrarySource[] = [];
 
-  for (const [libraryId, libraryStyles] of stylesByLibrary) {
-    const isLocal = libraryId === 'local';
-    const libraryName = libraryStyles[0]?.libraryName || 'Unknown';
+  // Always add "Local" library (even if no local styles exist)
+  const localStyles = stylesByLibrary.get('local') || [];
+  libraries.push({
+    id: 'local',
+    name: 'Local',
+    type: 'local',
+    isEnabled: true,
+    isAvailable: true,
+    styleCount: localStyles.length,
+    styleIds: localStyles.map((s) => s.id),
+    totalUsageCount: 0,
+    usagePercentage: 0,
+  });
+
+  // Add all remote libraries from the enhanced library map
+  for (const [libraryKey, libraryName] of libraryMap.entries()) {
+    // Skip local (already added) and remote-unknown (handled separately)
+    if (libraryKey === 'local') continue;
+
+    const libraryStyles = stylesByLibrary.get(libraryKey) || [];
 
     libraries.push({
-      id: libraryId,
+      id: libraryKey,
       name: libraryName,
-      type: isLocal ? 'local' : 'team_library',
+      type: 'team_library',
       isEnabled: true,
       isAvailable: true,
       styleCount: libraryStyles.length,
       styleIds: libraryStyles.map((s) => s.id),
-      totalUsageCount: 0, // Will be calculated from layer counts
+      totalUsageCount: 0,
       usagePercentage: 0,
     });
+  }
+
+  // Add any styles from unknown remote libraries (styles that didn't match any library)
+  console.log('[BUILD LIBRARIES] Checking for unknown libraries...');
+  console.log('[BUILD LIBRARIES] Styles grouped by library:',
+    Array.from(stylesByLibrary.entries()).map(([libId, styles]) => ({
+      libraryId: libId,
+      styleCount: styles.length,
+      libraryName: styles[0]?.libraryName
+    }))
+  );
+
+  for (const [libraryId, libraryStyles] of stylesByLibrary) {
+    if (libraryId !== 'local' && !libraryMap.has(libraryId) && !libraries.some(l => l.id === libraryId)) {
+      const libraryName = libraryStyles[0]?.libraryName || 'Unknown Library';
+
+      console.log(`[BUILD LIBRARIES] Adding unknown library: "${libraryName}" (id: ${libraryId}, ${libraryStyles.length} styles)`);
+
+      libraries.push({
+        id: libraryId,
+        name: libraryName,
+        type: 'team_library',
+        isEnabled: true,
+        isAvailable: true,
+        styleCount: libraryStyles.length,
+        styleIds: libraryStyles.map((s) => s.id),
+        totalUsageCount: 0,
+        usagePercentage: 0,
+      });
+    }
+  }
+
+  console.log(`[BUILD LIBRARIES] Created ${libraries.length} library sources:`,
+    libraries.map(l => ({ name: l.name, id: l.id, styleCount: l.styleCount }))
+  );
+
+  // DEBUG: Check for library name mismatches
+  console.log('[BUILD LIBRARIES] Checking for name mismatches...');
+  for (const library of libraries) {
+    const matchingStyles = Array.from(stylesByLibrary.values())
+      .flat()
+      .filter(s => s.libraryName === library.name);
+    if (matchingStyles.length !== library.styleCount) {
+      console.warn(
+        `[BUILD LIBRARIES] MISMATCH for library "${library.name}" (id: ${library.id}): ` +
+        `library.styleCount=${library.styleCount} but found ${matchingStyles.length} styles with matching libraryName`
+      );
+    }
   }
 
   // Sort: Local first, then alphabetically

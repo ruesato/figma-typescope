@@ -157,12 +157,12 @@ export function useAuditState() {
         }
       }
 
-      // Accumulate new libraries (avoid duplicates by key)
-      const existingLibraryKeys = new Set(styleGovernanceResult.libraries.map(l => l.key));
+      // Accumulate new libraries (avoid duplicates by id)
+      const existingLibraryIds = new Set(styleGovernanceResult.libraries.map(l => l.id));
       for (const library of newLibraries) {
-        if (!existingLibraryKeys.has(library.key)) {
+        if (!existingLibraryIds.has(library.id)) {
           styleGovernanceResult.libraries.push(library);
-          existingLibraryKeys.add(library.key);
+          existingLibraryIds.add(library.id);
         }
       }
 

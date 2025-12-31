@@ -113,6 +113,19 @@ export default function StyleTreeView({
 
   // Build tree structure from styles and libraries
   const treeData = useMemo(() => {
+    console.log('[STYLE TREE VIEW] Building tree with:', {
+      stylesCount: styles.length,
+      librariesCount: libraries.length,
+      groupByLibrary,
+      unstyledLayersCount: unstyledLayers.length,
+    });
+
+    if (libraries.length > 0) {
+      console.log('[STYLE TREE VIEW] Sample libraries:',
+        libraries.slice(0, 5).map(l => ({ name: l.name, styleCount: l.styleCount }))
+      );
+    }
+
     const tree: TreeNode<TextStyle>[] = [];
 
     // Group by library if enabled
@@ -179,6 +192,13 @@ export default function StyleTreeView({
         },
       };
       tree.push(unstyledNode);
+    }
+
+    console.log('[STYLE TREE VIEW] Tree built with', tree.length, 'top-level nodes');
+    if (tree.length > 0) {
+      console.log('[STYLE TREE VIEW] Tree nodes:',
+        tree.map(n => ({ type: n.type, name: n.name, childCount: n.children.length }))
+      );
     }
 
     return tree;
