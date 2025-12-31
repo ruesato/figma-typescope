@@ -18,7 +18,7 @@ import type {
 } from '@/shared/types';
 
 import { traverseTextNodes } from '@/main/utils/traversal';
-import { BatchProcessor } from '@/main/replacement/batchProcessor';
+import { yieldForGC, releaseArray } from './memoryUtils';
 
 /**
  * Build a map of style IDs to text layers using a single document traversal
@@ -28,15 +28,15 @@ import { BatchProcessor } from '@/main/replacement/batchProcessor';
  *
  * @param styleIds - Array of style IDs to find layers for
  * @param cancelFn - Optional function that returns true if operation should be cancelled
- * @returns Map of style ID to array of text nodes using that style
+ * @returns Map of style ID to array of layer IDs (not node references - memory optimization)
  */
 async function buildStyleToLayersMap(
   styleIds: string[],
   cancelFn?: () => boolean
-): Promise<{ [styleId: string]: TextNode[] }> {
+): Promise<{ [styleId: string]: string[] }> {
   console.log(`[ConversionEngine] Building style-to-layers map for ${styleIds.length} styles...`);
 
-  const map: { [styleId: string]: TextNode[] } = {};
+  const map: { [styleId: string]: string[] } = {};
   const styleIdSet = new Set(styleIds);
 
   // Initialize map with empty arrays
@@ -48,16 +48,19 @@ async function buildStyleToLayersMap(
   const allTextNodes = await traverseTextNodes(figma.root, cancelFn);
   console.log(`[ConversionEngine] Found ${allTextNodes.length} text nodes in document`);
 
-  // Build map in single pass
+  // Build map in single pass - MEMORY OPTIMIZATION: Store IDs only (~40 bytes vs ~1KB+ per node)
   for (const node of allTextNodes) {
     if (node.textStyleId && styleIdSet.has(node.textStyleId)) {
-      map[node.textStyleId].push(node);
+      map[node.textStyleId].push(node.id); // Store ID instead of node reference
     }
   }
 
+  // Release node references to allow garbage collection
+  allTextNodes.length = 0;
+
   // Log statistics
   const totalLayers = Object.values(map).reduce((sum, layers) => sum + layers.length, 0);
-  console.log(`[ConversionEngine] Mapped ${totalLayers} layers to ${styleIds.length} styles`);
+  console.log(`[ConversionEngine] Mapped ${totalLayers} layer IDs to ${styleIds.length} styles`);
 
   return map;
 }
@@ -65,66 +68,92 @@ async function buildStyleToLayersMap(
 /**
  * Apply a style to layers in batches with progress callbacks
  *
+ * MEMORY OPTIMIZATION: Accepts layer IDs and retrieves nodes on-demand per batch.
+ * This prevents holding all node references in memory simultaneously.
+ *
  * PERFORMANCE: Uses adaptive batching (100→25→100) to:
  * - Prevent memory accumulation
  * - Yield to event loop (prevent "Plugin not responding")
  * - Recover from errors gracefully
  *
- * @param layers - Array of text nodes to update
+ * @param layerIds - Array of layer IDs to update (not node references)
  * @param newStyleId - ID of the style to apply
  * @param progressCallback - Optional callback for progress updates
  * @param cancelFn - Optional function that returns true if operation should be cancelled
  * @returns Statistics about the operation
  */
 async function applyStyleToLayersInBatches(
-  layers: TextNode[],
+  layerIds: string[],
   newStyleId: string,
   progressCallback?: (updated: number, total: number) => void,
   cancelFn?: () => boolean
 ): Promise<{ updated: number; failed: number; errors: string[] }> {
-  const batchProcessor = new BatchProcessor({
-    initialBatchSize: 100,
-    minBatchSize: 25,
-    maxBatchSize: 100,
-    successThreshold: 5,
-  });
-
   let updated = 0;
   let failed = 0;
   const errors: string[] = [];
-  const total = layers.length;
+  const total = layerIds.length;
+  const BATCH_SIZE = 100;
 
-  console.log(`[ConversionEngine] Applying style to ${total} layers in batches...`);
+  console.log(`[ConversionEngine] Applying style to ${total} layers in batches of ${BATCH_SIZE}...`);
 
-  for await (const result of batchProcessor.processBatches(
-    layers,
-    async (layer) => {
-      // Check for cancellation
-      if (cancelFn?.()) {
-        throw new Error('Conversion cancelled by user');
+  // Process in batches - retrieve nodes on-demand
+  for (let i = 0; i < total; i += BATCH_SIZE) {
+    // Check for cancellation
+    if (cancelFn?.()) {
+      console.log('[ConversionEngine] Conversion cancelled by user');
+      break;
+    }
+
+    const batchIds = layerIds.slice(i, Math.min(i + BATCH_SIZE, total));
+    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+
+    // Retrieve nodes for this batch only
+    const nodes = await Promise.all(
+      batchIds.map(async (id) => {
+        try {
+          return await figma.getNodeByIdAsync(id);
+        } catch (error) {
+          return null; // Node may have been deleted
+        }
+      })
+    );
+
+    // Process batch
+    for (let j = 0; j < nodes.length; j++) {
+      const node = nodes[j];
+      if (node?.type === 'TEXT') {
+        try {
+          (node as TextNode).textStyleId = newStyleId;
+          updated++;
+        } catch (error) {
+          failed++;
+          errors.push(`Layer ${node.name}: ${(error as Error).message}`);
+        }
+      } else {
+        failed++;
+        if (node) {
+          errors.push(`Layer ${node.name}: Not a text node`);
+        } else {
+          errors.push(`Layer ${batchIds[j]}: Node not found (may have been deleted)`);
+        }
       }
-
-      // Apply the new style
-      layer.textStyleId = newStyleId;
     }
-  )) {
-    updated += result.layersProcessed;
-    failed += result.layersFailed;
 
-    // Collect errors
-    for (const error of result.errors) {
-      errors.push(`Layer ${error.layerName}: ${error.error.message}`);
-    }
+    // Release batch node references
+    releaseArray(nodes);
 
     // Emit progress callback
     if (progressCallback) {
-      progressCallback(updated, total);
+      progressCallback(updated + failed, total);
     }
 
     // Log batch completion
     console.log(
-      `[ConversionEngine] Batch ${result.batchNumber}: ${result.layersProcessed} layers processed, ${result.layersFailed} failed`
+      `[ConversionEngine] Batch ${batchNumber}: ${nodes.length} layers processed (${updated} updated, ${failed} failed so far)`
     );
+
+    // Yield to event loop for GC
+    await yieldForGC();
   }
 
   console.log(`[ConversionEngine] Applied style to ${updated}/${total} layers (${failed} failed)`);
@@ -220,7 +249,8 @@ export async function convertStylesToLocal(
   }
 
   // Phase 2: Scan document ONCE to build style-to-layers map (10-20%)
-  let styleToLayersMap: { [styleId: string]: TextNode[] } = {};
+  // MEMORY OPTIMIZATION: Map contains layer IDs (strings), not node references
+  let styleToLayersMap: { [styleId: string]: string[] } = {};
   if (applyToLayers) {
     if (progressCallback) {
       progressCallback({
@@ -426,8 +456,10 @@ async function createLocalStyleWithOverrides(
   localStyle.description = sourceStyle.description || '';
 
   // Copy fills (colors)
+  // MEMORY OPTIMIZATION: Use shallow copy instead of deep clone (JSON.parse/stringify)
+  // Paint objects are read-only after creation, so deep clone is unnecessary
   if (sourceStyle.paints && sourceStyle.paints.length > 0) {
-    localStyle.paints = JSON.parse(JSON.stringify(sourceStyle.paints));
+    localStyle.paints = [...sourceStyle.paints];
   }
 
   // Copy variable bindings from source style
