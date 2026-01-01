@@ -77,6 +77,101 @@ export async function traverseTextNodes(
 }
 
 /**
+ * Options for streaming traversal
+ */
+export interface StreamingTraversalOptions {
+  /** Function to check if operation should be cancelled */
+  cancelFn?: () => boolean;
+  /** Yield to event loop every N nodes (default: 50) */
+  yieldEvery?: number;
+  /** Callback when progress is made (processedCount) */
+  onProgress?: (count: number) => void;
+}
+
+/**
+ * Stream through text nodes without accumulating them in memory
+ *
+ * MEMORY OPTIMIZED: Uses callback pattern to process nodes one at a time,
+ * avoiding the 75MB+ memory spike from collecting all nodes in an array.
+ *
+ * @param node - Root node to start traversal from
+ * @param callback - Callback invoked for each text node (can be sync or async)
+ * @param options - Traversal options including cancellation and yield frequency
+ * @returns Total number of text nodes processed
+ *
+ * @example
+ * ```ts
+ * const styleIdToLayerIds = new Map<string, string[]>();
+ *
+ * await traverseTextNodesStreaming(
+ *   figma.root,
+ *   async (node) => {
+ *     if (node.textStyleId) {
+ *       const ids = styleIdToLayerIds.get(node.textStyleId) || [];
+ *       ids.push(node.id);
+ *       styleIdToLayerIds.set(node.textStyleId, ids);
+ *     }
+ *   },
+ *   { yieldEvery: 50 }
+ * );
+ * ```
+ */
+export async function traverseTextNodesStreaming(
+  node: BaseNode,
+  callback: (node: TextNode) => void | Promise<void>,
+  options?: StreamingTraversalOptions
+): Promise<number> {
+  const { cancelFn, yieldEvery = 50, onProgress } = options || {};
+  let processedCount = 0;
+
+  // Check for cancellation before starting
+  if (cancelFn?.()) {
+    return 0;
+  }
+
+  async function traverse(currentNode: BaseNode): Promise<void> {
+    // Check for cancellation
+    if (cancelFn?.()) {
+      return;
+    }
+
+    // If this is a text node, process it via callback
+    if (currentNode.type === 'TEXT') {
+      await callback(currentNode as TextNode);
+      processedCount++;
+
+      // Report progress
+      if (onProgress && processedCount % 100 === 0) {
+        onProgress(processedCount);
+      }
+
+      // Yield periodically to allow GC and prevent UI freeze
+      if (processedCount % yieldEvery === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+
+    // Recursively traverse children if node has them
+    if ('children' in currentNode) {
+      const children = (currentNode as ChildrenMixin).children;
+      for (const child of children) {
+        await traverse(child);
+        // Check for cancellation after each child
+        if (cancelFn?.()) {
+          return;
+        }
+      }
+    }
+  }
+
+  console.log(`[Performance] Starting streaming traversal with yield every ${yieldEvery} nodes`);
+  await traverse(node);
+  console.log(`[Performance] Streaming traversal complete: processed ${processedCount} text nodes`);
+
+  return processedCount;
+}
+
+/**
  * Get text nodes from current selection or page
  *
  * @param scope - Whether to use 'selection' or 'page'

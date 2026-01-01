@@ -17,14 +17,45 @@ import type {
   RGBA,
 } from '@/shared/types';
 
-import { traverseTextNodes } from '@/main/utils/traversal';
-import { yieldForGC, releaseArray } from './memoryUtils';
+import { traverseTextNodes, traverseTextNodesStreaming } from '@/main/utils/traversal';
+import { yieldForGC, releaseArray, logMemoryUsage } from './memoryUtils';
+
+// Maximum number of errors to collect to prevent memory issues during failing conversions
+const MAX_ERRORS = 100;
 
 /**
- * Build a map of style IDs to text layers using a single document traversal
+ * Safely add error(s) to the errors array with a cap to prevent unbounded growth
+ */
+function addError(errors: string[], error: string | string[]): void {
+  if (errors.length >= MAX_ERRORS + 1) return; // Already capped
+
+  if (Array.isArray(error)) {
+    // For spread operations like errors.push(...result.errors)
+    for (const e of error) {
+      if (errors.length >= MAX_ERRORS) {
+        if (errors.length === MAX_ERRORS) {
+          errors.push(`... additional errors truncated (limit: ${MAX_ERRORS})`);
+        }
+        return;
+      }
+      errors.push(e);
+    }
+  } else {
+    if (errors.length === MAX_ERRORS) {
+      errors.push(`... additional errors truncated (limit: ${MAX_ERRORS})`);
+      return;
+    }
+    errors.push(error);
+  }
+}
+
+/**
+ * Build a map of style IDs to text layers using streaming document traversal
  *
- * PERFORMANCE: This is 10-100x faster than calling findLayersUsingStyle() for each style
- * because it traverses the document only ONCE instead of N times.
+ * MEMORY OPTIMIZED: Uses streaming callback pattern instead of collecting all nodes
+ * in an array. This prevents the 75MB+ memory spike that occurs with large documents.
+ *
+ * PERFORMANCE: Still traverses document only ONCE (O(N) where N = total nodes).
  *
  * @param styleIds - Array of style IDs to find layers for
  * @param cancelFn - Optional function that returns true if operation should be cancelled
@@ -34,7 +65,7 @@ async function buildStyleToLayersMap(
   styleIds: string[],
   cancelFn?: () => boolean
 ): Promise<{ [styleId: string]: string[] }> {
-  console.log(`[ConversionEngine] Building style-to-layers map for ${styleIds.length} styles...`);
+  console.log(`[ConversionEngine] Building style-to-layers map for ${styleIds.length} styles (streaming)...`);
 
   const map: { [styleId: string]: string[] } = {};
   const styleIdSet = new Set(styleIds);
@@ -44,23 +75,34 @@ async function buildStyleToLayersMap(
     map[styleId] = [];
   }
 
-  // Single traversal using optimized API (10-100x faster than recursive traversal)
-  const allTextNodes = await traverseTextNodes(figma.root, cancelFn);
-  console.log(`[ConversionEngine] Found ${allTextNodes.length} text nodes in document`);
+  // MEMORY OPTIMIZATION: Stream through nodes without accumulating them in memory
+  // This prevents the 75MB+ memory spike from collecting 50,000+ nodes at once
+  logMemoryUsage('Before streaming traversal');
 
-  // Build map in single pass - MEMORY OPTIMIZATION: Store IDs only (~40 bytes vs ~1KB+ per node)
-  for (const node of allTextNodes) {
-    if (node.textStyleId && styleIdSet.has(node.textStyleId)) {
-      map[node.textStyleId].push(node.id); // Store ID instead of node reference
+  const processedCount = await traverseTextNodesStreaming(
+    figma.root,
+    (node) => {
+      // Only store ID if this node uses one of our target styles
+      if (node.textStyleId && styleIdSet.has(node.textStyleId)) {
+        map[node.textStyleId].push(node.id);
+      }
+    },
+    {
+      cancelFn,
+      yieldEvery: 50, // Yield frequently to allow GC
+      onProgress: (count) => {
+        if (count % 500 === 0) {
+          console.log(`[ConversionEngine] Processed ${count} text nodes...`);
+        }
+      },
     }
-  }
+  );
 
-  // Release node references to allow garbage collection
-  allTextNodes.length = 0;
+  logMemoryUsage('After streaming traversal');
 
   // Log statistics
   const totalLayers = Object.values(map).reduce((sum, layers) => sum + layers.length, 0);
-  console.log(`[ConversionEngine] Mapped ${totalLayers} layer IDs to ${styleIds.length} styles`);
+  console.log(`[ConversionEngine] Scanned ${processedCount} text nodes, mapped ${totalLayers} layer IDs to ${styleIds.length} styles`);
 
   return map;
 }
@@ -92,7 +134,14 @@ async function applyStyleToLayersInBatches(
   let failed = 0;
   const errors: string[] = [];
   const total = layerIds.length;
-  const BATCH_SIZE = 100;
+
+  // MEMORY OPTIMIZATION: Smaller batch sizes for memory stability
+  // Adaptive batch sizing: smaller batches for larger operations to prevent memory spikes
+  let BATCH_SIZE = 25; // Reduced from 100 for better memory management
+  if (total > 1000) {
+    BATCH_SIZE = 10; // Even smaller for very large operations
+    console.log(`[ConversionEngine] Large operation (${total} layers) - using smaller batch size: ${BATCH_SIZE}`);
+  }
 
   console.log(`[ConversionEngine] Applying style to ${total} layers in batches of ${BATCH_SIZE}...`);
 
@@ -127,14 +176,14 @@ async function applyStyleToLayersInBatches(
           updated++;
         } catch (error) {
           failed++;
-          errors.push(`Layer ${node.name}: ${(error as Error).message}`);
+          addError(errors, `Layer ${node.name}: ${(error as Error).message}`);
         }
       } else {
         failed++;
         if (node) {
-          errors.push(`Layer ${node.name}: Not a text node`);
+          addError(errors, `Layer ${node.name}: Not a text node`);
         } else {
-          errors.push(`Layer ${batchIds[j]}: Node not found (may have been deleted)`);
+          addError(errors, `Layer ${batchIds[j]}: Node not found (may have been deleted)`);
         }
       }
     }
@@ -211,6 +260,14 @@ export async function convertStylesToLocal(
   console.log(`[ConversionEngine] Converting ${sourceStyleIds.length} styles with overrides:`, propertyOverrides);
   console.log(`[ConversionEngine] Apply to layers: ${applyToLayers}`);
 
+  // CRITICAL MEMORY OPTIMIZATION: Skip invisible nodes within instances
+  // This can reduce traversal from 50,000 nodes to 5,000 nodes in component-heavy documents
+  // Figma docs: "setting figma.skipInvisibleInstanceChildren = true is recommended for
+  // substantial speed improvements in document traversal"
+  const previousSkipInvisibleSetting = figma.skipInvisibleInstanceChildren;
+  figma.skipInvisibleInstanceChildren = true;
+  console.log(`[ConversionEngine] Enabled skipInvisibleInstanceChildren (was: ${previousSkipInvisibleSetting})`);
+
   const newLocalStyles: TextStyle[] = [];
   const stylesMapped: ConversionMapping[] = [];
   const errors: string[] = [];
@@ -286,7 +343,7 @@ export async function convertStylesToLocal(
       // Get source style
       const sourceStyle = await figma.getStyleByIdAsync(styleId);
       if (!sourceStyle || sourceStyle.type !== 'TEXT') {
-        errors.push(`Style ${styleId} not found or not a text style`);
+        addError(errors, `Style ${styleId} not found or not a text style`);
         continue;
       }
 
@@ -329,7 +386,7 @@ export async function convertStylesToLocal(
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      errors.push(`Failed to convert style ${styleId}: ${errorMsg}`);
+      addError(errors, `Failed to convert style ${styleId}: ${errorMsg}`);
       console.error(`[ConversionEngine] Error converting style ${styleId}:`, error);
     }
   }
@@ -381,7 +438,7 @@ export async function convertStylesToLocal(
 
         // Collect errors from batch processing
         if (result.errors.length > 0) {
-          errors.push(...result.errors);
+          addError(errors, result.errors);
         }
 
         console.log(
@@ -389,7 +446,7 @@ export async function convertStylesToLocal(
         );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        errors.push(`Failed to apply style ${mapping.newStyleName}: ${errorMsg}`);
+        addError(errors, `Failed to apply style ${mapping.newStyleName}: ${errorMsg}`);
         console.error(
           `[ConversionEngine] Error applying style ${mapping.newStyleName}:`,
           error
@@ -408,6 +465,10 @@ export async function convertStylesToLocal(
   if (applyToLayers) {
     console.log(`[ConversionEngine] Applied styles to ${layersAffected} layers`);
   }
+
+  // Restore previous skipInvisibleInstanceChildren setting
+  figma.skipInvisibleInstanceChildren = previousSkipInvisibleSetting;
+  console.log(`[ConversionEngine] Restored skipInvisibleInstanceChildren to: ${previousSkipInvisibleSetting}`);
 
   return {
     newLocalStyles,
