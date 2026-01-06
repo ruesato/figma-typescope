@@ -917,7 +917,15 @@ export interface ConversionResult {
   errors: string[];
   duration: number;
   layersAffected?: number; // Number of text layers that had styles applied
+  layersSkipped?: number; // Number of text layers skipped (will inherit from main component)
   checkpointCreated?: boolean; // Whether a version history checkpoint was created
+  categoryBreakdown?: {
+    mainComponents: number;
+    libraryInstances: number;
+    detachedInstances: number;
+    instancesWithOverride: number;
+    plainText: number;
+  };
 }
 
 // ----------------------------------------------------------------------------

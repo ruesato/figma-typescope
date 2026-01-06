@@ -75,6 +75,7 @@ export default function App() {
   const [toast, setToast] = useState<{
     message: string;
     type: 'success' | 'error' | 'loading';
+    duration?: number; // Optional duration override (0 = no auto-close)
   } | null>(null);
 
   // Page selection state
@@ -144,14 +145,49 @@ export default function App() {
           // Mark new styles for highlighting
           setNewLocalStyleIds(new Set(msg.payload.newLocalStyles.map((s: any) => s.id)));
 
-          // Show success toast with layer info if applicable
-          let successMessage = `Converted ${msg.payload.totalConverted} style${msg.payload.totalConverted !== 1 ? 's' : ''} successfully`;
-          if (msg.payload.layersAffected !== undefined && msg.payload.layersAffected > 0) {
-            successMessage += ` and applied to ${msg.payload.layersAffected} layer${msg.payload.layersAffected !== 1 ? 's' : ''}`;
+          // Build detailed success message with stats
+          const payload = msg.payload;
+          const durationSec = (payload.duration / 1000).toFixed(1);
+
+          let successMessage = `✓ Converted ${payload.totalConverted} style${payload.totalConverted !== 1 ? 's' : ''} in ${durationSec}s`;
+
+          // Add layer replacement stats if applicable
+          if (payload.layersAffected !== undefined && payload.layersAffected > 0) {
+            const parts: string[] = [];
+            parts.push(`\n\n${payload.layersAffected} layer${payload.layersAffected !== 1 ? 's' : ''} updated:`);
+
+            // Add category breakdown if available
+            if (payload.categoryBreakdown) {
+              const breakdown = payload.categoryBreakdown;
+              if (breakdown.mainComponents > 0) {
+                parts.push(`  • ${breakdown.mainComponents} main component${breakdown.mainComponents !== 1 ? 's' : ''}`);
+              }
+              if (breakdown.instancesWithOverride > 0) {
+                parts.push(`  • ${breakdown.instancesWithOverride} instance${breakdown.instancesWithOverride !== 1 ? 's' : ''} with override${breakdown.instancesWithOverride !== 1 ? 's' : ''}`);
+              }
+              if (breakdown.libraryInstances > 0) {
+                parts.push(`  • ${breakdown.libraryInstances} library instance${breakdown.libraryInstances !== 1 ? 's' : ''}`);
+              }
+              if (breakdown.detachedInstances > 0) {
+                parts.push(`  • ${breakdown.detachedInstances} detached instance${breakdown.detachedInstances !== 1 ? 's' : ''}`);
+              }
+              if (breakdown.plainText > 0) {
+                parts.push(`  • ${breakdown.plainText} plain text layer${breakdown.plainText !== 1 ? 's' : ''}`);
+              }
+            }
+
+            // Add skipped count if any
+            if (payload.layersSkipped !== undefined && payload.layersSkipped > 0) {
+              parts.push(`\n${payload.layersSkipped} layer${payload.layersSkipped !== 1 ? 's' : ''} skipped (will inherit from main component)`);
+            }
+
+            successMessage += parts.join('\n');
           }
+
           setToast({
             message: successMessage,
             type: 'success',
+            duration: 0, // Don't auto-dismiss - keep visible for user to review stats
           });
 
           // Auto-refresh audit to show updated usage counts
@@ -852,7 +888,7 @@ export default function App() {
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
-          duration={toast.type === 'loading' ? 0 : 3000}
+          duration={toast.duration !== undefined ? toast.duration : (toast.type === 'loading' ? 0 : 3000)}
         />
       )}
 

@@ -65,7 +65,7 @@ export default function Toast({ message, type, onClose, duration = 3000 }: Toast
         transform: 'translateX(-50%)',
         zIndex: 9999,
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start', // Changed from 'center' to support multiline
         gap: 'var(--figma-space-sm)',
         padding: '12px 16px',
         backgroundColor: styles.bg,
@@ -82,10 +82,10 @@ export default function Toast({ message, type, onClose, duration = 3000 }: Toast
       aria-live="polite"
     >
       {/* Icon */}
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{styles.icon}</div>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', paddingTop: '2px' }}>{styles.icon}</div>
 
       {/* Message */}
-      <div style={{ flex: 1 }}>{message}</div>
+      <div style={{ flex: 1, whiteSpace: 'pre-line' }}>{message}</div>
 
       {/* Close button (only for non-loading toasts) */}
       {type !== 'loading' && onClose && (

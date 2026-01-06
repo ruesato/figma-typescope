@@ -108,6 +108,200 @@ async function buildStyleToLayersMap(
 }
 
 /**
+ * Node categorization for component-aware processing
+ */
+interface TextNodeCategory {
+  localMainComponent: string[];      // Update first (triggers propagation)
+  libraryInstance: string[];         // Must update (can't modify library main)
+  detachedInstance: string[];        // Must update (no main component)
+  localInstanceWithOverride: string[]; // Must update (has textStyleId override)
+  localInstanceNoOverride: string[]; // SKIP (will inherit from main)
+  plainText: string[];               // Must update (not in component)
+}
+
+/**
+ * Check if a text node has a textStyleId override in an instance
+ *
+ * CONSERVATIVE: Only returns true if we're certain there's an override.
+ * When uncertain, returns false to trigger an update (safer).
+ *
+ * @param textNode - The text node to check
+ * @param instance - The instance node containing the text
+ * @returns True if textStyleId is definitely overridden
+ */
+function hasTextStyleOverride(textNode: TextNode, instance: InstanceNode): boolean {
+  // instance.overrides contains all fields directly overridden on this instance
+  // Check if this text node's ID appears in the overrides
+  // Note: Figma's override structure may vary, so we check multiple patterns
+
+  if (!instance.overrides || instance.overrides.length === 0) {
+    return false;
+  }
+
+  const textNodeId = textNode.id;
+
+  // Check if any override relates to this text node
+  return instance.overrides.some((override: any) => {
+    // Pattern 1: Override ID matches text node ID
+    if (override.id === textNodeId) {
+      // Check if textStyleId is in the overridden fields
+      if (override.overriddenFields) {
+        return override.overriddenFields.includes('textStyleId');
+      }
+      // If no overriddenFields array, assume any override means it's overridden
+      return true;
+    }
+
+    // Pattern 2: Override ID contains text node ID (for nested overrides)
+    if (typeof override.id === 'string' && override.id.includes(textNodeId)) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
+/**
+ * Check if an instance's main component is from a library
+ *
+ * @param instance - The instance node to check
+ * @returns True if main component is remote/library component
+ */
+async function isLibraryComponent(instance: InstanceNode): Promise<boolean> {
+  try {
+    const mainComponent = await instance.getMainComponentAsync();
+    return mainComponent?.remote === true;
+  } catch (error) {
+    console.warn('[ConversionEngine] Failed to check if component is from library:', error);
+    // Conservative: assume it's a library component (so we update the instance)
+    return true;
+  }
+}
+
+/**
+ * Categorize text nodes for component-aware processing
+ *
+ * CONSERVATIVE APPROACH: When uncertain about node type or override status,
+ * we err on the side of updating the node rather than skipping it.
+ *
+ * @param layerIds - Array of text layer IDs to categorize
+ * @param cancelFn - Optional cancellation function
+ * @returns Categorized node IDs
+ */
+async function categorizeTextNodes(
+  layerIds: string[],
+  cancelFn?: () => boolean
+): Promise<TextNodeCategory> {
+  const categories: TextNodeCategory = {
+    localMainComponent: [],
+    libraryInstance: [],
+    detachedInstance: [],
+    localInstanceWithOverride: [],
+    localInstanceNoOverride: [],
+    plainText: [],
+  };
+
+  console.log(`[ConversionEngine] Categorizing ${layerIds.length} text nodes for component-aware processing...`);
+  logMemoryUsage('Before node categorization');
+
+  for (const layerId of layerIds) {
+    // Check for cancellation
+    if (cancelFn?.()) {
+      console.log('[ConversionEngine] Categorization cancelled by user');
+      break;
+    }
+
+    try {
+      const node = await figma.getNodeByIdAsync(layerId);
+      if (!node || node.type !== 'TEXT') {
+        // Node not found or not text - skip
+        continue;
+      }
+
+      const textNode = node as TextNode;
+      let categorized = false;
+
+      // Walk up parent hierarchy to find component/instance context
+      let current: BaseNode | null = textNode;
+      while (current && current.parent) {
+        current = current.parent;
+
+        // Case 1: Text is inside a LOCAL main component
+        if (current.type === 'COMPONENT') {
+          const component = current as ComponentNode;
+          // Check if it's a local component (not from library)
+          if (!component.remote) {
+            categories.localMainComponent.push(layerId);
+            categorized = true;
+            break;
+          }
+        }
+
+        // Case 2: Text is inside an instance
+        if (current.type === 'INSTANCE') {
+          const instance = current as InstanceNode;
+
+          // Check if instance is detached (no main component)
+          const mainComponent = await instance.getMainComponentAsync();
+          if (!mainComponent) {
+            categories.detachedInstance.push(layerId);
+            categorized = true;
+            break;
+          }
+
+          // Check if main component is from library
+          const isLibrary = await isLibraryComponent(instance);
+          if (isLibrary) {
+            categories.libraryInstance.push(layerId);
+            categorized = true;
+            break;
+          }
+
+          // Main component is local - check for textStyleId override
+          const hasOverride = hasTextStyleOverride(textNode, instance);
+          if (hasOverride) {
+            categories.localInstanceWithOverride.push(layerId);
+          } else {
+            categories.localInstanceNoOverride.push(layerId);
+          }
+          categorized = true;
+          break;
+        }
+
+        // Stop at page level
+        if (current.type === 'PAGE') {
+          break;
+        }
+      }
+
+      // Case 3: Plain text (not in any component/instance)
+      if (!categorized) {
+        categories.plainText.push(layerId);
+      }
+
+    } catch (error) {
+      console.warn(`[ConversionEngine] Error categorizing node ${layerId}:`, error);
+      // Conservative: if we can't categorize, treat as plain text (will be updated)
+      categories.plainText.push(layerId);
+    }
+  }
+
+  logMemoryUsage('After node categorization');
+
+  // Log categorization results
+  console.log('[ConversionEngine] Node categorization complete:', {
+    localMainComponent: categories.localMainComponent.length,
+    libraryInstance: categories.libraryInstance.length,
+    detachedInstance: categories.detachedInstance.length,
+    localInstanceWithOverride: categories.localInstanceWithOverride.length,
+    localInstanceNoOverride: categories.localInstanceNoOverride.length,
+    plainText: categories.plainText.length,
+  });
+
+  return categories;
+}
+
+/**
  * Apply a style to layers in batches with progress callbacks
  *
  * MEMORY OPTIMIZATION: Accepts layer IDs and retrieves nodes on-demand per batch.
@@ -391,7 +585,17 @@ export async function convertStylesToLocal(
     }
   }
 
-  // Phase 4: Apply styles to layers in batches (50-100%)
+  // Phase 4: Apply styles to layers using component-aware processing (50-100%)
+  let layersSkipped = 0;
+  // Track category breakdown for reporting
+  const categoryBreakdown = {
+    mainComponents: 0,
+    libraryInstances: 0,
+    detachedInstances: 0,
+    instancesWithOverride: 0,
+    plainText: 0,
+  };
+
   if (applyToLayers && stylesMapped.length > 0) {
     let totalLayersProcessed = 0;
     const totalLayersToProcess = Object.values(styleToLayersMap).reduce(
@@ -408,41 +612,190 @@ export async function convertStylesToLocal(
       }
 
       console.log(
-        `[ConversionEngine] Applying style ${mapping.newStyleName} to ${layers.length} layers...`
+        `[ConversionEngine] Applying style ${mapping.newStyleName} to ${layers.length} layers using component-aware processing...`
       );
 
       try {
-        const result = await applyStyleToLayersInBatches(
-          layers,
-          mapping.newStyleId,
-          (updated, total) => {
-            // Calculate overall progress (50-100%)
-            const phaseProgress = (totalLayersProcessed + updated) / totalLayersToProcess;
-            const percentage = 50 + Math.round(phaseProgress * 50);
+        // COMPONENT-AWARE OPTIMIZATION: Categorize layers before processing
+        // This allows us to process in optimal order and skip inheriting instances
+        const categories = await categorizeTextNodes(layers, cancelFn);
 
-            if (progressCallback) {
-              progressCallback({
-                state: 'applying',
-                phase: 'layers',
-                percentage,
-                layersProcessed: totalLayersProcessed + updated,
-                totalLayers: totalLayersToProcess,
-              });
-            }
-          },
-          cancelFn
-        );
-
-        layersAffected += result.updated;
-        totalLayersProcessed += layers.length;
-
-        // Collect errors from batch processing
-        if (result.errors.length > 0) {
-          addError(errors, result.errors);
-        }
+        // Track total skipped for this style
+        const skippedForStyle = categories.localInstanceNoOverride.length;
+        layersSkipped += skippedForStyle;
 
         console.log(
-          `[ConversionEngine] Applied style ${mapping.newStyleName} to ${result.updated}/${layers.length} layers`
+          `[ConversionEngine] Category breakdown for ${mapping.newStyleName}:`,
+          {
+            mainComponents: categories.localMainComponent.length,
+            libraryInstances: categories.libraryInstance.length,
+            detachedInstances: categories.detachedInstance.length,
+            instancesWithOverride: categories.localInstanceWithOverride.length,
+            instancesNoOverride: categories.localInstanceNoOverride.length,
+            plainText: categories.plainText.length,
+            willSkip: skippedForStyle,
+          }
+        );
+
+        // Process categories in optimal order
+        let categoryUpdated = 0;
+
+        // Step 1: Update LOCAL main components FIRST
+        // This triggers automatic propagation to inheriting instances
+        if (categories.localMainComponent.length > 0) {
+          console.log(
+            `[ConversionEngine] [1/5] Processing ${categories.localMainComponent.length} main component text nodes...`
+          );
+          const result = await applyStyleToLayersInBatches(
+            categories.localMainComponent,
+            mapping.newStyleId,
+            (updated, total) => {
+              const phaseProgress = (totalLayersProcessed + categoryUpdated + updated) / totalLayersToProcess;
+              const percentage = 50 + Math.round(phaseProgress * 50);
+              if (progressCallback) {
+                progressCallback({
+                  state: 'applying',
+                  phase: 'layers',
+                  percentage,
+                  layersProcessed: totalLayersProcessed + categoryUpdated + updated,
+                  totalLayers: totalLayersToProcess,
+                });
+              }
+            },
+            cancelFn
+          );
+          categoryUpdated += result.updated;
+          categoryBreakdown.mainComponents += result.updated;
+          if (result.errors.length > 0) addError(errors, result.errors);
+        }
+
+        // Step 2: Yield to allow Figma to propagate main component changes
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        // Step 3: Update library instance text (can't modify library main)
+        if (categories.libraryInstance.length > 0) {
+          console.log(
+            `[ConversionEngine] [2/5] Processing ${categories.libraryInstance.length} library instance text nodes...`
+          );
+          const result = await applyStyleToLayersInBatches(
+            categories.libraryInstance,
+            mapping.newStyleId,
+            (updated, total) => {
+              const phaseProgress = (totalLayersProcessed + categoryUpdated + updated) / totalLayersToProcess;
+              const percentage = 50 + Math.round(phaseProgress * 50);
+              if (progressCallback) {
+                progressCallback({
+                  state: 'applying',
+                  phase: 'layers',
+                  percentage,
+                  layersProcessed: totalLayersProcessed + categoryUpdated + updated,
+                  totalLayers: totalLayersToProcess,
+                });
+              }
+            },
+            cancelFn
+          );
+          categoryUpdated += result.updated;
+          categoryBreakdown.libraryInstances += result.updated;
+          if (result.errors.length > 0) addError(errors, result.errors);
+        }
+
+        // Step 4: Update detached instances (no main component)
+        if (categories.detachedInstance.length > 0) {
+          console.log(
+            `[ConversionEngine] [3/5] Processing ${categories.detachedInstance.length} detached instance text nodes...`
+          );
+          const result = await applyStyleToLayersInBatches(
+            categories.detachedInstance,
+            mapping.newStyleId,
+            (updated, total) => {
+              const phaseProgress = (totalLayersProcessed + categoryUpdated + updated) / totalLayersToProcess;
+              const percentage = 50 + Math.round(phaseProgress * 50);
+              if (progressCallback) {
+                progressCallback({
+                  state: 'applying',
+                  phase: 'layers',
+                  percentage,
+                  layersProcessed: totalLayersProcessed + categoryUpdated + updated,
+                  totalLayers: totalLayersToProcess,
+                });
+              }
+            },
+            cancelFn
+          );
+          categoryUpdated += result.updated;
+          categoryBreakdown.detachedInstances += result.updated;
+          if (result.errors.length > 0) addError(errors, result.errors);
+        }
+
+        // Step 5: Update local instances WITH override
+        if (categories.localInstanceWithOverride.length > 0) {
+          console.log(
+            `[ConversionEngine] [4/5] Processing ${categories.localInstanceWithOverride.length} instance text nodes with overrides...`
+          );
+          const result = await applyStyleToLayersInBatches(
+            categories.localInstanceWithOverride,
+            mapping.newStyleId,
+            (updated, total) => {
+              const phaseProgress = (totalLayersProcessed + categoryUpdated + updated) / totalLayersToProcess;
+              const percentage = 50 + Math.round(phaseProgress * 50);
+              if (progressCallback) {
+                progressCallback({
+                  state: 'applying',
+                  phase: 'layers',
+                  percentage,
+                  layersProcessed: totalLayersProcessed + categoryUpdated + updated,
+                  totalLayers: totalLayersToProcess,
+                });
+              }
+            },
+            cancelFn
+          );
+          categoryUpdated += result.updated;
+          categoryBreakdown.instancesWithOverride += result.updated;
+          if (result.errors.length > 0) addError(errors, result.errors);
+        }
+
+        // Step 6: Update plain text (not in components)
+        if (categories.plainText.length > 0) {
+          console.log(
+            `[ConversionEngine] [5/5] Processing ${categories.plainText.length} plain text nodes...`
+          );
+          const result = await applyStyleToLayersInBatches(
+            categories.plainText,
+            mapping.newStyleId,
+            (updated, total) => {
+              const phaseProgress = (totalLayersProcessed + categoryUpdated + updated) / totalLayersToProcess;
+              const percentage = 50 + Math.round(phaseProgress * 50);
+              if (progressCallback) {
+                progressCallback({
+                  state: 'applying',
+                  phase: 'layers',
+                  percentage,
+                  layersProcessed: totalLayersProcessed + categoryUpdated + updated,
+                  totalLayers: totalLayersToProcess,
+                });
+              }
+            },
+            cancelFn
+          );
+          categoryUpdated += result.updated;
+          categoryBreakdown.plainText += result.updated;
+          if (result.errors.length > 0) addError(errors, result.errors);
+        }
+
+        // Step 7: Log skipped nodes (inheriting instances)
+        if (categories.localInstanceNoOverride.length > 0) {
+          console.log(
+            `[ConversionEngine] ✓ Skipped ${categories.localInstanceNoOverride.length} instance text nodes (will inherit from main component)`
+          );
+        }
+
+        layersAffected += categoryUpdated;
+        totalLayersProcessed += layers.length;
+
+        console.log(
+          `[ConversionEngine] Applied style ${mapping.newStyleName} to ${categoryUpdated}/${layers.length} layers (${skippedForStyle} skipped)`
         );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
@@ -463,7 +816,7 @@ export async function convertStylesToLocal(
     `[ConversionEngine] Conversion complete: ${totalConverted} succeeded, ${totalFailed} failed in ${duration}ms`
   );
   if (applyToLayers) {
-    console.log(`[ConversionEngine] Applied styles to ${layersAffected} layers`);
+    console.log(`[ConversionEngine] Applied styles to ${layersAffected} layers, skipped ${layersSkipped} inheriting instances`);
   }
 
   // Restore previous skipInvisibleInstanceChildren setting
@@ -478,7 +831,9 @@ export async function convertStylesToLocal(
     errors,
     duration,
     layersAffected: applyToLayers ? layersAffected : undefined,
+    layersSkipped: applyToLayers ? layersSkipped : undefined,
     checkpointCreated: applyToLayers ? checkpointCreated : undefined,
+    categoryBreakdown: applyToLayers && layersAffected > 0 ? categoryBreakdown : undefined,
   };
 }
 
@@ -717,9 +1072,9 @@ async function applyPropertyOverrides(
 
 /**
  * Try to load a font with multiple fallback styles
- * Returns true if any variant was successfully loaded
+ * Returns the style name that was successfully loaded, or null if none worked
  */
-async function tryLoadFontWithFallbacks(family: string, preferredStyle: string): Promise<boolean> {
+async function tryLoadFontWithFallbacks(family: string, preferredStyle: string): Promise<string | null> {
   // Common font style fallbacks in order of preference
   const fallbackStyles = ['Regular', 'Normal', 'Book', 'Medium', 'Roman', 'Light'];
 
@@ -740,14 +1095,14 @@ async function tryLoadFontWithFallbacks(family: string, preferredStyle: string):
       if (style !== preferredStyle) {
         console.log(`[ConversionEngine] Loaded ${family} ${style} as fallback for ${preferredStyle}`);
       }
-      return true;
+      return style; // Return the style that actually loaded
     } catch (error) {
       // Continue to next fallback
       continue;
     }
   }
 
-  return false;
+  return null; // No style could be loaded
 }
 
 /**
@@ -769,16 +1124,16 @@ async function applyFontFamilyOverride(
     const family = String(override.value);
     const currentStyle = style.fontName.style;
 
-    const fontLoaded = await tryLoadFontWithFallbacks(family, currentStyle);
-    if (!fontLoaded) {
+    const loadedStyle = await tryLoadFontWithFallbacks(family, currentStyle);
+    if (!loadedStyle) {
       throw new Error(
         `Cannot load font "${family}". The font may be missing from your system.`
       );
     }
 
-    // Update the font name (keep current style if it loaded, or use whatever fallback worked)
-    // Note: We don't change the style here because tryLoadFontWithFallbacks already loaded it
-    style.fontName = { family, style: currentStyle };
+    // Update the font name with the style that actually loaded
+    style.fontName = { family, style: loadedStyle };
+    console.log(`[ConversionEngine] Applied manual font family override: ${family} ${loadedStyle}`);
   } else {
     // Token binding - bind the variable to fontFamily
     // Try to get the variable - could be local (ID) or remote (key)
@@ -797,50 +1152,55 @@ async function applyFontFamilyOverride(
       throw new Error(`Token ${override.tokenName} not found (ID: ${override.tokenId})`);
     }
 
-    // When binding a fontFamily variable, we need to ensure the style has a loaded font.
-    // Since the variable only affects the family (not the weight), we can use Inter
-    // with the same weight/style as the original, then bind the variable.
-    // This avoids needing the original font (e.g., Menlo) to be installed.
+    // When binding a fontFamily variable, Figma requires the TARGET font to be loaded
+    // The target is: variable value (e.g., "Menlo") + current style weight (e.g., "Bold")
+    // We need to load the target font with fallback styles before binding
     const originalWeight = style.fontName.style;
 
-    // Debug: Log the variable details
+    // Get the variable value (the target font family)
     const variableValue = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
+    const targetFamily = String(variableValue);
+
     console.log(
       `[ConversionEngine] Preparing to bind fontFamily variable:`,
       {
         variableName: variable.name,
-        variableValue,
+        targetFamily,
         originalFamily: style.fontName.family,
         originalWeight,
       }
     );
 
-    // Load Inter with the same weight/style
-    try {
-      await figma.loadFontAsync({ family: 'Inter', style: originalWeight });
-      style.fontName = { family: 'Inter', style: originalWeight };
-    } catch (interError) {
-      // If Inter doesn't have this weight, fall back to Regular
+    // Try to load the target font with the original weight, then fallbacks
+    const loadedStyle = await tryLoadFontWithFallbacks(targetFamily, originalWeight);
+
+    if (!loadedStyle) {
       console.warn(
-        `[ConversionEngine] Inter doesn't have weight ${originalWeight}, using Regular...`
+        `[ConversionEngine] Cannot bind fontFamily variable - target font "${targetFamily}" not available. ` +
+        `Preserving original font family "${style.fontName.family}".`
       );
-      await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
-      style.fontName = { family: 'Inter', style: 'Regular' };
+      // Keep the original font - don't bind the variable
+      return;
     }
 
-    // Now bind the fontFamily variable (which will override just the family, keeping the weight)
+    // Font loaded successfully - update the style with the style that actually loaded
+    // Note: loadedStyle may be a fallback (e.g., "Regular" instead of "Bold")
+    style.fontName = { family: targetFamily, style: loadedStyle };
+
+    // Now bind the fontFamily variable
     try {
       style.setBoundVariable('fontFamily', variable);
-      console.log(`[ConversionEngine] Bound variable ${override.tokenName} to fontFamily`);
+      console.log(
+        `[ConversionEngine] Successfully bound variable ${override.tokenName} to fontFamily ` +
+        `(${targetFamily} ${loadedStyle})`
+      );
     } catch (error) {
-      // Figma requires the target font (variable value + weight) to be installed
-      // If binding fails, fall back to not using a variable - just preserve the original font
+      // This shouldn't happen since we just loaded the font, but handle it gracefully
       console.warn(
-        `[ConversionEngine] Cannot bind fontFamily variable (target font not available). Preserving original font family.`,
+        `[ConversionEngine] Unexpected error binding fontFamily variable after loading font:`,
         error
       );
-      // The style already has Inter loaded, which is fine - we'll just not bind the variable
-      // The conversion will succeed, just without the variable binding
+      // Font is already set, just log the error
     }
   }
 }
