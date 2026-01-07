@@ -7,7 +7,14 @@
  * - After 5 consecutive successes: Increase back toward 100
  *
  * This balances performance (large batches) with reliability (small batches on errors).
+ *
+ * Memory optimizations:
+ * - Logs memory usage before/after processing
+ * - Natural cleanup between batches (slice creates new arrays)
+ * - Small delay between batches allows GC opportunities
  */
+
+import { logMemoryUsage } from '../conversion/memoryUtils';
 
 // ============================================================================
 // Types
@@ -79,12 +86,14 @@ export class BatchProcessor {
     console.log(
       `Starting batch processing: ${items.length} items, initial batch size: ${this.currentBatchSize}`
     );
+    logMemoryUsage('Before batch processing');
 
     while (totalProcessed < items.length) {
       batchNumber++;
       const batchStartTime = Date.now();
 
       // Get current batch
+      // MEMORY: slice() creates a new array for this batch
       const batchItems = items.slice(totalProcessed, totalProcessed + this.currentBatchSize);
       const batchSize = batchItems.length;
 
@@ -107,13 +116,15 @@ export class BatchProcessor {
       // Call completion callback
       this.options.onBatchComplete(result);
 
-      // Small delay to prevent blocking
+      // MEMORY: batchItems reference will be garbage collected when loop continues
+      // The delay() call provides an opportunity for GC to run
       await this.delay(10);
     }
 
     console.log(
       `Batch processing complete: ${batchNumber} batches, final size: ${this.currentBatchSize}`
     );
+    logMemoryUsage('After batch processing');
   }
 
   /**

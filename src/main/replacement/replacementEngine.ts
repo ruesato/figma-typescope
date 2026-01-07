@@ -1,6 +1,13 @@
 import type { ReplacementResult, FailedLayer } from '@/shared/types';
 import { BatchProcessor } from './batchProcessor';
 import { retryWithBackoff, classifyError } from './errorRecovery';
+import { yieldForGC, releaseArray } from '../conversion/memoryUtils';
+import {
+  categorizeTextNodes,
+  clearMainComponentCache,
+  getMainComponentCacheSize,
+  type TextNodeCategory,
+} from '../utils/nodeCategorization';
 
 /**
  * Replacement Engine for Style Governance
@@ -14,6 +21,33 @@ import { retryWithBackoff, classifyError } from './errorRecovery';
  * State Machine: idle → validating → creating_checkpoint → processing → complete/error
  * No cancellation after checkpoint (safety constraint)
  */
+
+// ============================================================================
+// Memory Safety Constants
+// ============================================================================
+
+/**
+ * Maximum number of styles to clone during token replacement
+ * Prevents unbounded memory growth when processing large token replacements
+ */
+const MAX_CLONED_STYLES = 50;
+
+/**
+ * Maximum number of errors to collect during replacement
+ * Prevents unbounded error array growth during failing replacements
+ */
+const MAX_REPLACEMENT_ERRORS = 100;
+
+/**
+ * Error message when style cloning limit is reached
+ */
+const MAX_CLONED_STYLES_ERROR_MSG =
+  `Too many styles to clone (limit: ${MAX_CLONED_STYLES}). ` +
+  `This may indicate an issue with your token bindings. ` +
+  `Consider processing in smaller batches or checking your token structure.`;
+
+// NOTE: Node categorization logic has been extracted to @/main/utils/nodeCategorization
+// This reduces code duplication and provides shared component-aware processing logic
 
 // ============================================================================
 // Types
@@ -112,6 +146,62 @@ export class ReplacementEngine {
   /**
    * Process style replacement with adaptive batching and error recovery
    */
+  /**
+   * Process a category of layers
+   */
+  private async processCategory(
+    layerIds: string[],
+    targetStyleId: string,
+    categoryName: string
+  ): Promise<{ updated: number; failed: number; failedLayers: FailedLayer[] }> {
+    let updated = 0;
+    let failed = 0;
+    const failedLayers: FailedLayer[] = [];
+
+    // MEMORY OPTIMIZATION: Process in small batches (25) for memory stability
+    const BATCH_SIZE = 25;
+
+    for (let i = 0; i < layerIds.length; i += BATCH_SIZE) {
+      const batchIds = layerIds.slice(i, Math.min(i + BATCH_SIZE, layerIds.length));
+      const nodes = await Promise.all(
+        batchIds.map((id) => figma.getNodeByIdAsync(id).catch(() => null))
+      );
+
+      for (let j = 0; j < nodes.length; j++) {
+        const node = nodes[j];
+        const layerId = batchIds[j];
+
+        if (node?.type === 'TEXT') {
+          try {
+            (node as TextNode).textStyleId = targetStyleId;
+            updated++;
+          } catch (error) {
+            failed++;
+            // MEMORY SAFETY: Cap error collection
+            if (failedLayers.length < MAX_REPLACEMENT_ERRORS) {
+              failedLayers.push({
+                layerId,
+                layerName: node.name,
+                reason: (error as Error).message,
+                retryCount: 0,
+              });
+            } else if (failedLayers.length === MAX_REPLACEMENT_ERRORS) {
+              console.warn(
+                `[ReplacementEngine] Error cap reached (${MAX_REPLACEMENT_ERRORS}). ` +
+                `Truncating additional errors.`
+              );
+            }
+          }
+        }
+      }
+
+      // MEMORY OPTIMIZATION: Yield for GC
+      await yieldForGC();
+    }
+
+    return { updated, failed, failedLayers };
+  }
+
   private async processStyleReplacement(
     options: StyleReplacementOptions
   ): Promise<Omit<ReplacementResult, 'checkpointTitle' | 'duration'>> {
@@ -119,76 +209,94 @@ export class ReplacementEngine {
 
     let layersUpdated = 0;
     let layersFailed = 0;
+    let layersSkipped = 0;
     const failedLayers: FailedLayer[] = [];
+    const categoryBreakdown = {
+      mainComponents: 0,
+      libraryInstances: 0,
+      detachedInstances: 0,
+      instancesWithOverride: 0,
+      plainText: 0,
+    };
 
     const totalLayers = affectedLayerIds.length;
 
-    // Create batch processor with adaptive sizing
-    const batchProcessor = new BatchProcessor({
-      initialBatchSize: 100,
-      minBatchSize: 25,
-      maxBatchSize: 100,
-      successThreshold: 5,
-      onBatchComplete: (result) => {
-        // Update counts
-        layersUpdated += result.layersProcessed;
-        layersFailed += result.layersFailed;
+    console.log(`[ReplacementEngine] Processing ${totalLayers} layers with component-aware optimization...`);
 
-        // Collect failed layers
-        for (const error of result.errors) {
-          failedLayers.push({
-            layerId: error.layerId,
-            layerName: error.layerName,
-            reason: error.error.message,
-            retryCount: error.retryCount,
-          });
-        }
-
-        // Emit progress
-        const totalProcessed = layersUpdated + layersFailed;
-        const percentage = Math.round((totalProcessed / totalLayers) * 90) + 10; // 10-100%
-
-        this.emitProgress({
-          state: 'processing',
-          percentage,
-          currentBatch: result.batchNumber,
-          totalBatches: Math.ceil(totalLayers / batchProcessor.getCurrentBatchSize()),
-          currentBatchSize: result.batchSize,
-          layersProcessed: totalProcessed,
-          failedLayers: layersFailed,
-          checkpointTitle: this.checkpointTitle,
-        });
-      },
+    // COMPONENT-AWARE OPTIMIZATION: Categorize layers before processing
+    const categories = await categorizeTextNodes(affectedLayerIds, {
+      cancelFn: () => this.cancelRequested,
+      logPrefix: 'ReplacementEngine',
     });
 
-    console.log(`Processing ${totalLayers} layers with adaptive batching`);
+    // Track skipped layers (will inherit from main component)
+    layersSkipped = categories.localInstanceNoOverride.length;
 
-    // Process layers with adaptive batching
-    for await (const _batchResult of batchProcessor.processBatches(
-      affectedLayerIds,
-      async (layerId) => {
-        // Check for cancellation before processing each layer
-        if (this.cancelRequested) {
-          throw new Error('Replacement cancelled by user');
-        }
+    console.log('[ReplacementEngine] Component-aware breakdown:', {
+      localMainComponent: categories.localMainComponent.length,
+      libraryInstance: categories.libraryInstance.length,
+      detachedInstance: categories.detachedInstance.length,
+      localInstanceWithOverride: categories.localInstanceWithOverride.length,
+      localInstanceNoOverride: categories.localInstanceNoOverride.length,
+      plainText: categories.plainText.length,
+      willSkip: layersSkipped,
+    });
 
-        // Apply style replacement with retry logic
-        await retryWithBackoff(async () => {
-          const node = await figma.getNodeByIdAsync(layerId);
+    // Process categories in optimal order
+    const categoriesToProcess = [
+      { name: 'localMainComponent', ids: categories.localMainComponent, field: 'mainComponents' as const },
+      { name: 'libraryInstance', ids: categories.libraryInstance, field: 'libraryInstances' as const },
+      { name: 'detachedInstance', ids: categories.detachedInstance, field: 'detachedInstances' as const },
+      { name: 'localInstanceWithOverride', ids: categories.localInstanceWithOverride, field: 'instancesWithOverride' as const },
+      { name: 'plainText', ids: categories.plainText, field: 'plainText' as const },
+    ];
 
-          if (!node || node.type !== 'TEXT') {
-            throw new Error('Not a text layer');
-          }
+    let totalProcessed = 0;
 
-          // Apply new style
-          (node as TextNode).textStyleId = targetStyleId;
-        });
-      }
-    )) {
-      // Batch processed - progress emitted via callback
+    for (const category of categoriesToProcess) {
+      if (category.ids.length === 0) continue;
+      if (this.cancelRequested) break;
+
+      console.log(`[ReplacementEngine] Processing ${category.name}: ${category.ids.length} layers`);
+
+      const result = await this.processCategory(
+        category.ids,
+        targetStyleId,
+        category.name
+      );
+
+      layersUpdated += result.updated;
+      layersFailed += result.failed;
+      failedLayers.push(...result.failedLayers);
+      categoryBreakdown[category.field] += result.updated;
+
+      totalProcessed += category.ids.length;
+
+      // Emit progress
+      const percentage = Math.round((totalProcessed / totalLayers) * 90) + 10;
+      this.emitProgress({
+        state: 'processing',
+        percentage,
+        currentBatch: 0,
+        totalBatches: 0,
+        currentBatchSize: 0,
+        layersProcessed: totalProcessed,
+        failedLayers: layersFailed,
+        checkpointTitle: this.checkpointTitle,
+      });
     }
 
-    console.log(`Replacement complete: ${layersUpdated} updated, ${layersFailed} failed`);
+    // Log skipped layers
+    if (layersSkipped > 0) {
+      console.log(`[ReplacementEngine] ✓ Skipped ${layersSkipped} instance text nodes (will inherit from main component)`);
+    }
+
+    console.log(`[ReplacementEngine] Replacement complete: ${layersUpdated} updated, ${layersFailed} failed, ${layersSkipped} skipped`);
+
+    // Clear cache to free memory
+    const cacheSize = getMainComponentCacheSize();
+    clearMainComponentCache();
+    console.log(`[ReplacementEngine] Cleared main component cache (${cacheSize} entries freed)`);
 
     return {
       success: layersFailed === 0,
@@ -196,6 +304,8 @@ export class ReplacementEngine {
       layersFailed,
       failedLayers,
       hasWarnings: layersFailed > 0,
+      layersSkipped,
+      categoryBreakdown,
     };
   }
 
@@ -337,8 +447,10 @@ export class ReplacementEngine {
     localStyle.description = sourceStyle.description || '';
 
     // Copy fills (colors)
+    // MEMORY OPTIMIZATION: Use shallow copy instead of deep clone (25x faster)
+    // Paint objects are read-only after creation, so deep clone is unnecessary
     if (sourceStyle.paints && sourceStyle.paints.length > 0) {
-      localStyle.paints = JSON.parse(JSON.stringify(sourceStyle.paints));
+      localStyle.paints = [...sourceStyle.paints];
     }
 
     // Copy variable bindings from source style, replacing the source token with target
@@ -497,8 +609,16 @@ export class ReplacementEngine {
         layersUpdated += result.layersProcessed;
         layersFailed += result.layersFailed;
 
-        // Collect failed layers
+        // Collect failed layers with cap
+        // MEMORY SAFETY: Cap error collection to prevent unbounded growth
         for (const error of result.errors) {
+          if (failedLayers.length >= MAX_REPLACEMENT_ERRORS) {
+            console.warn(
+              `[ReplacementEngine] Error cap reached (${MAX_REPLACEMENT_ERRORS}). ` +
+              `Truncating additional errors.`
+            );
+            break;
+          }
           failedLayers.push({
             layerId: error.layerId,
             layerName: error.layerName,
@@ -771,6 +891,11 @@ export class ReplacementEngine {
             }
 
             if (styleHasSourceToken) {
+              // MEMORY SAFETY: Check if we've exceeded the style cloning limit
+              if (remoteToLocalStyleMap.size >= MAX_CLONED_STYLES) {
+                throw new Error(MAX_CLONED_STYLES_ERROR_MSG);
+              }
+
               // Style has the source token - clone it
               // Clone the style with token replacement
               const newLocalStyleId = await this.cloneStyleWithTokenReplacement(

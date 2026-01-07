@@ -827,6 +827,14 @@ export interface ReplacementResult {
   checkpointTitle: string; // Version history checkpoint
   duration: number; // Time taken in ms
   hasWarnings: boolean; // True if partial failures
+  layersSkipped?: number; // Layers skipped (will inherit from main component)
+  categoryBreakdown?: {
+    mainComponents: number;
+    libraryInstances: number;
+    detachedInstances: number;
+    instancesWithOverride: number;
+    plainText: number;
+  };
 }
 
 /**

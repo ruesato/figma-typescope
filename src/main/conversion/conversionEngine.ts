@@ -19,6 +19,12 @@ import type {
 
 import { traverseTextNodes, traverseTextNodesStreaming } from '@/main/utils/traversal';
 import { yieldForGC, releaseArray, logMemoryUsage } from './memoryUtils';
+import {
+  categorizeTextNodes,
+  clearMainComponentCache,
+  getMainComponentCacheSize,
+  type TextNodeCategory,
+} from '@/main/utils/nodeCategorization';
 
 // Maximum number of errors to collect to prevent memory issues during failing conversions
 const MAX_ERRORS = 100;
@@ -107,199 +113,8 @@ async function buildStyleToLayersMap(
   return map;
 }
 
-/**
- * Node categorization for component-aware processing
- */
-interface TextNodeCategory {
-  localMainComponent: string[];      // Update first (triggers propagation)
-  libraryInstance: string[];         // Must update (can't modify library main)
-  detachedInstance: string[];        // Must update (no main component)
-  localInstanceWithOverride: string[]; // Must update (has textStyleId override)
-  localInstanceNoOverride: string[]; // SKIP (will inherit from main)
-  plainText: string[];               // Must update (not in component)
-}
-
-/**
- * Check if a text node has a textStyleId override in an instance
- *
- * CONSERVATIVE: Only returns true if we're certain there's an override.
- * When uncertain, returns false to trigger an update (safer).
- *
- * @param textNode - The text node to check
- * @param instance - The instance node containing the text
- * @returns True if textStyleId is definitely overridden
- */
-function hasTextStyleOverride(textNode: TextNode, instance: InstanceNode): boolean {
-  // instance.overrides contains all fields directly overridden on this instance
-  // Check if this text node's ID appears in the overrides
-  // Note: Figma's override structure may vary, so we check multiple patterns
-
-  if (!instance.overrides || instance.overrides.length === 0) {
-    return false;
-  }
-
-  const textNodeId = textNode.id;
-
-  // Check if any override relates to this text node
-  return instance.overrides.some((override: any) => {
-    // Pattern 1: Override ID matches text node ID
-    if (override.id === textNodeId) {
-      // Check if textStyleId is in the overridden fields
-      if (override.overriddenFields) {
-        return override.overriddenFields.includes('textStyleId');
-      }
-      // If no overriddenFields array, assume any override means it's overridden
-      return true;
-    }
-
-    // Pattern 2: Override ID contains text node ID (for nested overrides)
-    if (typeof override.id === 'string' && override.id.includes(textNodeId)) {
-      return true;
-    }
-
-    return false;
-  });
-}
-
-/**
- * Check if an instance's main component is from a library
- *
- * @param instance - The instance node to check
- * @returns True if main component is remote/library component
- */
-async function isLibraryComponent(instance: InstanceNode): Promise<boolean> {
-  try {
-    const mainComponent = await instance.getMainComponentAsync();
-    return mainComponent?.remote === true;
-  } catch (error) {
-    console.warn('[ConversionEngine] Failed to check if component is from library:', error);
-    // Conservative: assume it's a library component (so we update the instance)
-    return true;
-  }
-}
-
-/**
- * Categorize text nodes for component-aware processing
- *
- * CONSERVATIVE APPROACH: When uncertain about node type or override status,
- * we err on the side of updating the node rather than skipping it.
- *
- * @param layerIds - Array of text layer IDs to categorize
- * @param cancelFn - Optional cancellation function
- * @returns Categorized node IDs
- */
-async function categorizeTextNodes(
-  layerIds: string[],
-  cancelFn?: () => boolean
-): Promise<TextNodeCategory> {
-  const categories: TextNodeCategory = {
-    localMainComponent: [],
-    libraryInstance: [],
-    detachedInstance: [],
-    localInstanceWithOverride: [],
-    localInstanceNoOverride: [],
-    plainText: [],
-  };
-
-  console.log(`[ConversionEngine] Categorizing ${layerIds.length} text nodes for component-aware processing...`);
-  logMemoryUsage('Before node categorization');
-
-  for (const layerId of layerIds) {
-    // Check for cancellation
-    if (cancelFn?.()) {
-      console.log('[ConversionEngine] Categorization cancelled by user');
-      break;
-    }
-
-    try {
-      const node = await figma.getNodeByIdAsync(layerId);
-      if (!node || node.type !== 'TEXT') {
-        // Node not found or not text - skip
-        continue;
-      }
-
-      const textNode = node as TextNode;
-      let categorized = false;
-
-      // Walk up parent hierarchy to find component/instance context
-      let current: BaseNode | null = textNode;
-      while (current && current.parent) {
-        current = current.parent;
-
-        // Case 1: Text is inside a LOCAL main component
-        if (current.type === 'COMPONENT') {
-          const component = current as ComponentNode;
-          // Check if it's a local component (not from library)
-          if (!component.remote) {
-            categories.localMainComponent.push(layerId);
-            categorized = true;
-            break;
-          }
-        }
-
-        // Case 2: Text is inside an instance
-        if (current.type === 'INSTANCE') {
-          const instance = current as InstanceNode;
-
-          // Check if instance is detached (no main component)
-          const mainComponent = await instance.getMainComponentAsync();
-          if (!mainComponent) {
-            categories.detachedInstance.push(layerId);
-            categorized = true;
-            break;
-          }
-
-          // Check if main component is from library
-          const isLibrary = await isLibraryComponent(instance);
-          if (isLibrary) {
-            categories.libraryInstance.push(layerId);
-            categorized = true;
-            break;
-          }
-
-          // Main component is local - check for textStyleId override
-          const hasOverride = hasTextStyleOverride(textNode, instance);
-          if (hasOverride) {
-            categories.localInstanceWithOverride.push(layerId);
-          } else {
-            categories.localInstanceNoOverride.push(layerId);
-          }
-          categorized = true;
-          break;
-        }
-
-        // Stop at page level
-        if (current.type === 'PAGE') {
-          break;
-        }
-      }
-
-      // Case 3: Plain text (not in any component/instance)
-      if (!categorized) {
-        categories.plainText.push(layerId);
-      }
-
-    } catch (error) {
-      console.warn(`[ConversionEngine] Error categorizing node ${layerId}:`, error);
-      // Conservative: if we can't categorize, treat as plain text (will be updated)
-      categories.plainText.push(layerId);
-    }
-  }
-
-  logMemoryUsage('After node categorization');
-
-  // Log categorization results
-  console.log('[ConversionEngine] Node categorization complete:', {
-    localMainComponent: categories.localMainComponent.length,
-    libraryInstance: categories.libraryInstance.length,
-    detachedInstance: categories.detachedInstance.length,
-    localInstanceWithOverride: categories.localInstanceWithOverride.length,
-    localInstanceNoOverride: categories.localInstanceNoOverride.length,
-    plainText: categories.plainText.length,
-  });
-
-  return categories;
-}
+// NOTE: Node categorization logic has been extracted to @/main/utils/nodeCategorization
+// This reduces code duplication between conversion and replacement engines
 
 /**
  * Apply a style to layers in batches with progress callbacks
@@ -618,7 +433,12 @@ export async function convertStylesToLocal(
       try {
         // COMPONENT-AWARE OPTIMIZATION: Categorize layers before processing
         // This allows us to process in optimal order and skip inheriting instances
-        const categories = await categorizeTextNodes(layers, cancelFn);
+        logMemoryUsage('Before node categorization');
+        const categories = await categorizeTextNodes(layers, {
+          cancelFn,
+          logPrefix: 'ConversionEngine',
+        });
+        logMemoryUsage('After node categorization');
 
         // Track total skipped for this style
         const skippedForStyle = categories.localInstanceNoOverride.length;
@@ -822,6 +642,11 @@ export async function convertStylesToLocal(
   // Restore previous skipInvisibleInstanceChildren setting
   figma.skipInvisibleInstanceChildren = previousSkipInvisibleSetting;
   console.log(`[ConversionEngine] Restored skipInvisibleInstanceChildren to: ${previousSkipInvisibleSetting}`);
+
+  // Clear main component cache to free memory
+  const cacheSize = getMainComponentCacheSize();
+  clearMainComponentCache();
+  console.log(`[ConversionEngine] Cleared main component cache (${cacheSize} entries freed)`);
 
   return {
     newLocalStyles,
