@@ -201,9 +201,10 @@ export async function processAuditData(
 
     // Progress: 40-95% (Processing phase)
 
-    // Step 1: Collect all unique style IDs used in the document (40-45%)
+    // Step 1: Collect all style IDs - both used and unused (40-45%)
     if (onProgress) onProgress(42, 'Collecting style IDs...');
 
+    // First, collect styles currently in use by text layers
     const usedStyleIds = new Set<string>();
     const styleIdSamples: { layerName: string; styleId: string }[] = [];
     for (const layer of textLayers) {
@@ -220,10 +221,23 @@ export async function processAuditData(
     console.log(
       `Found ${usedStyleIds.size} unique styles in use (from ${textLayers.length} layers)`
     );
-    console.log('Sample style IDs from layers:', styleIdSamples);
-    console.log('All unique style IDs:', Array.from(usedStyleIds));
 
-    if (usedStyleIds.size === 0) {
+    // Also include ALL local text styles (even if unused)
+    // This ensures unused local styles and remote styles can still be converted
+    console.log('[STYLE LOADING] Loading all local text styles...');
+    const allLocalStyles = await figma.getLocalTextStylesAsync();
+    const allStyleIds = new Set(usedStyleIds);
+    let unusedLocalCount = 0;
+    for (const localStyle of allLocalStyles) {
+      if (!allStyleIds.has(localStyle.id)) {
+        allStyleIds.add(localStyle.id);
+        unusedLocalCount++;
+      }
+    }
+    console.log(`Added ${unusedLocalCount} unused local styles (total: ${allStyleIds.size} styles to load)`);
+    console.log('Sample style IDs from layers:', styleIdSamples);
+
+    if (allStyleIds.size === 0) {
       console.warn('[PROCESSOR] No style IDs found - this will result in no styles being loaded!');
     }
 
@@ -235,7 +249,7 @@ export async function processAuditData(
     console.log(`[LIBRARY DISCOVERY] Base library map has ${baseLibraryMap.size} entries`);
 
     // Enhance library map by discovering libraries from actual style usage
-    const enhancedLibraryMap = await buildEnhancedLibraryMap(baseLibraryMap, usedStyleIds);
+    const enhancedLibraryMap = await buildEnhancedLibraryMap(baseLibraryMap, allStyleIds);
     const libraryMap = enhancedLibraryMap;
     console.log(`[LIBRARY MAP] Enhanced library map has ${libraryMap.size} entries`);
 
@@ -243,17 +257,17 @@ export async function processAuditData(
     if (onProgress) onProgress(50, 'Loading text styles...');
 
     const styles: TextStyle[] = [];
-    console.log(`[STYLE LOADING] Starting to load ${usedStyleIds.size} styles...`);
+    console.log(`[STYLE LOADING] Starting to load ${allStyleIds.size} styles (${usedStyleIds.size} used + ${unusedLocalCount} unused local)...`);
 
     let localCount = 0;
     let remoteCount = 0;
     let failedCount = 0;
-    const totalStyles = usedStyleIds.size;
+    const totalStyles = allStyleIds.size;
     let processedStyles = 0;
 
     // Batch style loading for better performance (50x faster)
     const STYLE_BATCH_SIZE = 50;
-    const styleIds = Array.from(usedStyleIds);
+    const styleIds = Array.from(allStyleIds);
 
     for (let i = 0; i < styleIds.length; i += STYLE_BATCH_SIZE) {
       const batch = styleIds.slice(i, Math.min(i + STYLE_BATCH_SIZE, styleIds.length));
