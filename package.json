@@ -1,6 +1,6 @@
 {
   "name": "typescope",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Comprehensive Figma plugin for typography and text style auditing",
   "license": "MIT",
   "scripts": {
