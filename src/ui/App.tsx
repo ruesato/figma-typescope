@@ -19,7 +19,9 @@ import FilterToolbar from './components/FilterToolbar';
 import Toast from './components/Toast';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import PageSelector from './components/PageSelector';
-import type { TextStyle, DesignToken } from '@/shared/types';
+import ReplacementResultModal from './components/ReplacementResultModal';
+import ConversionResultModal from './components/ConversionResultModal';
+import type { TextStyle, DesignToken, ReplacementResult } from '@/shared/types';
 
 /**
  * Main App component - Root of the plugin UI
@@ -80,6 +82,36 @@ export default function App() {
 
   // Page selection state
   const [showPageSelector, setShowPageSelector] = useState(false);
+
+  // Replacement result modal state
+  const [replacementResultModal, setReplacementResultModal] = useState<{
+    result: ReplacementResult;
+    sourceName: string;
+    targetName: string;
+    operationType: 'style' | 'token';
+  } | null>(null);
+
+  // Track replacement context for showing result modal
+  const [activeReplacementContext, setActiveReplacementContext] = useState<{
+    sourceName: string;
+    targetName: string;
+    operationType: 'style' | 'token';
+  } | null>(null);
+
+  // Conversion result modal state
+  const [conversionResultModal, setConversionResultModal] = useState<{
+    totalConverted: number;
+    duration: number;
+    layersAffected?: number;
+    layersSkipped?: number;
+    categoryBreakdown?: {
+      mainComponents: number;
+      instancesWithOverride: number;
+      libraryInstances: number;
+      detachedInstances: number;
+      plainText: number;
+    };
+  } | null>(null);
 
   // Get message handlers for communication with main context
   const { runStyleAudit, navigateToLayer, replaceStyle, replaceToken } = useMessageHandler();
@@ -145,49 +177,18 @@ export default function App() {
           // Mark new styles for highlighting
           setNewLocalStyleIds(new Set(msg.payload.newLocalStyles.map((s: any) => s.id)));
 
-          // Build detailed success message with stats
-          const payload = msg.payload;
-          const durationSec = (payload.duration / 1000).toFixed(1);
+          // Close toast and panel immediately
+          setToast(null);
+          setShowConversionPanel(false);
+          setConversionError(undefined);
 
-          let successMessage = `✓ Converted ${payload.totalConverted} style${payload.totalConverted !== 1 ? 's' : ''} in ${durationSec}s`;
-
-          // Add layer replacement stats if applicable
-          if (payload.layersAffected !== undefined && payload.layersAffected > 0) {
-            const parts: string[] = [];
-            parts.push(`\n\n${payload.layersAffected} layer${payload.layersAffected !== 1 ? 's' : ''} updated:`);
-
-            // Add category breakdown if available
-            if (payload.categoryBreakdown) {
-              const breakdown = payload.categoryBreakdown;
-              if (breakdown.mainComponents > 0) {
-                parts.push(`  • ${breakdown.mainComponents} main component${breakdown.mainComponents !== 1 ? 's' : ''}`);
-              }
-              if (breakdown.instancesWithOverride > 0) {
-                parts.push(`  • ${breakdown.instancesWithOverride} instance${breakdown.instancesWithOverride !== 1 ? 's' : ''} with override${breakdown.instancesWithOverride !== 1 ? 's' : ''}`);
-              }
-              if (breakdown.libraryInstances > 0) {
-                parts.push(`  • ${breakdown.libraryInstances} library instance${breakdown.libraryInstances !== 1 ? 's' : ''}`);
-              }
-              if (breakdown.detachedInstances > 0) {
-                parts.push(`  • ${breakdown.detachedInstances} detached instance${breakdown.detachedInstances !== 1 ? 's' : ''}`);
-              }
-              if (breakdown.plainText > 0) {
-                parts.push(`  • ${breakdown.plainText} plain text layer${breakdown.plainText !== 1 ? 's' : ''}`);
-              }
-            }
-
-            // Add skipped count if any
-            if (payload.layersSkipped !== undefined && payload.layersSkipped > 0) {
-              parts.push(`\n${payload.layersSkipped} layer${payload.layersSkipped !== 1 ? 's' : ''} skipped (will inherit from main component)`);
-            }
-
-            successMessage += parts.join('\n');
-          }
-
-          setToast({
-            message: successMessage,
-            type: 'success',
-            duration: 0, // Don't auto-dismiss - keep visible for user to review stats
+          // Show conversion result modal
+          setConversionResultModal({
+            totalConverted: msg.payload.totalConverted,
+            duration: msg.payload.duration,
+            layersAffected: msg.payload.layersAffected,
+            layersSkipped: msg.payload.layersSkipped,
+            categoryBreakdown: msg.payload.categoryBreakdown,
           });
 
           // Auto-refresh audit to show updated usage counts
@@ -201,12 +202,6 @@ export default function App() {
             },
             '*'
           );
-
-          // Close panel after short delay
-          setTimeout(() => {
-            setShowConversionPanel(false);
-            setConversionError(undefined);
-          }, 1500);
           break;
 
         case 'CONVERSION_ERROR':
@@ -214,12 +209,42 @@ export default function App() {
           setConversionError(msg.payload.error);
           setToast({ message: msg.payload.error, type: 'error' });
           break;
+
+        case 'REPLACEMENT_COMPLETE':
+          console.log('[App] Replacement complete:', msg.payload);
+
+          // Close loading toast
+          setToast(null);
+
+          // Show replacement result modal using active replacement context
+          if (activeReplacementContext) {
+            setReplacementResultModal({
+              result: {
+                success: msg.payload.layersFailed === 0,
+                layersUpdated: msg.payload.layersUpdated,
+                layersFailed: msg.payload.layersFailed || 0,
+                failedLayers: msg.payload.failedLayers || [],
+                checkpointTitle: msg.payload.checkpointTitle || '',
+                duration: msg.payload.duration,
+                hasWarnings: msg.payload.hasWarnings,
+                layersSkipped: msg.payload.layersSkipped,
+                categoryBreakdown: msg.payload.categoryBreakdown,
+              },
+              sourceName: activeReplacementContext.sourceName,
+              targetName: activeReplacementContext.targetName,
+              operationType: activeReplacementContext.operationType,
+            });
+
+            // Clear the active replacement context
+            setActiveReplacementContext(null);
+          }
+          break;
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [styleGovernanceResult, setStyleGovernanceResult]);
+  }, [styleGovernanceResult, setStyleGovernanceResult, activeReplacementContext]);
 
   // ============================================================================
   // Event Handlers
@@ -291,6 +316,13 @@ export default function App() {
         affectedLayerCount: affectedLayerIds.length,
       });
 
+      // Store replacement context for result modal
+      setActiveReplacementContext({
+        sourceName: sourceStyle.name,
+        targetName: targetStyle.name,
+        operationType: 'style',
+      });
+
       await replaceStyle(sourceStyle.id, targetStyle.id, affectedLayerIds);
 
       // Reset replacement state
@@ -304,6 +336,13 @@ export default function App() {
         sourceTokenId: sourceToken.id,
         targetTokenId: targetToken.id,
         affectedLayerCount: affectedLayerIds.length,
+      });
+
+      // Store replacement context for result modal
+      setActiveReplacementContext({
+        sourceName: sourceToken.name,
+        targetName: targetToken.name,
+        operationType: 'token',
       });
 
       replaceToken(sourceToken.id, targetToken.id, affectedLayerIds);
@@ -425,6 +464,13 @@ export default function App() {
       affectedLayerCount: affectedLayerIds.length,
     });
 
+    // Store replacement context for result modal
+    setActiveReplacementContext({
+      sourceName: source.name,
+      targetName: target.name,
+      operationType: 'style',
+    });
+
     // Show loading toast
     setToast({ message: 'Replacing style...', type: 'loading' });
 
@@ -449,13 +495,8 @@ export default function App() {
       // Optimistically update audit results
       updateAuditResultsAfterReplacement(source.id, target.id, affectedLayerIds);
 
-      // Show success toast
-      setToast({
-        message: `Successfully replaced "${source.name}" with "${target.name}"`,
-        type: 'success',
-      });
-
       // Close panel and reset state
+      // Note: Success modal will be shown when REPLACEMENT_COMPLETE message is received
       setShowReplacementPanel(false);
       setReplacementPanelError(undefined);
       setSourceStyle(null);
@@ -889,6 +930,31 @@ export default function App() {
           type={toast.type}
           onClose={() => setToast(null)}
           duration={toast.duration !== undefined ? toast.duration : (toast.type === 'loading' ? 0 : 3000)}
+        />
+      )}
+
+      {/* Replacement Result Modal */}
+      {replacementResultModal && (
+        <ReplacementResultModal
+          isOpen={true}
+          result={replacementResultModal.result}
+          sourceName={replacementResultModal.sourceName}
+          targetName={replacementResultModal.targetName}
+          operationType={replacementResultModal.operationType}
+          onClose={() => setReplacementResultModal(null)}
+        />
+      )}
+
+      {/* Conversion Result Modal */}
+      {conversionResultModal && (
+        <ConversionResultModal
+          isOpen={true}
+          totalConverted={conversionResultModal.totalConverted}
+          duration={conversionResultModal.duration}
+          layersAffected={conversionResultModal.layersAffected}
+          layersSkipped={conversionResultModal.layersSkipped}
+          categoryBreakdown={conversionResultModal.categoryBreakdown}
+          onClose={() => setConversionResultModal(null)}
         />
       )}
 

@@ -529,9 +529,13 @@ async function handleReplaceStyle(
       payload: {
         operationType: 'style',
         layersUpdated: result.layersUpdated,
+        layersFailed: result.layersFailed,
         failedLayers: result.failedLayers,
         duration: result.duration,
         hasWarnings: result.hasWarnings,
+        layersSkipped: result.layersSkipped,
+        categoryBreakdown: result.categoryBreakdown,
+        checkpointTitle: result.checkpointTitle,
       },
     });
 
@@ -651,9 +655,13 @@ async function handleReplaceToken(
       payload: {
         operationType: 'token',
         layersUpdated: result.layersUpdated,
+        layersFailed: result.layersFailed,
         failedLayers: result.failedLayers || [],
         duration: result.duration,
         hasWarnings: result.hasWarnings,
+        layersSkipped: result.layersSkipped,
+        categoryBreakdown: result.categoryBreakdown,
+        checkpointTitle: result.checkpointTitle,
       },
     });
 
