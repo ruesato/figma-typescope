@@ -326,6 +326,16 @@ export async function processAuditData(
         sourceType: s.sourceType
       }))
     );
+    // DEBUG: Log all remote styles to help diagnose "Convert to Local" button issue
+    const remoteStyles = styles.filter(s => s.sourceType !== 'local');
+    console.log(`[REMOTE STYLES DEBUG] Found ${remoteStyles.length} remote styles:`,
+      remoteStyles.map(s => ({
+        name: s.name,
+        id: s.id.substring(0, 8) + '...',
+        sourceType: s.sourceType,
+        libraryName: s.libraryName
+      }))
+    );
     output.styles = styles;
 
     // Step 4: Build library sources (55-60%)
@@ -431,6 +441,12 @@ export async function processAuditData(
 
     console.log('[USAGE CALCULATION] Style usage counts updated:',
       output.styles.map(s => ({ name: s.name, usageCount: s.usageCount })).slice(0, 5)
+    );
+
+    // DEBUG: Log remote style usage counts specifically
+    const remoteStylesWithUsage = output.styles.filter(s => s.sourceType !== 'local');
+    console.log(`[USAGE DEBUG] Remote style usage counts (${remoteStylesWithUsage.length} remote styles):`,
+      remoteStylesWithUsage.map(s => ({ name: s.name, usageCount: s.usageCount, id: s.id.substring(0, 8) + '...' }))
     );
 
     // Step 8: Build hierarchy (90-93%)
