@@ -133,10 +133,13 @@ export default function App() {
   const styleBadgeCount = styleGovernanceResult?.styles.length ?? 0;
   const tokenBadgeCount = styleGovernanceResult?.tokens.length ?? 0;
 
-  // Check if there are remote styles
+  // Check if there are remote styles (only when audit is complete to avoid flickering during streaming)
   const hasRemoteStyles = useMemo(() => {
+    // Don't show button during audit to prevent flickering as pages are processed
+    if (isAuditing) return false;
+
     return styleGovernanceResult?.styles.some((s) => s.sourceType !== 'local') ?? false;
-  }, [styleGovernanceResult]);
+  }, [styleGovernanceResult, isAuditing]);
 
   // DEBUG: Log badge counts whenever they change
   useEffect(() => {
